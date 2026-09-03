@@ -1,0 +1,29 @@
+{
+  "name": "nst-entrepreneurship-portal",
+  "version": "1.0.0",
+  "description": "",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "start": "npm start -w backend",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Divyapahuja31/nst-entrepreneurship-portal.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Divyapahuja31/nst-entrepreneurship-portal/issues"
+  },
+  "homepage": "https://github.com/Divyapahuja31/nst-entrepreneurship-portal#readme",
+  "dependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

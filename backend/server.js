@@ -1,24 +1,32 @@
-  import express from 'express'
-  import cors from 'cors'
-  // import dotenv from 'dotenv'
+import express from 'express'
+import cors from 'cors'
+import dotenv from 'dotenv'
+import mongoose from 'mongoose'
+import routes from './routes/index.js'
 
-  // dotenv.config()
+dotenv.config()
 
-  const app = express()
-  const PORT = process.env.PORT || 4000
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.error('Error connecting to MongoDB:', err))
 
-  app.use(cors())
-  app.use(express.json())
+const app = express()
+const PORT = process.env.PORT || 4000
 
-  app.get('/', (req, res) => {
-    res.send('Hello from the backend!')
-  })
+app.use(cors())
+app.use(express.json())
 
-  app.listen(PORT, (err) => {
-    if (err) {
-      console.error('Error starting the server:', err)
-      return
-    }
-    console.log(`Server is running on port ${PORT}`)
-  })
+// app.get('/', (req, res) => {
+//   res.send('Hello from the backend!')
+// })
 
+app.use('/', routes)
+
+app.listen(PORT, (err) => {
+  if (err) {
+    console.error('Error starting the server:', err)
+    return
+  }
+  console.log(`Server is running on port ${PORT}`)
+})

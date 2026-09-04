@@ -29,7 +29,7 @@
     "Dayshmookh",
     "nst",
     "entrepreneurship",
-    "portal",
+    "portal"
   ],
   "ignorePaths": [
     "node_modules/**",

@@ -9,7 +9,10 @@
   "scripts": {
     "build": "cd frontend && npm run build",
     "start": "npm start -w backend",
-    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\""
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "prettify": "concurrently \"cd backend && npm run prettify\" \"cd frontend && npm run prettify\"",
+    "lint": "eslint ./backend ./frontend",
+    "lint-fix": "eslint ./backend ./frontend --fix"
   },
   "repository": {
     "type": "git",

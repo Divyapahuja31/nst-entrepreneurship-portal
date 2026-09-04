@@ -15,7 +15,21 @@
     "mongodb",
     "bson",
     "uuid",
-    "unlisten"
+    "unlisten",
+
+    "Divya",
+    "Pahuja",
+    "Kanishk",
+    "Ranjan",
+    "Krit",
+    "Garg",
+    "Raghav",
+    "Khandelwal",
+    "Krushn",
+    "Dayshmookh",
+    "nst",
+    "entrepreneurship",
+    "portal",
   ],
   "ignorePaths": [
     "node_modules/**",

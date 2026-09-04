@@ -1,4 +1,4 @@
-import moongoose from 'mongoose';
+import moongoose from 'mongoose'
 
 const meetingsSchema = new moongoose.Schema(
   {
@@ -8,13 +8,13 @@ const meetingsSchema = new moongoose.Schema(
     },
     organiser: {
       type: moongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
     participants: [
       {
         type: moongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: 'User',
       },
     ],
     scheduledAt: {
@@ -22,7 +22,7 @@ const meetingsSchema = new moongoose.Schema(
       required: true,
     },
     meetingDuration: {
-      type: Number, 
+      type: Number,
       required: true,
     },
     meet_url: {
@@ -31,16 +31,16 @@ const meetingsSchema = new moongoose.Schema(
     },
     status: {
       type: Boolean,
-      default: true, 
+      default: true,
     },
   },
   {
     timestamps: true,
   }
-);
+)
 
-export const modelName = "Meeting";
+export const modelName = 'Meeting'
 
-const Meeting = moongoose.model(modelName, meetingsSchema);
+const Meeting = moongoose.model(modelName, meetingsSchema)
 
-export default Meeting;
+export default Meeting

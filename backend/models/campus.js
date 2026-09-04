@@ -1,4 +1,4 @@
-import moongose from "mongoose";
+import moongose from 'mongoose'
 
 const campusSchema = new moongose.Schema(
   {
@@ -15,10 +15,10 @@ const campusSchema = new moongose.Schema(
   {
     timestamps: true,
   }
-);
+)
 
-export const modelName = "Campus";
+export const modelName = 'Campus'
 
-const Campus = moongose.model(modelName, campusSchema);
+const Campus = moongose.model(modelName, campusSchema)
 
-export default Campus;
+export default Campus

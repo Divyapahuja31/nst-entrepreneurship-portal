@@ -9,7 +9,7 @@ dotenv.config()
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('Error connecting to MongoDB:', err))
+  .catch(err => console.error('Error connecting to MongoDB:', err))
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -23,7 +23,7 @@ app.use(express.json())
 
 app.use('/', routes)
 
-app.listen(PORT, (err) => {
+app.listen(PORT, err => {
   if (err) {
     console.error('Error starting the server:', err)
     return

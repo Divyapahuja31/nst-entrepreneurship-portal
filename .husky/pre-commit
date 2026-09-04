@@ -1,0 +1,19 @@
+echo "Running code-quality validation gates..."
+
+# Execute lint-staged to run ESLint, Prettier, and CodeSpellcheck
+npx lint-staged
+
+# Capture the exit code of the tests
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ COMMIT ABORTED: Code quality checks failed."
+  echo "=========================================================="
+  echo "HOW TO FIX THIS:"
+  echo "1. Look at the error logs above to find the exact file and line."
+  echo "2. Fix formatting mistakes or typos (check cspell.json for custom words)."
+  echo "3. Stage your corrected changes (git add) and try committing again."
+  echo "=========================================================="
+  exit 1
+fi
+
+echo "✅ All quality controls passed! Proceeding with commit."

@@ -1,6 +1,6 @@
-import moongose from 'mongoose'
+import mongoose from 'mongoose'
 
-const campusSchema = new moongose.Schema(
+const campusSchema = new mongoose.Schema(
   {
     name: {
       type: String,
@@ -19,6 +19,6 @@ const campusSchema = new moongose.Schema(
 
 export const modelName = 'Campus'
 
-const Campus = moongose.model(modelName, campusSchema)
+const Campus = mongoose.model(modelName, campusSchema)
 
 export default Campus

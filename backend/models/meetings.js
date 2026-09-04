@@ -1,19 +1,19 @@
-import moongoose from 'mongoose'
+import mongoose from 'mongoose'
 
-const meetingsSchema = new moongoose.Schema(
+const meetingsSchema = new mongoose.Schema(
   {
     title: {
       type: String,
       required: true,
     },
-    organiser: {
-      type: moongoose.Schema.Types.ObjectId,
+    organizer: {
+      type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
     participants: [
       {
-        type: moongoose.Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
       },
     ],
@@ -41,6 +41,6 @@ const meetingsSchema = new moongoose.Schema(
 
 export const modelName = 'Meeting'
 
-const Meeting = moongoose.model(modelName, meetingsSchema)
+const Meeting = mongoose.model(modelName, meetingsSchema)
 
 export default Meeting

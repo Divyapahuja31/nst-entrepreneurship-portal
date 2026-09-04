@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "mongodb.mongodb-vscode",
+    "usernamehw.errorlens",
+    "mikestead.dotenv",
+    "streetsidesoftware.code-spell-checker",
+    "editorconfig.editorconfig"
+  ]
+}

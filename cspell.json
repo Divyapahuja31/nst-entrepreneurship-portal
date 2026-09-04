@@ -1,0 +1,27 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "mongoose",
+    "expressjs",
+    "mjs",
+    "cjs",
+    "prettierrc",
+    "eslint",
+    "husky",
+    "nodemodules",
+    "dotenv",
+    "cors",
+    "mongodb",
+    "bson",
+    "uuid",
+    "unlisten"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    "package-lock.json",
+    "dist/**",
+    "build/**",
+    ".git/**"
+  ]
+}

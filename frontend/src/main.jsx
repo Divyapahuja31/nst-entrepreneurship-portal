@@ -13,6 +13,8 @@ import './index.css'
 import App from './App.jsx'
 import EmptyLayout from './layouts/EmptyLayout.jsx'
 import MainLayout from './layouts/MainLayout.jsx'
+import Dashboard from './pages/Dashboard.jsx'
+import Kpis from './pages/Kpis.jsx'
 import SignIn from './pages/SignIn.jsx'
 import SignUp from './pages/SignUp.jsx'
 
@@ -35,11 +37,31 @@ const credentialsAction =
     }
   }
 
+const signoutAction = async () => {
+  try {
+    await api.post('/auth/logout')
+    return redirect('/signin')
+  } catch (err) {
+    if (!err.response) {
+      return {error: 'Network error. Try again.'}
+    }
+
+    return {error: err.response.data?.error || 'Could not sign out'}
+  }
+}
+
 const router = createBrowserRouter([
   {
     Component: EmptyLayout,
     children: [
-      {Component: MainLayout, children: [{index: true, Component: App}]},
+      {
+        Component: MainLayout,
+        children: [
+          {index: true, Component: App},
+          {path: 'dashboard', Component: Dashboard},
+          {path: 'kpis', Component: Kpis},
+        ],
+      },
       {
         path: 'signin',
         Component: SignIn,
@@ -50,6 +72,7 @@ const router = createBrowserRouter([
         Component: SignUp,
         action: credentialsAction('/auth/signup', 'Something went wrong'),
       },
+      {path: 'signout', action: signoutAction},
     ],
   },
 ])

@@ -29,7 +29,9 @@
     "Dayshmookh",
     "nst",
     "entrepreneurship",
-    "portal"
+    "portal",
+    "adypu",
+    "newtonschool"
   ],
   "ignorePaths": [
     "node_modules/**",

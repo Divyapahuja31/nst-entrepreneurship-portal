@@ -10,7 +10,7 @@ export const cookieOptions = {
   maxAge: TOKEN_MAX_AGE,
 }
 export const signToken = user => {
-  jwt.sign({userId: user._id, email: user.email}, JWT_SECRET, {
+  return jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, {
     expiresIn: '30d',
   })
 }

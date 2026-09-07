@@ -1,23 +1,41 @@
-import {Form} from 'react-router'
+import { Form, useActionData } from 'react-router'
+import TextField from '@mui/material/TextField'
+import Button from '@mui/material/Button'
+
+import '../style/auth.css'
 
 function SignIn() {
+  const action = useActionData()
+  console.log(action)
   return (
-    <>
-      <h1>Sign In</h1>
-      <h3>
-        Access is restricted, Student must be on the approval list; faculty are
-        reviewed manually
-      </h3>
-      <Form method="post">
-        <input type="email" placeholder="Enter your email" name="email" />
-        <input
-          type="password"
-          placeholder="Enter your password"
-          name="password"
-        />
-        <input type="submit" />
-      </Form>
-    </>
+    <div className="container">
+      <div className="box">
+        <h1>Sign In</h1>
+        <h3>
+          Access is restricted, Student must be on the approval list; faculty
+          are reviewed manually
+        </h3>
+        <p> {action && action.error}</p>
+
+        <Form method="post">
+          <TextField
+            error={Boolean(action && action.error)}
+            label="Email"
+            type="email"
+          />
+
+          <TextField
+            error={Boolean(action && action.error)}
+            label="Password"
+            type="password"
+          />
+
+          <Button fullWidth variant="contained" type="submit" sx={{ mt: 2 }}>
+            Contained
+          </Button>
+        </Form>
+      </div>
+    </div>
   )
 }
 

@@ -17,6 +17,12 @@ const kpiSchema = new mongoose.Schema(
       enum: Object.keys(KPIStatus),
       default: 'DRAFT',
     },
+    subKPIs: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SubKPI',
+      },
+    ],
   },
   {
     timestamps: true,

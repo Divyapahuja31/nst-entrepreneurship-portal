@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import meetingStatus from './enums/meetingStatus'
 
 const meetingsSchema = new mongoose.Schema(
   {
@@ -29,9 +30,20 @@ const meetingsSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    startTime: {
+      type: Date,
+    },
+    endTime: {
+      type: Date,
+    },
     status: {
-      type: Boolean,
-      default: true,
+      type: String,
+      enum: Object.keys(meetingStatus),
+      default: 'Not Started',
+    },
+    venture: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Venture',
     },
   },
   {

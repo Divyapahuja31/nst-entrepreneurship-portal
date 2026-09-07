@@ -1,0 +1,16 @@
+nav {
+  height: 100vh;
+  width: 20vw;
+  padding: 24px;
+  background-color: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px
+}
+
+
+a {
+  text-decoration: none;
+  color: #fff;
+}

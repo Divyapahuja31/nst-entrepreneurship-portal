@@ -1,6 +1,6 @@
 import path from 'path'
 import fs from 'fs'
-import {URL} from 'node:url'
+import { URL } from 'node:url'
 
 const __filename = new URL('', import.meta.url).pathname
 const __dirname = new URL('.', import.meta.url).pathname // Will contain trailing slash
@@ -15,7 +15,7 @@ const files = fs.readdirSync(__dirname).filter(file => {
 })
 
 const requireModel = async modelPath => {
-  const {default: model, modelName} = await import(modelPath)
+  const { default: model, modelName } = await import(modelPath)
 
   models[modelName] = model
 }

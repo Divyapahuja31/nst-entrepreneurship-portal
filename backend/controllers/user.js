@@ -1,34 +1,53 @@
-import models from '../models/index.js'
+import User from '../models/user.js'
+import {cookieOptions, signToken} from '../utils/token.js'
 
-const {User} = models
-
-const createUser = async (req, res) => {
-  const user = new User({
-    username: 'test',
-    email: 'test@test.com',
-    password: 'test',
-  })
-
+const signUp = async (req, res) => {
   try {
+    const {username, email, password} = req.body
+    if (!username || !email || !password) {
+      return res
+        .status(400)
+        .json({error: 'username, email and password are required'})
+    }
+
+    const user = new User({username, email, password})
     await user.save()
-    res.send(user)
+
+    return res
+      .cookie('token', signToken(user), cookieOptions)
+      .status(201)
+      .json({user})
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({error: 'Email or username already in use'})
+    }
     console.error(err)
-    res.send(err)
+    return res.status(500).json({error: 'Server error'})
   }
 }
 
-const getUsers = async (req, res) => {
+const signIn = async (req, res) => {
   try {
-    const users = await User.find()
-    res.send(users)
+    const {email, password} = req.body
+    const user = await User.findOne({email})
+    if (!user) {
+      return res.status(401).json({error: 'Invalid email or password'})
+    }
+
+    const isMatch = await user.comparePassword(password)
+    if (!isMatch) {
+      return res.status(401).json({error: 'Invalid email or password'})
+    }
+
+    return res.cookie('token', signToken(user), cookieOptions).json({user})
   } catch (err) {
     console.error(err)
-    res.send(err)
+    return res.status(500).json({error: 'Server error'})
   }
 }
 
-export default {
-  createUser,
-  getUsers,
+const logout = async (_, res) => {
+  return res.clearCookie('token', cookieOptions).json({success: true})
 }
+
+export {signUp, signIn, logout}

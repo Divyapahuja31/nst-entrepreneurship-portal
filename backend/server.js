@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser'
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
@@ -14,14 +15,15 @@ mongoose
 const app = express()
 const PORT = process.env.PORT || 4000
 
-app.use(cors())
+app.use(
+  cors({
+    credentials: true,
+  })
+)
 app.use(express.json())
+app.use(cookieParser())
 
-// app.get('/', (req, res) => {
-//   res.send('Hello from the backend!')
-// })
-
-app.use('/', routes)
+app.use('/api', routes)
 
 app.listen(PORT, err => {
   if (err) {

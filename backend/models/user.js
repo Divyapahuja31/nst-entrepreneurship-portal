@@ -18,22 +18,29 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return !this.googleId
+      },
     },
     batch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Batch',
-      required: true,
+      default: null,
     },
     campus: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Campus',
-      required: true,
+      required: false,
     },
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Role',
       required: true,
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
   },
   {

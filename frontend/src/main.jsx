@@ -17,6 +17,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Kpis from './pages/Kpis.jsx'
 import SignIn from './pages/SignIn.jsx'
 import SignUp from './pages/SignUp.jsx'
+import CompleteSignup from './pages/CompleteSignup.jsx'
 import Admin from './pages/admin/Index.jsx'
 
 const api = axios.create({ baseURL: '/api', withCredentials: true })
@@ -74,6 +75,10 @@ const router = createBrowserRouter([
         action: credentialsAction('/auth/signup', 'Something went wrong'),
       },
       { path: 'signout', action: signoutAction },
+      {
+        path: 'complete-signup',
+        Component: CompleteSignup,
+      },
     ],
   },
 ])

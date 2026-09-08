@@ -17,7 +17,7 @@ const validateEmail = email => {
     return 'Email is required'
   }
   if (!/^[a-zA-Z0-9._%+-]+@(adypu\.edu\.in|newtonschool\.co)$/i.test(email)) {
-    return 'Email is invalid, please use a valid email'
+    return 'Email is invalid, please use an official ADYPU or Newton School email ID'
   }
   return ''
 }

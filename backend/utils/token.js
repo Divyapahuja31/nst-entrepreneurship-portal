@@ -34,3 +34,27 @@ export function validateToken(token) {
     return { valid: false, reason: error.message }
   }
 }
+
+export const signGoogleSignupToken = ({ googleId, email }) => {
+  return jwt.sign(
+    {
+      googleId,
+      email,
+      type: 'google-signup',
+    },
+    JWT_SECRET,
+    {
+      expiresIn: '10m',
+    }
+  )
+}
+
+export const verifyGoogleSignupToken = token => {
+  const decoded = jwt.verify(token, JWT_SECRET)
+
+  if (decoded.type !== 'google-signup') {
+    throw new Error('Invalid Google signup token')
+  }
+
+  return decoded
+}

@@ -1,8 +1,8 @@
 import axios from 'axios'
-import {createRoot} from 'react-dom/client'
+import { createRoot } from 'react-dom/client'
 
-import {createBrowserRouter, redirect} from 'react-router'
-import {RouterProvider} from 'react-router/dom'
+import { createBrowserRouter, redirect } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
 
 import '@fontsource/roboto/300.css'
 import '@fontsource/roboto/400.css'
@@ -18,35 +18,34 @@ import Kpis from './pages/Kpis.jsx'
 import SignIn from './pages/SignIn.jsx'
 import SignUp from './pages/SignUp.jsx'
 
-const api = axios.create({baseURL: '/api', withCredentials: true})
+const api = axios.create({ baseURL: '/api', withCredentials: true })
 
 const credentialsAction =
   (path, fallbackError) =>
-  async ({request}) => {
+  async ({ request }) => {
     const formData = await request.formData()
-
     try {
       await api.post(path, Object.fromEntries(formData))
       return redirect('/')
     } catch (err) {
       if (!err.response) {
-        return {error: 'Network error. Try again.'}
+        return { error: 'Network error. Try again.' }
       }
 
-      return {error: err.response.data?.error || fallbackError}
+      return { error: err.response.data?.error || fallbackError }
     }
   }
 
 const signoutAction = async () => {
   try {
-    await api.post('/auth/logout')
+    await api.post('/auth/signout')
     return redirect('/signin')
   } catch (err) {
     if (!err.response) {
-      return {error: 'Network error. Try again.'}
+      return { error: 'Network error. Try again.' }
     }
 
-    return {error: err.response.data?.error || 'Could not sign out'}
+    return { error: err.response.data?.error || 'Could not sign out' }
   }
 }
 
@@ -57,22 +56,22 @@ const router = createBrowserRouter([
       {
         Component: MainLayout,
         children: [
-          {index: true, Component: App},
-          {path: 'dashboard', Component: Dashboard},
-          {path: 'kpis', Component: Kpis},
+          { index: true, Component: App },
+          { path: 'dashboard', Component: Dashboard },
+          { path: 'kpis', Component: Kpis },
         ],
       },
       {
         path: 'signin',
         Component: SignIn,
-        action: credentialsAction('/auth/login', 'Invalid credentials'),
+        action: credentialsAction('/auth/signin', 'Invalid credentials'),
       },
       {
         path: 'signup',
         Component: SignUp,
         action: credentialsAction('/auth/signup', 'Something went wrong'),
       },
-      {path: 'signout', action: signoutAction},
+      { path: 'signout', action: signoutAction },
     ],
   },
 ])

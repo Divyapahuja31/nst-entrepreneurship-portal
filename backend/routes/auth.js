@@ -3,7 +3,7 @@ import { Router } from 'express'
 import {
   signUp,
   signIn,
-  signout,
+  signOut,
   googleAuthCallback,
   googleAuth,
 } from '../controllers/user.js'
@@ -14,7 +14,7 @@ router.get('/google', googleAuth)
 router.get('/google/callback', googleAuthCallback)
 
 router.post('/signup', signUp)
-router.post('/login', signIn)
-router.post('/signout', signout)
+router.post('/signin', signIn)
+router.post('/signout', signOut)
 
 export default router

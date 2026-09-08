@@ -28,7 +28,7 @@ function SignUp() {
                 labelId="demo-simple-select-label"
                 id="demo-simple-select"
                 label="Position"
-                error={Boolean(action && action.error)}
+                error={Boolean(action && action.error?.position)}
                 name="position"
               >
                 <MenuItem value={'student'}>Student (Founder)</MenuItem>

@@ -23,7 +23,7 @@ function authMiddleware(req, res, next) {
     req.user = {
       id: response.payload.userId,
       email: response.payload.email,
-      role: 'admin',
+      role: response.payload.role,
     }
   }
 

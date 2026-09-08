@@ -17,6 +17,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Kpis from './pages/Kpis.jsx'
 import SignIn from './pages/SignIn.jsx'
 import SignUp from './pages/SignUp.jsx'
+import Admin from './pages/admin/Index.jsx'
 
 const api = axios.create({ baseURL: '/api', withCredentials: true })
 
@@ -59,6 +60,7 @@ const router = createBrowserRouter([
           { index: true, Component: App },
           { path: 'dashboard', Component: Dashboard },
           { path: 'kpis', Component: Kpis },
+          { path: 'admin', Component: Admin },
         ],
       },
       {

@@ -1,0 +1,10 @@
+export default {
+  STAGE_1: 'IDEATION',
+  STAGE_2: 'DISCOVERY',
+  STAGE_3: 'VALIDATION',
+  STAGE_4: 'MVP',
+  STAGE_5: 'PILOT',
+  STAGE_6: 'REVENUE',
+  STAGE_7: 'GROWTH',
+  STAGE_8: 'FUND RAISING',
+}

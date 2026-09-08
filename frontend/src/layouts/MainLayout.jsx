@@ -123,7 +123,7 @@ export default function MiniDrawer() {
         </DrawerHeader>
         <Divider />
         <List>
-          {(data.role == 'admin' ? adminMenuItems : menuItems).map(item => (
+          {(data?.role === 'admin' ? adminMenuItems : menuItems).map(item => (
             <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
               <ListItemButton
                 component={NavLink}

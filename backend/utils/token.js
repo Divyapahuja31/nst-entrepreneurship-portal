@@ -10,8 +10,9 @@ export const cookieOptions = {
   maxAge: TOKEN_MAX_AGE,
 }
 export const signToken = user => {
+  const roleName = user.role?.name || user.role
   return jwt.sign(
-    { userId: user._id, email: user.email, role: user.role },
+    { userId: user._id, email: user.email, role: roleName },
     JWT_SECRET,
     {
       algorithm: 'HS256',

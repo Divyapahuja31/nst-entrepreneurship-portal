@@ -4,6 +4,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 import routes from './routes/index.js'
+import { validateToken } from './utils/token.js'
 
 dotenv.config()
 
@@ -15,6 +16,20 @@ mongoose
 const app = express()
 const PORT = process.env.PORT || 4000
 
+function authMiddleware(req, res, next) {
+  const token = req.cookies.token
+  const response = validateToken(token)
+  if (response.valid) {
+    req.user = {
+      id: response.payload.userId,
+      email: response.payload.email,
+      roles: response.payload.roles,
+    }
+  }
+
+  next()
+}
+
 app.use(
   cors({
     credentials: true,
@@ -22,6 +37,7 @@ app.use(
 )
 app.use(express.json())
 app.use(cookieParser())
+app.use(authMiddleware)
 
 app.use('/api', routes)
 

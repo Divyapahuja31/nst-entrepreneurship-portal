@@ -54,6 +54,7 @@ const signUp = async (req, res) => {
     })
 
     await user.save()
+    await user.populate('role')
 
     return res
       .cookie('token', signToken(user), cookieOptions)
@@ -80,7 +81,7 @@ const signIn = async (req, res) => {
   try {
     const { email, password } = req.body
 
-    const user = await User.findOne({ email })
+    const user = await User.findOne({ email }).populate('role')
 
     if (!user) {
       return res.status(401).json({
@@ -107,6 +108,9 @@ const signIn = async (req, res) => {
 }
 
 const profile = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
   return res.json(req.user)
 }
 
@@ -163,7 +167,7 @@ const googleAuthCallback = async (req, res) => {
 
     const user = await User.findOne({
       $or: [{ googleId }, { email: email.toLowerCase() }],
-    })
+    }).populate('role')
 
     if (user) {
       if (!user.googleId) {
@@ -274,6 +278,7 @@ const completeGoogleSignup = async (req, res) => {
     })
 
     await user.save()
+    user.role = studentRole
     return res
       .cookie('token', signToken(user), cookieOptions)
       .status(201)

@@ -16,6 +16,12 @@ import ListItemButton from '@mui/material/ListItemButton'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import LogoutIcon from '@mui/icons-material/Logout'
+import PeopleIcon from '@mui/icons-material/People'
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
+import AutoStoriesIcon from '@mui/icons-material/AutoStories'
+import AssistantNavigationIcon from '@mui/icons-material/AssistantNavigation'
+import { useLoaderData } from 'react-router'
+
 import { NavLink, Outlet, useFetcher, useLocation } from 'react-router'
 
 import DashboardIcon from '@mui/icons-material/Dashboard'
@@ -36,8 +42,37 @@ const menuItems = [
   },
 ]
 
+const adminMenuItems = [
+  {
+    menu: 'Overview',
+    icon: DashboardIcon,
+    path: '/admin',
+  },
+  {
+    menu: 'Profiles',
+    icon: PeopleIcon,
+    path: '/admin/profiles',
+  },
+  {
+    menu: 'Venture OS ',
+    icon: AutoAwesomeIcon,
+    path: '/admin/venture',
+  },
+  {
+    menu: 'Methodology',
+    icon: AutoStoriesIcon,
+    path: '/admin/methodology',
+  },
+  {
+    menu: 'Leadership',
+    icon: AssistantNavigationIcon,
+    path: '/admin/leadership',
+  },
+]
+
 export default function MiniDrawer() {
   const theme = useTheme()
+  const data = useLoaderData()
   const { pathname } = useLocation()
   const [open, setOpen] = React.useState(false)
   const signout = useFetcher()
@@ -88,7 +123,7 @@ export default function MiniDrawer() {
         </DrawerHeader>
         <Divider />
         <List>
-          {menuItems.map(item => (
+          {(data.role == 'admin' ? adminMenuItems : menuItems).map(item => (
             <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
               <ListItemButton
                 component={NavLink}

@@ -22,12 +22,14 @@ function SignIn() {
             error={Boolean(action && action.error)}
             label="Email"
             type="email"
+            name="email"
           />
 
           <TextField
             error={Boolean(action && action.error)}
             label="Password"
             type="password"
+            name="password"
           />
 
           <Button fullWidth variant="contained" type="submit" sx={{ mt: 2 }}>

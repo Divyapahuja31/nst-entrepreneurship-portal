@@ -106,6 +106,10 @@ const signIn = async (req, res) => {
   }
 }
 
+const profile = async (req, res) => {
+  return res.json(req.user)
+}
+
 const googleAuth = (req, res) => {
   const url = client.generateAuthUrl({
     access_type: 'offline',
@@ -301,6 +305,7 @@ export {
   signOut,
   googleAuthCallback,
   googleAuth,
+  profile,
   completeGoogleSignup,
   getGoogleSignupOptions,
 }

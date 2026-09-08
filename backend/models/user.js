@@ -20,6 +20,21 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    batch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Batch',
+      required: true,
+    },
+    campus: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Campus',
+      required: true,
+    },
+    role: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Role',
+      required: true,
+    },
   },
   {
     timestamps: true,

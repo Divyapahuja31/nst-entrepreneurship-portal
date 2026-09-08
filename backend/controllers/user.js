@@ -14,7 +14,7 @@ const signUp = async (req, res) => {
   try {
     const { username, email, password, position } = req.body
     const error = validateAll({ username, email, password, position })
-    if (error) {
+    if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
     }
 
@@ -28,7 +28,9 @@ const signUp = async (req, res) => {
       .json({ user })
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(409).json({ error: 'Email or username already in use' })
+      return res
+        .status(409)
+        .json({ error: { email: 'Email or username already in use' } })
     }
     console.error(err)
     return res.status(500).json({ error: 'Server error' })
@@ -103,8 +105,8 @@ const googleAuthCallback = async (req, res) => {
   }
 }
 
-const signout = async (_, res) => {
+const signOut = async (_, res) => {
   return res.clearCookie('token', cookieOptions).json({ success: true })
 }
 
-export { signUp, signIn, signout, googleAuthCallback, googleAuth }
+export { signUp, signIn, signOut, googleAuthCallback, googleAuth }

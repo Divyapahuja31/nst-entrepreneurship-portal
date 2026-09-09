@@ -73,6 +73,7 @@ const adminMenuItems = [
 export default function MiniDrawer() {
   const theme = useTheme()
   const data = useLoaderData()
+  console.log(data)
   const { pathname } = useLocation()
   const [open, setOpen] = React.useState(false)
   const signout = useFetcher()

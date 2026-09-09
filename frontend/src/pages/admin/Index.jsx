@@ -13,31 +13,33 @@ const cards = [
   {
     id: 1,
     title: 'Founder',
-    data: '18',
+    data: 'founder',
     description: 'Plants are essential for all life.',
   },
   {
     id: 2,
     title: 'On Track',
-    data: '18',
+    data: 'onTrack',
     description: 'Animals are a part of nature.',
   },
   {
     id: 3,
     title: 'Watch',
-    data: '18',
+    data: 'watch',
     description: 'Humans depend on plants and animals for survival.',
   },
   {
     id: 4,
     title: 'At Risk',
-    data: '18',
+    data: 'atRisk',
     description: 'Humans depend on plants and animals for survival.',
   },
 ]
 
 function Index() {
-  const data = useLoaderData()
+  const { result, kpi, overview } = useLoaderData()
+
+  console.log('kpi', kpi)
 
   return (
     <>
@@ -76,7 +78,7 @@ function Index() {
                   {card.title}
                 </Typography>
                 <Typography variant="h5" component="div">
-                  {card.data}
+                  {overview[card.data]}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   {card.description}
@@ -94,10 +96,10 @@ function Index() {
           gap: 2,
         }}
       >
-        <BarChart />
-        <DonutChart stage={data['stage']} />
+        <BarChart kpiDistribution={kpi} />
+        <DonutChart stage={result['stage']} />
       </Box>
-      <HorizontalBars campus={data['campus']} />
+      <HorizontalBars campus={result['campus']} />
     </>
   )
 }

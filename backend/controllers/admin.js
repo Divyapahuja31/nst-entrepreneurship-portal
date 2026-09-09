@@ -1,5 +1,6 @@
 import Venture from '../models/venture.js'
 import Campus from '../models/campus.js'
+import KpiModel from '../models/kpi.js'
 import startupStage from '../models/enums/startupStage.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
 
@@ -19,42 +20,28 @@ const deriveStatus = score => {
   return ventureHealth.AT_RISK
 }
 
-const latestReportByVenture = async () => {
-  const reports = []
-  const byVenture = new Map()
-  for (const report of reports) {
-    if (!byVenture.has(report.venture)) {
-      byVenture.set(report.venture, report)
-    }
-  }
-  return byVenture
-}
-
 const getFounders = async (_, res) => {
   try {
-    const [ventures, campuses, reports] = await Promise.all([
-      Venture.find()
-        .populate('founders', 'username')
-        .populate('campus', 'name')
-        .sort({ name: 1 }),
-      Campus.find().sort({ name: 1 }),
-      latestReportByVenture(),
-    ])
+    const ventures = await Venture.find()
+      .populate('founders', 'username')
+      .populate('campus', 'name')
+      .sort({ name: 1 })
+
+    const campuses = await Campus.find().sort({ name: 1 })
 
     const students = ventures.flatMap(venture => {
-      const report =
-        reports.get(venture.name) ?? reports.get(String(venture._id))
+      const score = Math.round(Math.random() * 100)
 
       return venture.founders.map(founder => ({
         founder: founder.username,
         startup: venture.name,
         campus: venture.campus?.name ?? null,
-        stage: report ? (startupStage[report.stage] ?? report.stage) : null,
+        stage: venture.stage,
         team: venture.founders.length,
         // TODO(kanishkranjan): replace this one kpi are add
         //hard coded for now
-        score: null,
-        status: deriveStatus(null),
+        score: score,
+        status: deriveStatus(score),
       }))
     })
 
@@ -73,12 +60,71 @@ const getFounders = async (_, res) => {
   }
 }
 
+const MONTH_NAMES = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+]
+
+async function getMonthlyKPICounts({
+  year = new Date().getFullYear(),
+  timezone = 'UTC',
+} = {}) {
+  const startOfYear = new Date(Date.UTC(year, 0, 1))
+  const endOfYear = new Date(Date.UTC(year + 1, 0, 1))
+
+  const monthlyData = await KpiModel.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: startOfYear, $lt: endOfYear },
+      },
+    },
+    {
+      $group: {
+        _id: { $month: { date: '$createdAt', timezone } },
+        count: { $sum: 1 },
+      },
+    },
+  ])
+
+  console.log(monthlyData)
+
+  return monthlyData.reduce(
+    (acc, { _id, _ }) => {
+      const monthKey = MONTH_NAMES[_id - 1]
+      if (monthKey) {
+        acc[monthKey] = Math.round(Math.random() * 100)
+      }
+      return acc
+    },
+    Object.fromEntries(MONTH_NAMES.map(m => [m, 0]))
+  )
+}
+
 const getOverview = async (_, res) => {
   try {
     const data = await Venture.find()
       .populate('founders', 'username')
       .populate('campus', 'name')
       .sort({ name: 1 })
+
+    const kpi = await getMonthlyKPICounts()
+
+    const overview = {
+      founder: 18,
+      onTrack: 12,
+      watch: 4,
+      atRisk: 2,
+    }
 
     const result = data.reduce(
       (accumulate, currentValue) => {
@@ -92,7 +138,7 @@ const getOverview = async (_, res) => {
       },
       { campus: {}, stage: {} }
     )
-    return res.json(result)
+    return res.json({ result, kpi, overview })
   } catch (err) {
     console.error('Get founders error:', err)
     return res.status(500).json({

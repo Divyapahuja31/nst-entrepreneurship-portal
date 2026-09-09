@@ -11,6 +11,8 @@ import Admin from '../pages/admin/Index.jsx'
 
 import { foundersCount, foundersLoader } from '../api/admin.js'
 import { credentialsAction, profileLoader, signoutAction } from '../api/auth.js'
+import { biWeeklyLoader } from '../api/biweekly.js'
+import BiWeekly from '../pages/admin/BiWeekly.jsx'
 import Methodology from '../pages/admin/Methodology.jsx'
 import Profile from '../pages/admin/Profile.jsx'
 import CompleteSignup from '../pages/CompleteSignup.jsx'
@@ -34,6 +36,11 @@ export const router = createBrowserRouter([
                 path: 'profiles',
                 Component: Profile,
                 loader: foundersLoader,
+              },
+              {
+                path: 'biweekly',
+                Component: BiWeekly,
+                loader: biWeeklyLoader,
               },
               { path: 'methodology', Component: Methodology },
             ],

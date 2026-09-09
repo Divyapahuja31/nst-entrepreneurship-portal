@@ -9,7 +9,7 @@ import SignIn from '../pages/SignIn.jsx'
 import SignUp from '../pages/SignUp.jsx'
 import Admin from '../pages/admin/Index.jsx'
 
-import { foundersLoader } from '../api/admin.js'
+import { foundersCount, foundersLoader } from '../api/admin.js'
 import { credentialsAction, profileLoader, signoutAction } from '../api/auth.js'
 import Methodology from '../pages/admin/Methodology.jsx'
 import Profile from '../pages/admin/Profile.jsx'
@@ -29,7 +29,7 @@ export const router = createBrowserRouter([
           {
             path: 'admin',
             children: [
-              { index: true, Component: Admin },
+              { index: true, Component: Admin, loader: foundersCount },
               {
                 path: 'profiles',
                 Component: Profile,

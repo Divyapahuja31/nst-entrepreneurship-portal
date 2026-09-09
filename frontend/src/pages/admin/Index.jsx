@@ -7,31 +7,38 @@ import CardActionArea from '@mui/material/CardActionArea'
 import BarChart from '../../components/BarChart'
 import DonutChart from '../../components/DonutChart'
 import HorizontalBars from '../../components/HorizontalBars'
+import { useLoaderData } from 'react-router'
 
 const cards = [
   {
     id: 1,
     title: 'Founder',
+    data: '18',
     description: 'Plants are essential for all life.',
   },
   {
     id: 2,
     title: 'On Track',
+    data: '18',
     description: 'Animals are a part of nature.',
   },
   {
     id: 3,
     title: 'Watch',
+    data: '18',
     description: 'Humans depend on plants and animals for survival.',
   },
   {
     id: 4,
     title: 'At Risk',
+    data: '18',
     description: 'Humans depend on plants and animals for survival.',
   },
 ]
 
 function Index() {
+  const data = useLoaderData()
+
   return (
     <>
       <Typography variant="h2">Portfolio overview.</Typography>
@@ -68,6 +75,9 @@ function Index() {
                 <Typography variant="h5" component="div">
                   {card.title}
                 </Typography>
+                <Typography variant="h5" component="div">
+                  {card.data}
+                </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   {card.description}
                 </Typography>
@@ -85,9 +95,9 @@ function Index() {
         }}
       >
         <BarChart />
-        <DonutChart />
+        <DonutChart stage={data['stage']} />
       </Box>
-      <HorizontalBars />
+      <HorizontalBars campus={data['campus']} />
     </>
   )
 }

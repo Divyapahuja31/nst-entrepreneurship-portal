@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import startupStage from './enums/startupStage.js'
 
 const ventureProposalSchema = new mongoose.Schema(
   {
@@ -18,6 +19,11 @@ const ventureProposalSchema = new mongoose.Schema(
     isApproved: {
       type: Boolean,
       default: false,
+    },
+    stage: {
+      type: String,
+      enum: Object.keys(startupStage),
+      default: 'IDEATION',
     },
     submittedAt: {
       type: Date,

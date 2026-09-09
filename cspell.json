@@ -50,7 +50,11 @@
     "Saranga",
     "Ashu",
     "Choudhary",
-    "SAHIL"
+    "SAHIL",
+    "jtbd",
+    "reco",
+    "signups",
+    "waitlist"
   ],
   "ignorePaths": [
     "node_modules/**",

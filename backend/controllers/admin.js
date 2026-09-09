@@ -1,5 +1,4 @@
 import Venture from '../models/venture.js'
-import StatusReport from '../models/statusReport.js'
 import Campus from '../models/campus.js'
 import startupStage from '../models/enums/startupStage.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
@@ -21,7 +20,7 @@ const deriveStatus = score => {
 }
 
 const latestReportByVenture = async () => {
-  const reports = await StatusReport.find().sort({ createdAt: -1 })
+  const reports = []
   const byVenture = new Map()
   for (const report of reports) {
     if (!byVenture.has(report.venture)) {
@@ -74,4 +73,32 @@ const getFounders = async (_, res) => {
   }
 }
 
-export { getFounders }
+const getOverview = async (_, res) => {
+  try {
+    const data = await Venture.find()
+      .populate('founders', 'username')
+      .populate('campus', 'name')
+      .sort({ name: 1 })
+
+    const result = data.reduce(
+      (accumulate, currentValue) => {
+        const campusKey = currentValue.campus.name ?? 'Unknown'
+        const stageKey = currentValue.stage ?? 'Unknown'
+
+        accumulate.campus[campusKey] = (accumulate.campus[campusKey] ?? 0) + 1
+        accumulate.stage[stageKey] = (accumulate.stage[stageKey] ?? 0) + 1
+
+        return accumulate
+      },
+      { campus: {}, stage: {} }
+    )
+    return res.json(result)
+  } catch (err) {
+    console.error('Get founders error:', err)
+    return res.status(500).json({
+      error: 'Failed To load overdata',
+    })
+  }
+}
+
+export { getFounders, getOverview }

@@ -29,6 +29,12 @@ export const signoutAction = async () => {
 }
 
 export const profileLoader = async () => {
-  const { data } = await api.get('/auth/profile')
-  return data
+  try {
+    const { data } = await api.get('/auth/profile')
+    return data
+  } catch (err) {
+    if (err.response?.status === 401) {
+      return redirect('/signup')
+    }
+  }
 }

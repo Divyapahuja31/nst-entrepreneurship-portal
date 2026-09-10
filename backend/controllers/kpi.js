@@ -1,7 +1,6 @@
 import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
-import KPIStatus from '../models/enums/KPIStatus.js'
 import { validateCreateKPI } from '../utils/kpiValidator.js'
 
 export const createKPI = async (req, res) => {
@@ -113,14 +112,14 @@ export const submitKPIForApproval = async (req, res) => {
       })
     }
 
-    if (kpi.status !== KPIStatus.DRAFT) {
+    if (kpi.status !== 'DRAFT') {
       return res.status(400).json({
         success: false,
         message: 'Only draft KPIs can be submitted for approval',
       })
     }
 
-    kpi.status = KPIStatus.WAITING_FOR_APPROVAL
+    kpi.status = 'WAITING_FOR_APPROVAL'
 
     await kpi.save()
 

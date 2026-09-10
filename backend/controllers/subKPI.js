@@ -1,7 +1,6 @@
 import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
-import KPIStatus from '../models/enums/KPIStatus.js'
 
 const validateSubKPIRequest = req => {
   const { kpiId } = req.params
@@ -62,10 +61,7 @@ export const createSubKPI = async (req, res) => {
       })
     }
 
-    if (
-      kpi.status !== KPIStatus.DRAFT &&
-      kpi.status !== KPIStatus.WAITING_FOR_APPROVAL
-    ) {
+    if (kpi.status !== 'DRAFT' && kpi.status !== 'WAITING_FOR_APPROVAL') {
       return res.status(400).json({
         success: false,
         message: 'SubKPIs can only be added to draft or pending KPIs',

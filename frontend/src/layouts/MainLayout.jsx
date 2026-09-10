@@ -130,58 +130,64 @@ export default function MiniDrawer() {
         </DrawerHeader>
         <Divider />
         <List>
-          {(data?.role === 'admin' ? adminMenuItems : menuItems).map(item => (
-            <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
-              <ListItemButton
-                component={NavLink}
-                to={item.path}
-                selected={pathname === item.path}
-                sx={[
-                  {
-                    minHeight: 48,
-                    px: 2.5,
-                  },
-                  open
-                    ? {
-                        justifyContent: 'initial',
-                      }
-                    : {
-                        justifyContent: 'center',
-                      },
-                ]}
+          {(data?.role?.name === 'admin' ? adminMenuItems : menuItems).map(
+            item => (
+              <ListItem
+                key={item.path}
+                disablePadding
+                sx={{ display: 'block' }}
               >
-                <ListItemIcon
+                <ListItemButton
+                  component={NavLink}
+                  to={item.path}
+                  selected={pathname === item.path}
                   sx={[
                     {
-                      minWidth: 0,
-                      justifyContent: 'center',
+                      minHeight: 48,
+                      px: 2.5,
                     },
                     open
                       ? {
-                          mr: 3,
+                          justifyContent: 'initial',
                         }
                       : {
-                          mr: 'auto',
+                          justifyContent: 'center',
                         },
                   ]}
                 >
-                  <item.icon />
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.menu}
-                  sx={[
-                    open
-                      ? {
-                          opacity: 1,
-                        }
-                      : {
-                          opacity: 0,
-                        },
-                  ]}
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
+                  <ListItemIcon
+                    sx={[
+                      {
+                        minWidth: 0,
+                        justifyContent: 'center',
+                      },
+                      open
+                        ? {
+                            mr: 3,
+                          }
+                        : {
+                            mr: 'auto',
+                          },
+                    ]}
+                  >
+                    <item.icon />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.menu}
+                    sx={[
+                      open
+                        ? {
+                            opacity: 1,
+                          }
+                        : {
+                            opacity: 0,
+                          },
+                    ]}
+                  />
+                </ListItemButton>
+              </ListItem>
+            )
+          )}
         </List>
         <Box sx={{ marginTop: 'auto' }}>
           <Divider />

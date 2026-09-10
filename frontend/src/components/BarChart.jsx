@@ -14,7 +14,6 @@ export default function BarGraph({ kpiDistribution }) {
     })
   )
 
-  console.log(kpiData)
   return (
     <div style={{ width: '100%' }}>
       <BarChart

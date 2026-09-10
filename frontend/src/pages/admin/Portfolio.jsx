@@ -15,7 +15,7 @@ const FILTER_LABELS = {
   status: 'All statuses',
 }
 
-function Profile() {
+function Portfolio() {
   const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
   const [filters, setFilters] = React.useState({})
@@ -98,4 +98,4 @@ function Profile() {
   )
 }
 
-export default Profile
+export default Portfolio

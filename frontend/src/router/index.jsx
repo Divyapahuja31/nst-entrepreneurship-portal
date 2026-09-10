@@ -17,11 +17,15 @@ import {
   foundersCount,
   foundersLoader,
 } from '../api/admin.js'
-import { credentialsAction, profileLoader, signoutAction } from '../api/auth.js'
+import {
+  credentialsAction,
+  portfolioLoader,
+  signoutAction,
+} from '../api/auth.js'
 import { biWeeklyLoader } from '../api/biweekly.js'
 import BiWeekly from '../pages/admin/BiWeekly.jsx'
 import Methodology from '../pages/admin/Methodology.jsx'
-import Profile from '../pages/admin/Profile.jsx'
+import Portfolio from '../pages/admin/Portfolio.jsx'
 import CompleteSignup from '../pages/CompleteSignup.jsx'
 
 export const router = createBrowserRouter([
@@ -30,7 +34,7 @@ export const router = createBrowserRouter([
     children: [
       {
         Component: MainLayout,
-        loader: profileLoader,
+        loader: portfolioLoader,
         children: [
           { index: true, Component: App },
           { path: 'dashboard', Component: Dashboard },
@@ -40,8 +44,8 @@ export const router = createBrowserRouter([
             children: [
               { index: true, Component: Admin, loader: foundersCount },
               {
-                path: 'profiles',
-                Component: Profile,
+                path: 'portfolio',
+                Component: Portfolio,
                 loader: foundersLoader,
               },
               {

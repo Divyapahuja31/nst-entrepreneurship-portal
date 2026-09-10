@@ -49,9 +49,9 @@ const adminMenuItems = [
     path: '/admin',
   },
   {
-    menu: 'Profiles',
+    menu: 'Portfolio',
     icon: PeopleIcon,
-    path: '/admin/profiles',
+    path: '/admin/portfolio',
   },
   {
     menu: 'Venture OS ',

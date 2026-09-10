@@ -109,7 +109,7 @@ const signIn = async (req, res) => {
   }
 }
 
-const profile = async (req, res) => {
+const portfolio = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
@@ -318,7 +318,7 @@ export {
   signOut,
   googleAuthCallback,
   googleAuth,
-  profile,
+  portfolio,
   completeGoogleSignup,
   getGoogleSignupOptions,
 }

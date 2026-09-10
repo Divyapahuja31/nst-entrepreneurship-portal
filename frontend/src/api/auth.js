@@ -28,9 +28,9 @@ export const signoutAction = async () => {
   }
 }
 
-export const profileLoader = async () => {
+export const portfolioLoader = async () => {
   try {
-    const { data } = await api.get('/auth/profile')
+    const { data } = await api.get('/auth/portfolio')
     return data
   } catch (err) {
     if (err.response?.status === 401) {

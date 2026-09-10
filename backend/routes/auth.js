@@ -8,7 +8,7 @@ import {
   googleAuth,
   completeGoogleSignup,
   getGoogleSignupOptions,
-  profile,
+  portfolio,
 } from '../controllers/user.js'
 
 const router = Router()
@@ -22,6 +22,6 @@ router.post('/signup', signUp)
 router.post('/signin', signIn)
 router.post('/signout', signOut)
 
-router.get('/profile', profile)
+router.get('/portfolio', portfolio)
 
 export default router

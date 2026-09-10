@@ -25,31 +25,32 @@ const signUp = async (req, res) => {
   try {
     const { username, email, password, batch, campus } = req.body
 
+    let position = 'student'
+    const emailSplit = email.split('@')
+    if (emailSplit.length === 2 && emailSplit[1] === 'newtonschool.co') {
+      position = 'admin'
+    }
+
+    const roles = await Role.findOne({
+      name: position,
+    })
+
     const error = validateAll({
       username,
       email,
       password,
+      position,
     })
 
     if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
     }
 
-    const studentRole = await Role.findOne({
-      name: 'student',
-    })
-
-    if (!studentRole) {
-      return res.status(500).json({
-        error: 'Student role is not configured',
-      })
-    }
-
     const user = new User({
       username,
       email: email.toLowerCase(),
       password,
-      role: studentRole._id,
+      role: roles._id,
       batch,
       campus,
     })

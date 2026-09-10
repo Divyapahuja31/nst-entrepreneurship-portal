@@ -1,3 +1,5 @@
+import Role from '../models/role.js'
+
 const validateName = name => {
   if (!name) {
     return 'Username is required'
@@ -32,11 +34,15 @@ const validatePassword = password => {
   return ''
 }
 
-const validatePosition = position => {
+const validatePosition = async position => {
   if (!position) {
     return 'Position is required'
   }
-  if (position && ['faculty', 'student'].indexOf(position) === -1) {
+  const isValidPosition = await Role.findOne({
+    name: position,
+  })
+
+  if (!isValidPosition) {
     return 'Position is invalid'
   }
   return ''

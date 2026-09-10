@@ -310,7 +310,13 @@ export default function Kpis() {
                     </TableCell>
 
                     <TableCell align="center">
-                      -
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        sx={{ textTransform: 'none', fontWeight: 500, borderRadius: 1 }}
+                      >
+                        Upload Evidence
+                      </Button>
                     </TableCell>
 
                     <TableCell align="center">

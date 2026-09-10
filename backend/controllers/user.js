@@ -35,13 +35,12 @@ const signUp = async (req, res) => {
       name: position,
     })
 
-    const error = validateAll({
+    const error = await validateAll({
       username,
       email,
       password,
       position,
     })
-
     if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
     }

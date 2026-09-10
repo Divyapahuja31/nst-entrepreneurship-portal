@@ -48,13 +48,13 @@ const validatePosition = async position => {
   return ''
 }
 
-const validateAll = ({ username, email, password, position }) => {
+const validateAll = async ({ username, email, password, position }) => {
   const error = {}
 
   error.username = validateName(username)
   error.email = validateEmail(email)
   error.password = validatePassword(password)
-  error.position = validatePosition(position)
+  error.position = await validatePosition(position)
 
   return error
 }

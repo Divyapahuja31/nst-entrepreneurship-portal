@@ -2,10 +2,37 @@ import { useState } from 'react'
 import { Dialog, DialogContent, Typography, TextField, Button, Box, IconButton } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 
-export default function AddKpi({ open, onClose, onSave }) {
+export default function AddKpi({ open, onClose, onSave, initialData }) {
+  const [prevData, setPrevData] = useState(null)
+  const [prevOpen, setPrevOpen] = useState(false)
+
   const [kpiName, setKpiName] = useState('')
+  const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [subKpis, setSubKpis] = useState([])
+
+  if (open !== prevOpen || initialData !== prevData) {
+    setPrevOpen(open)
+    setPrevData(initialData)
+    if (open && initialData) {
+      setKpiName(initialData.title || '')
+      setDescription(initialData.description || '')
+      setDueDate(initialData.dueDate ? initialData.dueDate.split('T')[0] : '')
+      setSubKpis(
+        initialData.subKPIs
+          ? initialData.subKPIs.map((sub, idx) => ({
+              id: sub._id || sub.id || idx,
+              name: sub.name,
+            }))
+          : []
+      )
+    } else if (open && !initialData) {
+      setKpiName('')
+      setDescription('')
+      setDueDate('')
+      setSubKpis([])
+    }
+  }
 
   const handleAddSubKpi = () => {
     const newSubKpi = {
@@ -53,13 +80,14 @@ export default function AddKpi({ open, onClose, onSave }) {
     try {
       await onSave({
         title: kpiName.trim(),
-        description: kpiName.trim(),
+        description: description.trim() || kpiName.trim(),
         dueDate,
         status,
         subKpis: validSubKpis,
       })
 
       setKpiName('')
+      setDescription('')
       setDueDate('')
       setSubKpis([])
 
@@ -71,6 +99,7 @@ export default function AddKpi({ open, onClose, onSave }) {
 
   const handleCancel = () => {
     setKpiName('')
+    setDescription('')
     setDueDate('')
     setSubKpis([])
     onClose()
@@ -126,6 +155,35 @@ export default function AddKpi({ open, onClose, onSave }) {
           value={kpiName}
           onChange={e =>
             setKpiName(e.target.value)
+          }
+          sx={{
+            mb: 3,
+
+            '& .MuiInputBase-root': {
+              backgroundColor: '#ffffff',
+              color: '#000000',
+            },
+          }}
+        />
+
+        <Typography
+          sx={{
+            fontSize: '14px',
+            marginBottom: 1,
+          }}
+        >
+          Description
+        </Typography>
+
+        <TextField
+          fullWidth
+          multiline
+          rows={2}
+          size="small"
+          placeholder="Enter KPI description"
+          value={description}
+          onChange={e =>
+            setDescription(e.target.value)
           }
           sx={{
             mb: 3,

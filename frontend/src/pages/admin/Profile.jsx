@@ -19,6 +19,7 @@ function Profile() {
   const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
   const [filters, setFilters] = React.useState({})
+  const[selectedRows, setSelectedRows] = React.useState([])
 
   const founderQuery = (filters.founder ?? '').trim().toLowerCase()
   const visibleStudents = students.filter(student => {
@@ -37,7 +38,45 @@ function Profile() {
       )
     })
   })
+  const handleDeleteFounders = async () => {
+    if (selectedRows.length === 0) {
+      alert('Please select at least one founder to delete.')
+      return
+    }
 
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedRows.length} founder(s)?`
+    )
+    if (!confirmDelete) {
+      return
+    }
+
+    try {
+      const foundersToDelete = selectedRows.map(el => {
+        const idx = parseInt(el)
+        return {
+        founderName: visibleStudents[idx].founder,
+        startupName: visibleStudents[idx].startup,
+      }})
+      const response = await fetch('/api/admin/founders/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ founders: foundersToDelete }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete founders')
+      }
+
+      // Refresh the page or update the state to reflect the changes
+      window.location.reload()
+    } catch (error) {
+      console.error(error)
+      alert('An error occurred while deleting founders.')
+    }
+  }
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -66,7 +105,11 @@ function Profile() {
               setFilters(prev => ({ ...prev, founder: event.target.value }))
             }
           />
+          <Button onClick={handleDeleteFounders} disabled={selectedRows.length === 0} variant="contained" color="error" style={{marginTop: '2%', marginLeft: '10px'}}>
+          Delete Founders
+        </Button>
         </div>
+        
         <div>
           {Object.keys(filterData).map(key => (
             <FormControl key={key} sx={{ m: 1, minWidth: 120 }}>
@@ -93,7 +136,7 @@ function Profile() {
         </div>
       </div>
 
-      <CustomizedTable data={visibleStudents} />
+      <CustomizedTable data={visibleStudents} selectedRows={selectedRows} setSelectedRows={setSelectedRows} />
     </div>
   )
 }

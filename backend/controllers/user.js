@@ -2,6 +2,7 @@ import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
 import Role from '../models/role.js'
+import Venture from '../models/venture.js'
 import { validateAll } from '../utils/validator.js'
 import {
   cookieOptions,
@@ -111,7 +112,13 @@ const profile = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
-  return res.json(req.user)
+  const user = await User.findById(req.user.id).populate('role')
+  const venture = await Venture.findOne({ founders: req.user.id })
+  return res.json({
+    ...(user ? user.toJSON() : req.user),
+    ventureId: venture?._id || null,
+    venture: venture || null,
+  })
 }
 
 const googleAuth = (req, res) => {

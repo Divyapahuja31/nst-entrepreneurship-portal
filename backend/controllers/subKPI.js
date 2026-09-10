@@ -62,10 +62,13 @@ export const createSubKPI = async (req, res) => {
       })
     }
 
-    if (kpi.status !== KPIStatus.DRAFT) {
+    if (
+      kpi.status !== KPIStatus.DRAFT &&
+      kpi.status !== KPIStatus.WAITING_FOR_APPROVAL
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'SubKPIs can only be added to draft KPIs',
+        message: 'SubKPIs can only be added to draft or pending KPIs',
       })
     }
 
@@ -90,6 +93,75 @@ export const createSubKPI = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to create SubKPI',
+      error: error.message,
+    })
+  }
+}
+
+export const updateSubKPI = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { name, description } = req.body
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid SubKPI ID' })
+    }
+
+    const updateFields = {}
+    if (name !== undefined) {
+      updateFields.name = name.trim()
+    }
+    if (description !== undefined) {
+      updateFields.description = description.trim()
+    }
+
+    const subKPI = await SubKPI.findByIdAndUpdate(id, updateFields, {
+      new: true,
+    })
+
+    if (!subKPI) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'SubKPI not found' })
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, message: 'SubKPI updated', data: subKPI })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update SubKPI',
+      error: error.message,
+    })
+  }
+}
+
+export const deleteSubKPI = async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid SubKPI ID' })
+    }
+
+    const subKPI = await SubKPI.findByIdAndDelete(id)
+    if (!subKPI) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'SubKPI not found' })
+    }
+
+    await KPI.updateOne({ _id: subKPI.parentKPI }, { $pull: { subKPIs: id } })
+
+    return res.status(200).json({ success: true, message: 'SubKPI deleted' })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete SubKPI',
       error: error.message,
     })
   }

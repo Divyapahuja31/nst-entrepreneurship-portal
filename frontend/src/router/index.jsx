@@ -9,7 +9,14 @@ import SignIn from '../pages/SignIn.jsx'
 import SignUp from '../pages/SignUp.jsx'
 import Admin from '../pages/admin/Index.jsx'
 
-import { foundersCount, foundersLoader } from '../api/admin.js'
+import AddFounder from '../components/AddFounder.jsx'
+
+import {
+  addFounderAction,
+  addFounderLoader,
+  foundersCount,
+  foundersLoader,
+} from '../api/admin.js'
 import { credentialsAction, profileLoader, signoutAction } from '../api/auth.js'
 import { biWeeklyLoader } from '../api/biweekly.js'
 import BiWeekly from '../pages/admin/BiWeekly.jsx'
@@ -36,6 +43,12 @@ export const router = createBrowserRouter([
                 path: 'profiles',
                 Component: Profile,
                 loader: foundersLoader,
+              },
+              {
+                path: 'founders/new',
+                Component: AddFounder,
+                loader: addFounderLoader,
+                action: addFounderAction,
               },
               {
                 path: 'biweekly',

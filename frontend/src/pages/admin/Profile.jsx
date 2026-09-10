@@ -1,10 +1,11 @@
+import Button from '@mui/material/Button'
 import MenuItem from '@mui/material/MenuItem'
 import FormControl from '@mui/material/FormControl'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 
 import React from 'react'
-import { useLoaderData } from 'react-router'
+import { Link, useLoaderData } from 'react-router'
 
 import CustomizedTable from '../../components/Table'
 
@@ -39,6 +40,12 @@ function Profile() {
 
   return (
     <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button component={Link} to="/admin/founders/new" variant="contained">
+          Add founder
+        </Button>
+      </div>
+
       <div
         className="container"
         style={{

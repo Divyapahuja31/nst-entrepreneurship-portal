@@ -19,7 +19,6 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import PeopleIcon from '@mui/icons-material/People'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import AutoStoriesIcon from '@mui/icons-material/AutoStories'
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import { useLoaderData } from 'react-router'
 
 import { NavLink, Outlet, useFetcher, useLocation } from 'react-router'
@@ -57,11 +56,6 @@ const adminMenuItems = [
     menu: 'Venture OS ',
     icon: AutoAwesomeIcon,
     path: '/admin/venture',
-  },
-  {
-    menu: 'Bi-weekly',
-    icon: CalendarMonthIcon,
-    path: '/admin/biweekly',
   },
   {
     menu: 'Methodology',

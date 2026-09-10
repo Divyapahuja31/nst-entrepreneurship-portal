@@ -42,7 +42,7 @@ export const createKPI = async (req, res) => {
       venture,
       createdBy: req.user.id,
       subKPIs: [],
-      status: KPIStatus.DRAFT,
+      status: 'DRAFT',
     })
 
     return res.status(201).json({

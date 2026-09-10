@@ -32,6 +32,7 @@ function authMiddleware(req, res, next) {
 
 app.use(
   cors({
+    origin: true,
     credentials: true,
   })
 )

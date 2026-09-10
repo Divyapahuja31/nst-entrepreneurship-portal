@@ -54,7 +54,10 @@
     "jtbd",
     "reco",
     "signups",
-    "waitlist"
+    "waitlist",
+    "kpis",
+    "subkpis",
+    "subkpi"
   ],
   "ignorePaths": [
     "node_modules/**",

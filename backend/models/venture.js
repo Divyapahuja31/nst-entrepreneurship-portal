@@ -41,6 +41,10 @@ const ventureSchema = new mongoose.Schema(
   }
 )
 
+ventureSchema.virtual('teamSize').get(function () {
+  return this.founders.length
+})
+
 export const modelName = 'Venture'
 
 const Venture = mongoose.model(modelName, ventureSchema)

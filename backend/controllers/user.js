@@ -35,13 +35,12 @@ const signUp = async (req, res) => {
       name: position,
     })
 
-    const error = validateAll({
+    const error = await validateAll({
       username,
       email,
       password,
       position,
     })
-
     if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
     }
@@ -109,7 +108,7 @@ const signIn = async (req, res) => {
   }
 }
 
-const profile = async (req, res) => {
+const portfolio = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
@@ -318,7 +317,7 @@ export {
   signOut,
   googleAuthCallback,
   googleAuth,
-  profile,
+  portfolio,
   completeGoogleSignup,
   getGoogleSignupOptions,
 }

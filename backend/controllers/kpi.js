@@ -1,7 +1,6 @@
 import mongoose from 'mongoose'
-import '../models/subKPI.js'
+import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
-import KPIStatus from '../models/enums/KPIStatus.js'
 import { validateCreateKPI } from '../utils/kpiValidator.js'
 
 export const createKPI = async (req, res) => {
@@ -42,7 +41,7 @@ export const createKPI = async (req, res) => {
       venture,
       createdBy: req.user.id,
       subKPIs: [],
-      status: KPIStatus.DRAFT,
+      status: 'DRAFT',
     })
 
     return res.status(201).json({
@@ -77,7 +76,7 @@ export const getVentureKPIs = async (req, res) => {
     })
       .populate('createdBy', 'username email')
       .populate('subKPIs')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 })
 
     return res.status(200).json({
       success: true,
@@ -113,14 +112,14 @@ export const submitKPIForApproval = async (req, res) => {
       })
     }
 
-    if (kpi.status !== KPIStatus.DRAFT) {
+    if (kpi.status !== 'DRAFT') {
       return res.status(400).json({
         success: false,
         message: 'Only draft KPIs can be submitted for approval',
       })
     }
 
-    kpi.status = KPIStatus.WAITING_FOR_APPROVAL
+    kpi.status = 'WAITING_FOR_APPROVAL'
 
     await kpi.save()
 
@@ -134,6 +133,68 @@ export const submitKPIForApproval = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to submit KPI',
+      error: error.message,
+    })
+  }
+}
+
+export const updateKPI = async (req, res) => {
+  try {
+    const { kpiId } = req.params
+    const { title, description, dueDate } = req.body
+
+    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
+      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    }
+
+    const updateFields = {}
+    if (title !== undefined) {
+      updateFields.title = title.trim()
+    }
+    if (description !== undefined) {
+      updateFields.description = description.trim()
+    }
+    if (dueDate !== undefined) {
+      updateFields.dueDate = dueDate || null
+    }
+
+    const kpi = await KPI.findByIdAndUpdate(kpiId, updateFields, { new: true })
+
+    if (!kpi) {
+      return res.status(404).json({ success: false, message: 'KPI not found' })
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, message: 'KPI updated', data: kpi })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update KPI',
+      error: error.message,
+    })
+  }
+}
+
+export const deleteKPI = async (req, res) => {
+  try {
+    const { kpiId } = req.params
+    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
+      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    }
+
+    const kpi = await KPI.findByIdAndDelete(kpiId)
+    if (!kpi) {
+      return res.status(404).json({ success: false, message: 'KPI not found' })
+    }
+
+    await SubKPI.deleteMany({ parentKPI: kpiId })
+
+    return res.status(200).json({ success: true, message: 'KPI deleted' })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete KPI',
       error: error.message,
     })
   }

@@ -1,8 +1,8 @@
 export default {
-  DRAFT: 'DRAFT',
-  WAITING_FOR_APPROVAL: 'WAITING_FOR_APPROVAL',
-  APPROVED: 'APPROVED',
-  UNDER_REVIEW: 'UNDER_REVIEW',
-  ACCEPTED: 'ACCEPTED',
-  REJECTED: 'REJECTED',
+  DRAFT: 'Draft',
+  WAITING_FOR_APPROVAL: 'Waiting for Approval',
+  APPROVED: 'Approved',
+  UNDER_REVIEW: 'Under Review',
+  ACCEPTED: 'Accepted',
+  REJECTED: 'Reject',
 }

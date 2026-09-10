@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { useLoaderData } from 'react-router'
 
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -180,15 +179,14 @@ function shortDate(date) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function BiWeekly() {
-  const data = useLoaderData()
-  const [rows, setRows] = React.useState(data.submissions)
-  const [observations, setObservations] = React.useState(data.observations)
+function BiWeekly({ value }) {
+  const [rows, setRows] = React.useState(value.submissions)
+  const [observations, setObservations] = React.useState(value.observations)
   const [selected, setSelected] = React.useState(null)
   const [message, setMessage] = React.useState('')
 
-  const { founder, evaluations, userId } = data
-  const isStaff = data.role === 'admin'
+  const { founder, evaluations, userId } = value
+  const isStaff = value.role === 'admin'
 
   const cycles = React.useMemo(() => {
     const anchor =

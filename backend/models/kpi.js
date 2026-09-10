@@ -22,9 +22,12 @@ const kpiSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: Object.keys(KPIStatus),
-      default: KPIStatus.DRAFT,
+      default: 'DRAFT',
     },
-
+    score: {
+      type: Number,
+      default: 0,
+    },
     venture: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Venture',

@@ -7,6 +7,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 
 import AddKpi from '../components/AddKpi'
+import UploadEvidenceDialog from '../components/UploadEvidenceDialog'
 import { getVentureKPIs, createKPI, updateKPI, deleteKPI, createSubKPI, updateSubKPI, deleteSubKPI, submitKPIForApproval } from '../api/kpi'
 
 export default function Kpis() {
@@ -17,6 +18,8 @@ export default function Kpis() {
   const [openAddKpi, setOpenAddKpi] = useState(false)
   const [editingKpi, setEditingKpi] = useState(null)
   const [expandedKpiId, setExpandedKpiId] = useState(null)
+  const [evidenceDialogOpen, setEvidenceDialogOpen] = useState(false)
+  const [selectedKpiForEvidence, setSelectedKpiForEvidence] = useState(null)
   const [kpis, setKpis] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -313,6 +316,10 @@ export default function Kpis() {
                       <Button
                         variant="outlined"
                         size="small"
+                        onClick={() => {
+                          setSelectedKpiForEvidence(kpi)
+                          setEvidenceDialogOpen(true)
+                        }}
                         sx={{ textTransform: 'none', fontWeight: 500, borderRadius: 1 }}
                       >
                         Upload Evidence
@@ -433,6 +440,15 @@ export default function Kpis() {
         }}
         onSave={handleSaveKPI}
         initialData={editingKpi}
+      />
+
+      <UploadEvidenceDialog
+        open={evidenceDialogOpen}
+        onClose={() => {
+          setEvidenceDialogOpen(false)
+          setSelectedKpiForEvidence(null)
+        }}
+        kpi={selectedKpiForEvidence}
       />
     </>
   )

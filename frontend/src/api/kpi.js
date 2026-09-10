@@ -95,3 +95,25 @@ export const deleteKPI = async kpiId => {
     )
   }
 }
+
+export const updateSubKPI = async ({ id, name, description }) => {
+  try {
+    const { data } = await api.put(`/subkpis/${id}`, { name, description })
+    return data
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || error.message || 'Failed to update SubKPI', { cause: error }
+    )
+  }
+}
+
+export const deleteSubKPI = async id => {
+  try {
+    const { data } = await api.delete(`/subkpis/${id}`)
+    return data
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || error.message || 'Failed to delete SubKPI', { cause: error }
+    )
+  }
+}

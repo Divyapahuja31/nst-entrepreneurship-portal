@@ -33,7 +33,7 @@ const menuItems = [
   {
     menu: 'Dashboard',
     icon: DashboardIcon,
-    path: '/dashboard',
+    path: '/',
   },
   {
     menu: 'KPIs',

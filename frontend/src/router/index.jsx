@@ -1,6 +1,4 @@
 import { createBrowserRouter } from 'react-router'
-
-import App from '../App.jsx'
 import EmptyLayout from '../layouts/EmptyLayout.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 import Dashboard from '../pages/Dashboard.jsx'
@@ -27,6 +25,7 @@ import BiWeekly from '../pages/admin/BiWeekly.jsx'
 import Methodology from '../pages/admin/Methodology.jsx'
 import Portfolio from '../pages/admin/Portfolio.jsx'
 import CompleteSignup from '../pages/CompleteSignup.jsx'
+import { Proposal } from '../pages/student/Proposal.jsx'
 
 export const router = createBrowserRouter([
   {
@@ -36,9 +35,9 @@ export const router = createBrowserRouter([
         Component: MainLayout,
         loader: portfolioLoader,
         children: [
-          { index: true, Component: App },
-          { path: 'dashboard', Component: Dashboard },
+          { index: true, Component: Dashboard },
           { path: 'kpis', Component: Kpis },
+          { path: 'proposal', Component: Proposal },
           {
             path: 'admin',
             children: [

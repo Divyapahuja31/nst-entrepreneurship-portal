@@ -39,8 +39,6 @@ const cards = [
 function Index() {
   const { result, kpi, overview } = useLoaderData()
 
-  console.log('kpi', kpi)
-
   return (
     <>
       <Typography variant="h2">Portfolio overview.</Typography>

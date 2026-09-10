@@ -19,7 +19,6 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import PeopleIcon from '@mui/icons-material/People'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import AutoStoriesIcon from '@mui/icons-material/AutoStories'
-import AssistantNavigationIcon from '@mui/icons-material/AssistantNavigation'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import { useLoaderData } from 'react-router'
 
@@ -69,17 +68,11 @@ const adminMenuItems = [
     icon: AutoStoriesIcon,
     path: '/admin/methodology',
   },
-  {
-    menu: 'Leadership',
-    icon: AssistantNavigationIcon,
-    path: '/admin/leadership',
-  },
 ]
 
 export default function MiniDrawer() {
   const theme = useTheme()
   const data = useLoaderData()
-  console.log(data)
   const { pathname } = useLocation()
   const [open, setOpen] = React.useState(false)
   const signout = useFetcher()

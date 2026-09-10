@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import startupStage from './enums/startupStage.js'
 
 const ventureSchema = new mongoose.Schema(
   {
@@ -20,6 +21,16 @@ const ventureSchema = new mongoose.Schema(
     },
     description: {
       type: String,
+    },
+    stage: {
+      type: String,
+      enum: Object.keys(startupStage),
+      default: 'IDEATION',
+    },
+    industry: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Industry',
+      required: true,
     },
     website: {
       type: String,

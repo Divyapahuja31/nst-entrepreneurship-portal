@@ -45,7 +45,7 @@ const getFounders = async (_, res) => {
         startup: venture.name,
         campus: venture.campus?.name ?? null,
         stage: venture.stage,
-        team: venture.founders.length,
+        team: venture.teamSize,
         // TODO(kanishkranjan): replace this one kpi are add
         //hard coded for now
         score: score,

@@ -312,4 +312,57 @@ const getOverview = async (_, res) => {
   }
 }
 
-export { getFounders, getFounderOptions, createFounder, getOverview }
+const deleteFounders = async (req, res) => {
+  try {
+    const founders = req.body.founders
+    const response = []
+    for (let i = 0; i < founders.length; i++) {
+      const { founderName, startupName } = founders[i]
+
+      const founder = await User.findOne({ username: founderName })
+
+      if (!founder) {
+        response.push({
+          founder: founderName,
+          startup: startupName,
+          message: `Founder not found`,
+        })
+        continue
+      }
+      const venture = await Venture.findOneAndUpdate(
+        { name: startupName },
+        { $pull: { founders: founder._id } },
+        { new: true }
+      )
+
+      if (!venture) {
+        response.push({
+          founder: founderName,
+          startup: startupName,
+          message: `Startup not found`,
+        })
+        continue
+      }
+      response.push({
+        founder: founderName,
+        startup: startupName,
+        message: `Founder removed successfully`,
+      })
+    }
+
+    return res.status(200).json({ result: response })
+  } catch (err) {
+    console.error('Delete founders error:', err)
+    return res.status(500).json({
+      error: 'Failed To load overdata',
+    })
+  }
+}
+
+export {
+  getFounders,
+  getFounderOptions,
+  createFounder,
+  getOverview,
+  deleteFounders,
+}

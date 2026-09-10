@@ -263,8 +263,6 @@ async function getMonthlyKPICounts({
     },
   ])
 
-  console.log(monthlyData)
-
   return monthlyData.reduce(
     (acc, { _id, _ }) => {
       const monthKey = MONTH_NAMES[_id - 1]

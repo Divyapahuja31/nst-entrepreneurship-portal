@@ -21,9 +21,9 @@ import {
   signoutAction,
 } from '../api/auth.js'
 import { biWeeklyLoader } from '../api/biweekly.js'
-import BiWeekly from '../pages/admin/BiWeekly.jsx'
 import Methodology from '../pages/admin/Methodology.jsx'
 import Portfolio from '../pages/admin/Portfolio.jsx'
+import Profile from '../pages/admin/Profile.jsx'
 import CompleteSignup from '../pages/CompleteSignup.jsx'
 import { Proposal } from '../pages/student/Proposal.jsx'
 
@@ -53,12 +53,8 @@ export const router = createBrowserRouter([
                 loader: addFounderLoader,
                 action: addFounderAction,
               },
-              {
-                path: 'biweekly',
-                Component: BiWeekly,
-                loader: biWeeklyLoader,
-              },
               { path: 'methodology', Component: Methodology },
+              { path: 'profile', Component: Profile, loader: biWeeklyLoader },
             ],
           },
         ],

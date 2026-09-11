@@ -1,7 +1,7 @@
 import { BarChart } from '@mui/x-charts/BarChart'
 
 const chartSetting = {
-  height: 400,
+  height: 150,
   margin: { left: 0 },
 }
 

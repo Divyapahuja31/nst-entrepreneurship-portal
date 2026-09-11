@@ -28,31 +28,73 @@ const deriveStatus = score => {
   return ventureHealth.AT_RISK
 }
 
+const calculateFounderStudents = async () => {
+  const ventures = await Venture.find()
+    .populate('founders', 'username')
+    .populate('campus', 'name')
+    .sort({ name: 1 })
+
+  const kpis = await KpiModel.find({
+    $or: [
+      { status: 'GRADED' },
+      { evaluationDate: { $ne: null } },
+      { score: { $gt: 0 } },
+    ],
+  })
+
+  const kpisByVenture = new Map()
+
+  for (const kpi of kpis) {
+    if (kpi.venture) {
+      const vId = kpi.venture.toString()
+      if (!kpisByVenture.has(vId)) {
+        kpisByVenture.set(vId, [])
+      }
+      kpisByVenture.get(vId).push(kpi)
+    }
+  }
+
+  const students = ventures.flatMap(venture => {
+    const ventureKpis = kpisByVenture.get(venture._id.toString()) || []
+
+    const gradedKpis = ventureKpis.filter(
+      k =>
+        (k.status === 'GRADED' ||
+          k.evaluationDate !== null ||
+          (typeof k.score === 'number' && k.score > 0)) &&
+        typeof k.score === 'number' &&
+        !Number.isNaN(k.score)
+    )
+
+    let score = null
+    if (gradedKpis.length > 0) {
+      const sum = gradedKpis.reduce((acc, curr) => acc + (curr.score || 0), 0)
+      score = Math.round(sum / gradedKpis.length)
+    }
+
+    const status = deriveStatus(score)
+
+    return venture.founders.map(founder => ({
+      id: founder._id,
+      founder: founder.username,
+      startup: venture.name,
+      campus: venture.campus?.name ?? null,
+      stage: venture.stage,
+      team: venture.teamSize,
+      score,
+      status,
+    }))
+  })
+
+  return { ventures, students }
+}
+
 const getFounders = async (_, res) => {
   try {
-    const ventures = await Venture.find()
-      .populate('founders', 'username')
-      .populate('campus', 'name')
-      .sort({ name: 1 })
-
-    const campuses = await Campus.find().sort({ name: 1 })
-
-    const students = ventures.flatMap(venture => {
-      const score = Math.round(Math.random() * 100)
-
-      return venture.founders.map(founder => ({
-        id: founder._id,
-        founder: founder.username,
-        startup: venture.name,
-        campus: venture.campus?.name ?? null,
-        stage: venture.stage,
-        team: venture.teamSize,
-        // TODO(kanishkranjan): replace this one kpi are add
-        //hard coded for now
-        score: score,
-        status: deriveStatus(score),
-      }))
-    })
+    const [{ students }, campuses] = await Promise.all([
+      calculateFounderStudents(),
+      Campus.find().sort({ name: 1 }),
+    ])
 
     return res.json({
       students,
@@ -243,58 +285,117 @@ const MONTH_NAMES = [
   'december',
 ]
 
-async function getMonthlyKPICounts({
+async function getMonthlyAverageKPIScores({
   year = new Date().getFullYear(),
-  timezone = 'UTC',
 } = {}) {
   const startOfYear = new Date(Date.UTC(year, 0, 1))
   const endOfYear = new Date(Date.UTC(year + 1, 0, 1))
 
-  const monthlyData = await KpiModel.aggregate([
-    {
-      $match: {
-        createdAt: { $gte: startOfYear, $lt: endOfYear },
-      },
-    },
-    {
-      $group: {
-        _id: { $month: { date: '$createdAt', timezone } },
-        count: { $sum: 1 },
-      },
-    },
+  const [ventures, kpis] = await Promise.all([
+    Venture.find().select('_id founders'),
+    KpiModel.find({
+      $or: [
+        { status: 'GRADED' },
+        { evaluationDate: { $ne: null } },
+        { score: { $gt: 0 } },
+      ],
+    }),
   ])
 
-  return monthlyData.reduce(
-    (acc, { _id, _ }) => {
-      const monthKey = MONTH_NAMES[_id - 1]
-      if (monthKey) {
-        acc[monthKey] = Math.round(Math.random() * 100)
+  const ventureFoundersMap = new Map()
+  ventures.forEach(v => {
+    ventureFoundersMap.set(
+      v._id.toString(),
+      (v.founders || []).map(f => f.toString())
+    )
+  })
+
+  const validKPIs = kpis.filter(kpi => {
+    if (typeof kpi.score !== 'number' || Number.isNaN(kpi.score)) {
+      return false
+    }
+    const date = new Date(kpi.evaluationDate || kpi.createdAt)
+    return date >= startOfYear && date < endOfYear
+  })
+
+  const kpisByMonth = Array.from({ length: 12 }, () => [])
+  validKPIs.forEach(kpi => {
+    const month = new Date(kpi.evaluationDate || kpi.createdAt).getUTCMonth()
+    kpisByMonth[month].push(kpi)
+  })
+
+  const result = {}
+
+  MONTH_NAMES.forEach((monthName, monthIndex) => {
+    const monthKpis = kpisByMonth[monthIndex]
+    if (monthKpis.length === 0) {
+      result[monthName] = 0
+      return
+    }
+
+    const kpisByVenture = new Map()
+    monthKpis.forEach(kpi => {
+      if (!kpi.venture) {
+        return
       }
-      return acc
-    },
-    Object.fromEntries(MONTH_NAMES.map(m => [m, 0]))
-  )
+      const vId = kpi.venture.toString()
+      if (!kpisByVenture.has(vId)) {
+        kpisByVenture.set(vId, [])
+      }
+      kpisByVenture.get(vId).push(kpi)
+    })
+
+    const studentScores = []
+    kpisByVenture.forEach((vKpis, vId) => {
+      const vSum = vKpis.reduce((acc, k) => acc + (k.score || 0), 0)
+      const ventureAvg = vSum / vKpis.length
+      const founders = ventureFoundersMap.get(vId) || []
+      founders.forEach(() => studentScores.push(ventureAvg))
+    })
+
+    if (studentScores.length === 0) {
+      result[monthName] = 0
+      return
+    }
+
+    const totalScore = studentScores.reduce((acc, s) => acc + s, 0)
+    result[monthName] = Math.round(totalScore / studentScores.length)
+  })
+
+  return result
 }
 
 const getOverview = async (_, res) => {
   try {
-    const data = await Venture.find()
-      .populate('founders', 'username')
-      .populate('campus', 'name')
-      .sort({ name: 1 })
+    const [{ ventures, students }, kpi] = await Promise.all([
+      calculateFounderStudents(),
+      getMonthlyAverageKPIScores(),
+    ])
 
-    const kpi = await getMonthlyKPICounts()
+    let onTrack = 0
+    let watch = 0
+    let atRisk = 0
 
-    const overview = {
-      founder: 18,
-      onTrack: 12,
-      watch: 4,
-      atRisk: 2,
+    for (const student of students) {
+      if (student.status === ventureHealth.ON_TRACK) {
+        onTrack++
+      } else if (student.status === ventureHealth.WATCH) {
+        watch++
+      } else if (student.status === ventureHealth.AT_RISK) {
+        atRisk++
+      }
     }
 
-    const result = data.reduce(
+    const overview = {
+      founder: students.length,
+      onTrack,
+      watch,
+      atRisk,
+    }
+
+    const result = ventures.reduce(
       (accumulate, currentValue) => {
-        const campusKey = currentValue.campus.name ?? 'Unknown'
+        const campusKey = currentValue.campus?.name ?? 'Unknown'
         const stageKey = currentValue.stage ?? 'Unknown'
 
         accumulate.campus[campusKey] = (accumulate.campus[campusKey] ?? 0) + 1
@@ -306,56 +407,64 @@ const getOverview = async (_, res) => {
     )
     return res.json({ result, kpi, overview })
   } catch (err) {
-    console.error('Get founders error:', err)
+    console.error('Get overview error:', err)
     return res.status(500).json({
       error: 'Failed To load overdata',
     })
   }
 }
 
+const removeFounderFromVenture = async ({
+  founderId,
+  founderName,
+  ventureId,
+  startupName,
+}) => {
+  const founderQuery = founderId
+    ? { _id: founderId }
+    : { username: founderName }
+  const founder = await User.findOne(founderQuery)
+
+  if (!founder) {
+    return {
+      founder: founderName || founderId,
+      startup: startupName || ventureId,
+      message: 'Founder not found',
+    }
+  }
+
+  const ventureQuery = ventureId ? { _id: ventureId } : { name: startupName }
+  const venture = await Venture.findOneAndUpdate(
+    ventureQuery,
+    { $pull: { founders: founder._id } },
+    { new: true }
+  )
+
+  if (!venture) {
+    return {
+      founder: founder.username,
+      startup: startupName || ventureId,
+      message: 'Startup not found',
+    }
+  }
+
+  return {
+    founder: founder.username,
+    startup: venture.name,
+    message: 'Founder removed successfully',
+  }
+}
+
 const deleteFounders = async (req, res) => {
   try {
-    const founders = req.body.founders
-    const response = []
-    for (let i = 0; i < founders.length; i++) {
-      const { founderName, startupName } = founders[i]
-
-      const founder = await User.findOne({ username: founderName })
-
-      if (!founder) {
-        response.push({
-          founder: founderName,
-          startup: startupName,
-          message: `Founder not found`,
-        })
-        continue
-      }
-      const venture = await Venture.findOneAndUpdate(
-        { name: startupName },
-        { $pull: { founders: founder._id } },
-        { new: true }
-      )
-
-      if (!venture) {
-        response.push({
-          founder: founderName,
-          startup: startupName,
-          message: `Startup not found`,
-        })
-        continue
-      }
-      response.push({
-        founder: founderName,
-        startup: startupName,
-        message: `Founder removed successfully`,
-      })
-    }
+    const founders = req.body.founders || []
+    const response = await Promise.all(founders.map(removeFounderFromVenture))
 
     return res.status(200).json({ result: response })
   } catch (err) {
     console.error('Delete founders error:', err)
     return res.status(500).json({
-      error: 'Failed To load overdata',
+      error: 'Failed to delete founders',
     })
   }
 }
@@ -381,6 +490,8 @@ const getBiWeekly = async (req, res) => {
       return res.status(404).json({ error: 'Founder not found' })
     }
 
+    const venture = await Venture.findOne({ founders: founderId })
+
     const submissions = founder.biWeeklySubmission || []
     const evaluations = submissions
       .map(sub => sub.biWeeklyEvaluation)
@@ -391,6 +502,7 @@ const getBiWeekly = async (req, res) => {
 
     return res.json({
       founder,
+      venture,
       submissions,
       evaluations,
       observations,

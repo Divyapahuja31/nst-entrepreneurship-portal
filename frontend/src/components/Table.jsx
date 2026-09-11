@@ -24,19 +24,19 @@ export default function CustomizedTable({
     'status',
   ]
 
-  const handleRowSelect = (e) => {
-    const idx = parseInt(e.currentTarget.getAttribute("data-testid").split('-').pop());
-    if (selectedRows.includes(idx)) {
-      setSelectedRows(selectedRows.filter(i => i !== idx))
+  const handleRowSelect = (rowId) => {
+    if (selectedRows.includes(rowId)) {
+      setSelectedRows(selectedRows.filter(i => i !== rowId))
     } else {
-      setSelectedRows([...selectedRows, idx])
+      setSelectedRows([...selectedRows, rowId])
     }
   }
   const handleSelectAll = () => {
-    if (selectedRows.length === data.length) {
+    const allIds = data.map((r, idx) => r.id ?? idx)
+    if (data.length > 0 && selectedRows.length === data.length) {
       setSelectedRows([])
     } else {
-      setSelectedRows(data.map((_, idx) => idx))
+      setSelectedRows(allIds)
     }
   }
   return (
@@ -58,20 +58,20 @@ export default function CustomizedTable({
         </TableHead>
         <TableBody>
           {data.map((row, idx) => {
-            const userId = row.id
+            const userId = row.id ?? idx
             return (
-              <StyledTableRow key={userId ?? idx}>
+              <StyledTableRow key={userId}>
                 <StyledTableCell>
                   <Checkbox
-                    checked={selectedRows.includes(idx)}
-                    onClick={handleRowSelect}
+                    checked={selectedRows.includes(userId)}
+                    onClick={() => handleRowSelect(userId)}
                     data-testid={`select-row-checkbox-${idx}`}
                   />
                 </StyledTableCell>
                 <StyledTableCell component="th" scope="row">
                   <Link
                     component={RouterLink}
-                    to={`/profile/${userId}`}
+                    to={`/profile/${row.id}`}
                     underline="hover"
                     sx={{
                       color: 'primary.main',
@@ -87,7 +87,7 @@ export default function CustomizedTable({
                 <StyledTableCell align="right">{row.stage}</StyledTableCell>
                 <StyledTableCell align="right">{row.team}</StyledTableCell>
                 <StyledTableCell align="right">
-                  {row.score ? row.score : '-'}
+                  {row.score !== null && row.score !== undefined ? row.score : '-'}
                 </StyledTableCell>
                 <StyledTableCell align="right">
                   {row.status ? row.status : '-'}

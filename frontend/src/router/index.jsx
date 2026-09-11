@@ -14,6 +14,7 @@ import {
   addFounderLoader,
   foundersCount,
   foundersLoader,
+  portfolioAction,
   biWeeklyLoader,
   profileAction,
 } from '../api/admin.js'
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
                 path: 'portfolio',
                 Component: Portfolio,
                 loader: foundersLoader,
+                action: portfolioAction,
               },
               {
                 path: 'founders/new',

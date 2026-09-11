@@ -100,7 +100,10 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
   const gradedCount = kpis.filter(k => k.status === 'GRADED').length
 
   const gradedKpisWithScores = kpis.filter(
-    k => k.status === 'GRADED' && k.score > 0
+    k =>
+      k.status === 'GRADED' &&
+      typeof k.score === 'number' &&
+      !Number.isNaN(k.score)
   )
   const averageScore = gradedKpisWithScores.length
     ? Math.round(

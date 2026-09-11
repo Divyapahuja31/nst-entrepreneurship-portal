@@ -29,21 +29,15 @@ const deriveStatus = score => {
 }
 
 const calculateFounderStudents = async () => {
-  const ventures = await Venture.find()
-    .populate('founders', 'username')
-    .populate('campus', 'name')
-    .sort({ name: 1 })
-
-  const kpis = await KpiModel.find({
-    $or: [
-      { status: 'GRADED' },
-      { evaluationDate: { $ne: null } },
-      { score: { $gt: 0 } },
-    ],
-  })
+  const [ventures, kpis] = await Promise.all([
+    Venture.find()
+      .populate('founders', 'username')
+      .populate('campus', 'name')
+      .sort({ name: 1 }),
+    KpiModel.find({ status: 'GRADED', score: { $gt: 0 } }),
+  ])
 
   const kpisByVenture = new Map()
-
   for (const kpi of kpis) {
     if (kpi.venture) {
       const vId = kpi.venture.toString()
@@ -56,25 +50,13 @@ const calculateFounderStudents = async () => {
 
   const students = ventures.flatMap(venture => {
     const ventureKpis = kpisByVenture.get(venture._id.toString()) || []
+    const score = ventureKpis.length
+      ? Math.round(
+          ventureKpis.reduce((sum, k) => sum + k.score, 0) / ventureKpis.length
+        )
+      : null
 
-    const gradedKpis = ventureKpis.filter(
-      k =>
-        (k.status === 'GRADED' ||
-          k.evaluationDate !== null ||
-          (typeof k.score === 'number' && k.score > 0)) &&
-        typeof k.score === 'number' &&
-        !Number.isNaN(k.score)
-    )
-
-    let score = null
-    if (gradedKpis.length > 0) {
-      const sum = gradedKpis.reduce((acc, curr) => acc + (curr.score || 0), 0)
-      score = Math.round(sum / gradedKpis.length)
-    }
-
-    const status = deriveStatus(score)
-
-    return venture.founders.filter(Boolean).map(founder => ({
+    return venture.founders.map(founder => ({
       id: founder._id,
       founder: founder.username,
       startup: venture.name,
@@ -82,7 +64,7 @@ const calculateFounderStudents = async () => {
       stage: venture.stage,
       team: venture.teamSize,
       score,
-      status,
+      status: deriveStatus(score),
     }))
   })
 
@@ -294,38 +276,27 @@ async function getMonthlyAverageKPIScores({
   const [ventures, kpis] = await Promise.all([
     Venture.find().select('_id founders'),
     KpiModel.find({
+      score: { $gt: 0 },
       $or: [
-        { status: 'GRADED' },
-        { evaluationDate: { $ne: null } },
-        { score: { $gt: 0 } },
+        { evaluationDate: { $gte: startOfYear, $lt: endOfYear } },
+        { createdAt: { $gte: startOfYear, $lt: endOfYear } },
       ],
     }),
   ])
 
-  const ventureFoundersMap = new Map()
-  ventures.forEach(v => {
-    ventureFoundersMap.set(
-      v._id.toString(),
-      (v.founders || []).map(f => f.toString())
-    )
-  })
-
-  const validKPIs = kpis.filter(kpi => {
-    if (typeof kpi.score !== 'number' || Number.isNaN(kpi.score)) {
-      return false
-    }
-    const date = new Date(kpi.evaluationDate || kpi.createdAt)
-    return date >= startOfYear && date < endOfYear
-  })
+  const ventureFoundersCount = new Map(
+    ventures.map(v => [v._id.toString(), v.founders?.length || 0])
+  )
 
   const kpisByMonth = Array.from({ length: 12 }, () => [])
-  validKPIs.forEach(kpi => {
-    const month = new Date(kpi.evaluationDate || kpi.createdAt).getUTCMonth()
-    kpisByMonth[month].push(kpi)
-  })
+  for (const kpi of kpis) {
+    const date = new Date(kpi.evaluationDate || kpi.createdAt)
+    if (date >= startOfYear && date < endOfYear) {
+      kpisByMonth[date.getUTCMonth()].push(kpi)
+    }
+  }
 
   const result = {}
-
   MONTH_NAMES.forEach((monthName, monthIndex) => {
     const monthKpis = kpisByMonth[monthIndex]
     if (monthKpis.length === 0) {
@@ -333,33 +304,27 @@ async function getMonthlyAverageKPIScores({
       return
     }
 
-    const kpisByVenture = new Map()
-    monthKpis.forEach(kpi => {
+    const byVenture = new Map()
+    for (const kpi of monthKpis) {
       if (!kpi.venture) {
-        return
+        continue
       }
       const vId = kpi.venture.toString()
-      if (!kpisByVenture.has(vId)) {
-        kpisByVenture.set(vId, [])
-      }
-      kpisByVenture.get(vId).push(kpi)
-    })
-
-    const studentScores = []
-    kpisByVenture.forEach((vKpis, vId) => {
-      const vSum = vKpis.reduce((acc, k) => acc + (k.score || 0), 0)
-      const ventureAvg = vSum / vKpis.length
-      const founders = ventureFoundersMap.get(vId) || []
-      founders.forEach(() => studentScores.push(ventureAvg))
-    })
-
-    if (studentScores.length === 0) {
-      result[monthName] = 0
-      return
+      const current = byVenture.get(vId) || { sum: 0, count: 0 }
+      current.sum += kpi.score
+      current.count += 1
+      byVenture.set(vId, current)
     }
 
-    const totalScore = studentScores.reduce((acc, s) => acc + s, 0)
-    result[monthName] = Math.round(totalScore / studentScores.length)
+    let totalScore = 0
+    let totalWeight = 0
+    for (const [vId, { sum, count }] of byVenture) {
+      const weight = ventureFoundersCount.get(vId) || 0
+      totalScore += (sum / count) * weight
+      totalWeight += weight
+    }
+
+    result[monthName] = totalWeight ? Math.round(totalScore / totalWeight) : 0
   })
 
   return result
@@ -372,25 +337,11 @@ const getOverview = async (_, res) => {
       getMonthlyAverageKPIScores(),
     ])
 
-    let onTrack = 0
-    let watch = 0
-    let atRisk = 0
-
-    for (const student of students) {
-      if (student.status === ventureHealth.ON_TRACK) {
-        onTrack++
-      } else if (student.status === ventureHealth.WATCH) {
-        watch++
-      } else if (student.status === ventureHealth.AT_RISK) {
-        atRisk++
-      }
-    }
-
     const overview = {
       founder: students.length,
-      onTrack,
-      watch,
-      atRisk,
+      onTrack: students.filter(s => s.status === ventureHealth.ON_TRACK).length,
+      watch: students.filter(s => s.status === ventureHealth.WATCH).length,
+      atRisk: students.filter(s => s.status === ventureHealth.AT_RISK).length,
     }
 
     const result = ventures.reduce(

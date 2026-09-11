@@ -415,7 +415,7 @@ export default function Kpis() {
                         >
                           {kpi.actualValue
                             ? 'Update Progress'
-                            : 'Input Evidence'}
+                            : 'Upload Document'}
                         </Button>
                       ) : (
                         <Tooltip

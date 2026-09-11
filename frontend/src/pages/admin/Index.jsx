@@ -14,25 +14,25 @@ const cards = [
     id: 1,
     title: 'Founder',
     data: 'founder',
-    description: 'Plants are essential for all life.',
+    description: 'Total active founders enrolled in the program.',
   },
   {
     id: 2,
     title: 'On Track',
     data: 'onTrack',
-    description: 'Animals are a part of nature.',
+    description: 'Founders on track with average KPI score ≥ 70.',
   },
   {
     id: 3,
     title: 'Watch',
     data: 'watch',
-    description: 'Humans depend on plants and animals for survival.',
+    description: 'Founders needing mentorship with average KPI score 40–69.',
   },
   {
     id: 4,
     title: 'At Risk',
     data: 'atRisk',
-    description: 'Humans depend on plants and animals for survival.',
+    description: 'Founders requiring critical intervention with average KPI score < 40.',
   },
 ]
 
@@ -76,7 +76,7 @@ function Index() {
                   {card.title}
                 </Typography>
                 <Typography variant="h5" component="div">
-                  {overview[card.data]}
+                  {overview?.[card.data] ?? 0}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   {card.description}

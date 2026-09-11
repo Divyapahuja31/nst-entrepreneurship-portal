@@ -1,3 +1,4 @@
+import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
 import MenuItem from '@mui/material/MenuItem'
 import FormControl from '@mui/material/FormControl'
@@ -5,7 +6,7 @@ import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 
 import React from 'react'
-import { Link, useLoaderData } from 'react-router'
+import { Link, useFetcher, useLoaderData } from 'react-router'
 
 import CustomizedTable from '../../components/Table'
 
@@ -18,9 +19,12 @@ const FILTER_LABELS = {
 function Portfolio() {
   const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
+  const fetcher = useFetcher()
+  const isDeleting = fetcher.state !== 'idle'
   const [filters, setFilters] = React.useState({})
-  const[selectedRows, setSelectedRows] = React.useState([])
+  const [selectedRows, setSelectedRows] = React.useState([])
   const founderQuery = (filters.founder ?? '').trim().toLowerCase()
+
   const visibleStudents = students.filter(student => {
     if (
       !String(student?.founder ?? '')
@@ -37,7 +41,7 @@ function Portfolio() {
       )
     })
   })
-  const handleDeleteFounders = async () => {
+  const handleDeleteFounders = () => {
     if (selectedRows.length === 0) {
       alert('Please select at least one founder to delete.')
       return
@@ -50,31 +54,20 @@ function Portfolio() {
       return
     }
 
-    try {
-      const foundersToDelete = selectedRows.map(el => {
-        const idx = parseInt(el)
-        return {
-        founderName: visibleStudents[idx].founder,
-        startupName: visibleStudents[idx].startup,
-      }})
-      const response = await fetch('/api/admin/founders/delete', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ founders: foundersToDelete }),
-      })
+    const foundersToDelete = students
+      .filter(s => selectedRows.includes(s.id))
+      .map(s => ({
+        founderId: s.id,
+        founderName: s.founder,
+        startupName: s.startup,
+      }))
 
-      if (!response.ok) {
-        throw new Error('Failed to delete founders')
-      }
+    setSelectedRows([])
 
-      // Refresh the page or update the state to reflect the changes
-      window.location.reload()
-    } catch (error) {
-      console.error(error)
-      alert('An error occurred while deleting founders.')
-    }
+    fetcher.submit(
+      { intent: 'deleteFounders', founders: foundersToDelete },
+      { method: 'post', encType: 'application/json' }
+    )
   }
   return (
     <div>
@@ -83,6 +76,12 @@ function Portfolio() {
           Add founder
         </Button>
       </div>
+
+      {fetcher.data?.error && (
+        <Alert severity="error" sx={{ my: 1 }}>
+          {fetcher.data.error}
+        </Alert>
+      )}
 
       <div
         className="container"
@@ -104,9 +103,15 @@ function Portfolio() {
               setFilters(prev => ({ ...prev, founder: event.target.value }))
             }
           />
-          <Button onClick={handleDeleteFounders} disabled={selectedRows.length === 0} variant="contained" color="error" style={{marginTop: '2%', marginLeft: '10px'}}>
-          Delete Founders
-        </Button>
+          <Button
+            onClick={handleDeleteFounders}
+            disabled={selectedRows.length === 0 || isDeleting}
+            variant="contained"
+            color="error"
+            style={{ marginTop: '2%', marginLeft: '10px' }}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete Founders'}
+          </Button>
         </div>
         <div>
           {Object.keys(filterData).map(key => (
@@ -134,7 +139,11 @@ function Portfolio() {
         </div>
       </div>
 
-      <CustomizedTable data={visibleStudents} selectedRows={selectedRows} setSelectedRows={setSelectedRows} />
+      <CustomizedTable
+        data={visibleStudents}
+        selectedRows={selectedRows}
+        setSelectedRows={setSelectedRows}
+      />
     </div>
   )
 }

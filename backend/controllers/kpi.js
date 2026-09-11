@@ -109,11 +109,16 @@ export const getMyKPIs = async (req, res) => {
     }
 
     const venture = await Venture.findOne({ founders: req.user.id })
-    const query = venture
-      ? { $or: [{ venture: venture._id }, { createdBy: req.user.id }] }
-      : { createdBy: req.user.id }
+    if (!venture) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        venture: null,
+        data: [],
+      })
+    }
 
-    const kpis = await KPI.find(query)
+    const kpis = await KPI.find({ venture: venture._id })
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
       .populate('subKPIs')
@@ -122,7 +127,7 @@ export const getMyKPIs = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: kpis.length,
-      venture: venture || null,
+      venture,
       data: kpis,
     })
   } catch (error) {
@@ -148,11 +153,16 @@ export const getFounderKPIs = async (req, res) => {
     }
 
     const venture = await Venture.findOne({ founders: founderId })
-    const query = venture
-      ? { $or: [{ venture: venture._id }, { createdBy: founderId }] }
-      : { createdBy: founderId }
+    if (!venture) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        venture: null,
+        data: [],
+      })
+    }
 
-    const kpis = await KPI.find(query)
+    const kpis = await KPI.find({ venture: venture._id })
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
       .populate('subKPIs')
@@ -161,7 +171,7 @@ export const getFounderKPIs = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: kpis.length,
-      venture: venture || null,
+      venture,
       data: kpis,
     })
   } catch (error) {

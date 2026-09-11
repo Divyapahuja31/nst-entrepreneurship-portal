@@ -31,3 +31,12 @@ export const addFounderAction = async ({ request }) => {
     return { error: err.response.data?.error || 'Could not add founder' }
   }
 }
+
+export const biWeeklyLoader = async ({ params }) => {
+  const { data } = await api.get('/biweekly', {
+    params: {
+      founderId: params?.userid,
+    },
+  })
+  return data
+}

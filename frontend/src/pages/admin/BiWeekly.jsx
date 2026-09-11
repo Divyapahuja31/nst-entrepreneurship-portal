@@ -1,4 +1,11 @@
 import * as React from 'react'
+import { useOutletContext } from 'react-router'
+import {
+  submitBiWeeklyCycle,
+  saveBiWeeklyObservation,
+  saveBiWeeklyEvaluation,
+  reopenBiWeeklySubmission,
+} from '../../api/biweekly.js'
 
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -27,8 +34,8 @@ const CYCLES = 13 // 26 weeks = 13 bi-weekly cycles
 const GRACE_DAYS = 3
 
 /* ---------- Evidence checklist per cycle (stage-aware) ---------- */
-const CHECKLISTS = {
-  1: {
+const CHECKLISTS = [
+  {
     stage: 'Discovery — Kickoff',
     items: [
       {
@@ -44,7 +51,7 @@ const CHECKLISTS = {
       { key: 'goals_2w', label: '2-week goals doc' },
     ],
   },
-  2: {
+  {
     stage: 'Discovery — Expand',
     items: [
       { key: 'interviews_5', label: '5 more customer interviews' },
@@ -53,7 +60,7 @@ const CHECKLISTS = {
       { key: 'insight_note', label: 'Discovery insight note (what changed)' },
     ],
   },
-  3: {
+  {
     stage: 'Validation — Signal',
     items: [
       { key: 'landing_page', label: 'Landing page live URL' },
@@ -62,7 +69,7 @@ const CHECKLISTS = {
       { key: 'pricing_hyp', label: 'Pricing hypothesis doc' },
     ],
   },
-  4: {
+  {
     stage: 'Validation — Commit',
     items: [
       { key: 'loi_or_prepay', label: 'Letter of intent or pre-payment (≥1)' },
@@ -71,7 +78,7 @@ const CHECKLISTS = {
       { key: 'assumption_kill', label: 'Assumptions killed / kept summary' },
     ],
   },
-  5: {
+  {
     stage: 'MVP — Build v1',
     items: [
       { key: 'mvp_demo', label: 'MVP demo video (≤3 min)' },
@@ -80,7 +87,7 @@ const CHECKLISTS = {
       { key: 'bug_log', label: 'Bug / iteration log' },
     ],
   },
-  6: {
+  {
     stage: 'MVP — Iterate',
     items: [
       { key: 'mvp_v2_demo', label: 'MVP v2 demo (post-iteration)' },
@@ -92,7 +99,7 @@ const CHECKLISTS = {
       { key: 'roadmap_next', label: 'Roadmap for next cycle' },
     ],
   },
-  7: {
+  {
     stage: 'Pilot — Launch',
     items: [
       { key: 'pilot_users', label: 'Pilot user list (≥5 with contact)' },
@@ -101,7 +108,7 @@ const CHECKLISTS = {
       { key: 'nps_or_csat', label: 'NPS / CSAT first read' },
     ],
   },
-  8: {
+  {
     stage: 'Pilot — Retain',
     items: [
       { key: 'retention_chart', label: 'W1/W2 retention chart' },
@@ -110,7 +117,7 @@ const CHECKLISTS = {
       { key: 'churn_reasons', label: 'Churn interviews (≥3)' },
     ],
   },
-  9: {
+  {
     stage: 'Traction — Revenue',
     items: [
       { key: 'revenue_proof', label: 'Revenue proof (invoices / stripe)' },
@@ -119,7 +126,7 @@ const CHECKLISTS = {
       { key: 'channel_test', label: 'Channel test summary' },
     ],
   },
-  10: {
+  {
     stage: 'Traction — Scale readiness',
     items: [
       { key: 'unit_econ', label: 'Unit economics model' },
@@ -128,7 +135,7 @@ const CHECKLISTS = {
       { key: 'risk_register', label: 'Risk register' },
     ],
   },
-  11: {
+  {
     stage: 'Final — Story',
     items: [
       { key: 'pitch_deck', label: 'Investor / defense deck v1' },
@@ -137,7 +144,7 @@ const CHECKLISTS = {
       { key: 'traction_1pager', label: 'Traction 1-pager' },
     ],
   },
-  12: {
+  {
     stage: 'Final — Rehearsal',
     items: [
       { key: 'pitch_v2', label: 'Deck v2 (post-mentor review)' },
@@ -146,7 +153,7 @@ const CHECKLISTS = {
       { key: 'next_6mo_plan', label: 'Next 6-month plan' },
     ],
   },
-  13: {
+  {
     stage: 'Final — Defense',
     items: [
       { key: 'final_deck', label: 'Final defense deck (locked)' },
@@ -158,7 +165,7 @@ const CHECKLISTS = {
       { key: 'career_reco_form', label: 'Career recommendation intake filled' },
     ],
   },
-}
+]
 
 const STATUS_COLOR = { green: 'success', yellow: 'warning', red: 'error' }
 
@@ -179,20 +186,32 @@ function shortDate(date) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function BiWeekly({ value }) {
-  const [rows, setRows] = React.useState(value.submissions)
-  const [observations, setObservations] = React.useState(value.observations)
+function BiWeekly({ data }) {
+  const currentUser = useOutletContext()
+  const isAdmin = currentUser?.role?.name === 'admin'
+
+  const { founder } = data || {}
+  const [rows, setRows] = React.useState(data?.submissions ?? [])
+  const [observations, setObservations] = React.useState(
+    data?.observations ?? []
+  )
+  const [evaluations, setEvaluations] = React.useState(
+    data?.evaluations ?? []
+  )
   const [selected, setSelected] = React.useState(null)
   const [message, setMessage] = React.useState('')
 
-  const { founder, evaluations, userId } = value
-  const isStaff = value.role === 'admin'
+  const [prevData, setPrevData] = React.useState(data)
+  if (data !== prevData) {
+    setPrevData(data)
+    setRows(data?.submissions ?? [])
+    setObservations(data?.observations ?? [])
+    setEvaluations(data?.evaluations ?? [])
+  }
 
   const cycles = React.useMemo(() => {
     const anchor =
-      founder.intake_completed_at ??
-      founder.created_at ??
-      new Date().toISOString()
+      founder?.createdAt ?? founder?.created_at ?? new Date().toISOString()
     return computeCycles(anchor)
   }, [founder])
 
@@ -201,6 +220,16 @@ function BiWeekly({ value }) {
     const c = cycles.find(c => now >= c.start && now <= c.end)
     return c?.n ?? cycles.find(c => now < c.start)?.n ?? CYCLES
   }, [cycles])
+
+  if (!data || !founder) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="info">
+          No bi-weekly profile data found for this founder.
+        </Alert>
+      </Box>
+    )
+  }
 
   const active = selected ?? currentCycle
   const activeMeta = cycles.find(c => c.n === active)
@@ -212,51 +241,90 @@ function BiWeekly({ value }) {
       !rows.find(r => r.cycle_number === c.n && r.submitted_at)
   ).length
 
-  const saveSubmission = (payload, submit) => {
-    setRows(prev => {
-      const existing = prev.find(r => r.cycle_number === payload.cycle_number)
-      const next = {
-        ...(existing ?? { id: `s${payload.cycle_number}` }),
+  const saveSubmission = async (payload, submit) => {
+    try {
+      const res = await submitBiWeeklyCycle({
         ...payload,
-        submitted_at: submit
-          ? new Date().toISOString()
-          : (existing?.submitted_at ?? null),
-      }
-      return existing
-        ? prev.map(r => (r.cycle_number === payload.cycle_number ? next : r))
-        : [...prev, next]
-    })
-    setMessage(submit ? 'Submitted to faculty' : 'Draft saved')
+        isSubmit: submit,
+      })
+      const saved = res.submission
+      setRows(prev => {
+        const existing = prev.find(r => r.cycle_number === payload.cycle_number)
+        return existing
+          ? prev.map(r => (r.cycle_number === payload.cycle_number ? saved : r))
+          : [...prev, saved]
+      })
+      setMessage(submit ? 'Submitted to faculty' : 'Draft saved')
+    } catch (err) {
+      console.error('Failed to save submission:', err)
+      setMessage(err.response?.data?.error || 'Failed to save submission')
+    }
   }
 
-  const reopenSubmission = cycleNumber => {
+  const reopenSubmission = async cycleNumber => {
     if (!window.confirm('Unlock to edit? Faculty will see this as re-opened.'))
       return
-    setRows(prev =>
-      prev.map(r =>
-        r.cycle_number === cycleNumber ? { ...r, submitted_at: null } : r
+    try {
+      await reopenBiWeeklySubmission(founder?._id, cycleNumber)
+      setRows(prev =>
+        prev.map(r =>
+          r.cycle_number === cycleNumber ? { ...r, submitted_at: null } : r
+        )
       )
-    )
-    setMessage('Unlocked')
+      setMessage('Unlocked')
+    } catch (err) {
+      console.error('Failed to reopen:', err)
+      setMessage(err.response?.data?.error || 'Failed to unlock')
+    }
   }
 
-  const saveObservation = payload => {
-    setObservations(prev => {
-      const existing = prev.find(
-        o =>
-          o.cycle_number === payload.cycle_number &&
-          o.author_id === payload.author_id
-      )
-      const next = {
-        ...(existing ?? { id: `o${prev.length + 1}` }),
+  const saveObservation = async payload => {
+    try {
+      const res = await saveBiWeeklyObservation({
         ...payload,
-        updated_at: new Date().toISOString(),
-      }
-      return existing
-        ? prev.map(o => (o.id === existing.id ? next : o))
-        : [...prev, next]
-    })
-    setMessage('Observation saved')
+        founderId: founder?._id,
+      })
+      const saved = res.observation
+      setObservations(prev => {
+        const existing = prev.find(o => o.cycle_number === payload.cycle_number)
+        return existing
+          ? prev.map(o => (o.cycle_number === payload.cycle_number ? saved : o))
+          : [...prev, saved]
+      })
+      setMessage('Observation saved')
+    } catch (err) {
+      console.error('Failed to save observation:', err)
+      setMessage(err.response?.data?.error || 'Failed to save observation')
+    }
+  }
+
+  const saveEvaluation = async payload => {
+    try {
+      const res = await saveBiWeeklyEvaluation({
+        ...payload,
+        founderId: founder?._id,
+      })
+      const saved = res.evaluation
+      setEvaluations(prev => {
+        const existing = prev.find(
+          e =>
+            e.checklist_id === payload.checklist_id ||
+            e.month_number === payload.month_number
+        )
+        return existing
+          ? prev.map(e =>
+              e.checklist_id === payload.checklist_id ||
+              e.month_number === payload.month_number
+                ? saved
+                : e
+            )
+          : [saved, ...prev]
+      })
+      setMessage('Evaluation saved')
+    } catch (err) {
+      console.error('Failed to save evaluation:', err)
+      setMessage(err.response?.data?.error || 'Failed to save evaluation')
+    }
   }
 
   return (
@@ -275,7 +343,6 @@ function BiWeekly({ value }) {
           justifyContent="space-between"
           flexWrap="wrap"
         >
-          <Typography variant="h4">{founder.startup_name}</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             Current cycle #{currentCycle}
           </Typography>
@@ -283,7 +350,6 @@ function BiWeekly({ value }) {
       </Box>
 
       <MyProgress
-        founder={founder}
         submittedCount={submittedCount}
         missedCount={missedCount}
         totalCycles={CYCLES}
@@ -363,19 +429,30 @@ function BiWeekly({ value }) {
         periodEnd={activeMeta.end.toISOString().slice(0, 10)}
         deadline={activeMeta.deadline}
         existing={activeRow}
-        isStaff={isStaff}
+        isAdmin={isAdmin}
         onSave={saveSubmission}
         onReopen={reopenSubmission}
       />
 
       <MentorObservationSection
-        key={`obs-${activeMeta.n}`}
+        key={`obs-${activeMeta.n}-${observations.find(o => o.cycle_number === activeMeta.n)?._id ?? 'none'}`}
         cycleNumber={activeMeta.n}
         submission={activeRow}
-        observations={observations.filter(o => o.cycle_number === activeMeta.n)}
-        canAuthor={isStaff}
-        userId={userId}
+        observation={observations.find(o => o.cycle_number === activeMeta.n)}
+        canAuthor={isAdmin}
         onSave={saveObservation}
+      />
+
+      <EvaluationSection
+        key={`eval-${activeMeta.n}-${evaluations.find(e => e.checklist_id === activeMeta.n || e.month_number === Math.ceil(activeMeta.n / 2))?._id ?? 'none'}`}
+        cycleNumber={activeMeta.n}
+        evaluation={evaluations.find(
+          e =>
+            e.checklist_id === activeMeta.n ||
+            e.month_number === Math.ceil(activeMeta.n / 2)
+        )}
+        canAuthor={isAdmin}
+        onSave={saveEvaluation}
       />
 
       <Snackbar
@@ -394,7 +471,6 @@ function BiWeekly({ value }) {
 
 /* =========== My Progress panel =========== */
 function MyProgress({
-  founder,
   submittedCount,
   missedCount,
   totalCycles,
@@ -413,24 +489,11 @@ function MyProgress({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
             gap: 2,
             mt: 1,
           }}
         >
-          <Stat
-            label="Stage"
-            value={
-              <Box component="span" sx={{ textTransform: 'capitalize' }}>
-                {founder.lifecycle_stage ?? '—'}
-              </Box>
-            }
-            sub={
-              <Box component="span" sx={{ textTransform: 'capitalize' }}>
-                {founder.lifecycle_status}
-              </Box>
-            }
-          />
           <Stat
             label="Cycles submitted"
             value={
@@ -557,7 +620,7 @@ function CycleForm({
   periodEnd,
   deadline,
   existing,
-  isStaff,
+  isAdmin,
   onSave,
   onReopen,
 }) {
@@ -585,9 +648,9 @@ function CycleForm({
   const now = new Date()
   const submitted = !!existing?.submitted_at
   const pastDeadline = deadline < now
-  // Locked for students once submitted or past deadline. Staff can always edit.
-  const locked = !isStaff && (submitted || pastDeadline)
-  const checklist = CHECKLISTS[cycleNumber]
+  // Admin view is read-only (admin cannot submit student progress). Student is locked if submitted or past deadline.
+  const locked = isAdmin ? true : (submitted || pastDeadline)
+  const checklist = CHECKLISTS[cycleNumber + 1]
 
   const requiredCount = checklist?.items.length ?? 0
   const doneCount =
@@ -663,6 +726,14 @@ function CycleForm({
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
+            {isAdmin && (
+              <Chip
+                size="small"
+                color="info"
+                variant="outlined"
+                label="Admin view (read-only)"
+              />
+            )}
             {submitted && (
               <Chip
                 size="small"
@@ -681,9 +752,9 @@ function CycleForm({
                 label="Missed & locked"
               />
             )}
-            {isStaff && (submitted || pastDeadline) && existing && (
+            {isAdmin && (submitted || pastDeadline) && existing && (
               <Button size="small" onClick={() => onReopen(cycleNumber)}>
-                Reopen (staff)
+                Reopen for student
               </Button>
             )}
           </Stack>
@@ -961,46 +1032,58 @@ function CycleForm({
             disabled={locked}
           />
 
-          {!locked && (
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              flexWrap="wrap"
-              gap={1}
-            >
-              <Typography variant="caption" sx={{ color: 'warning.main' }}>
-                {requiredCount > 0 &&
-                  doneCount < requiredCount &&
-                  `${requiredCount - doneCount} required item${
-                    requiredCount - doneCount > 1 ? 's' : ''
-                  } still missing.`}
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => save(false)}
-                >
-                  Save draft
-                </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  disabled={!f.progress_summary}
-                  onClick={() => save(true)}
-                >
-                  Submit cycle {cycleNumber}
-                </Button>
-              </Stack>
-            </Stack>
-          )}
-
-          {locked && !submitted && (
-            <Alert severity="error" icon={<LockIcon />}>
-              Deadline passed on {deadline.toLocaleDateString()}. Contact
-              faculty to reopen.
+          {isAdmin ? (
+            <Alert severity="info">
+              {submitted
+                ? `Submission received from student on ${new Date(
+                    existing.submitted_at
+                  ).toLocaleDateString()}. Admin view is read-only.`
+                : 'Student has not submitted for this cycle yet.'}
             </Alert>
+          ) : (
+            <>
+              {!locked && (
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  flexWrap="wrap"
+                  gap={1}
+                >
+                  <Typography variant="caption" sx={{ color: 'warning.main' }}>
+                    {requiredCount > 0 &&
+                      doneCount < requiredCount &&
+                      `${requiredCount - doneCount} required item${
+                        requiredCount - doneCount > 1 ? 's' : ''
+                      } still missing.`}
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => save(false)}
+                    >
+                      Save draft
+                    </Button>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disabled={!f.progress_summary}
+                      onClick={() => save(true)}
+                    >
+                      Submit cycle {cycleNumber}
+                    </Button>
+                  </Stack>
+                </Stack>
+              )}
+
+              {locked && !submitted && (
+                <Alert severity="error" icon={<LockIcon />}>
+                  Deadline passed on {deadline.toLocaleDateString()}. Contact
+                  faculty to reopen.
+                </Alert>
+              )}
+            </>
           )}
         </Stack>
       </CardContent>
@@ -1012,15 +1095,13 @@ function CycleForm({
 function MentorObservationSection({
   cycleNumber,
   submission,
-  observations,
+  observation,
   canAuthor,
-  userId,
   onSave,
 }) {
   const evidenceLinks = Array.isArray(submission?.evidence_links)
     ? submission.evidence_links
     : []
-  const mine = observations.find(o => o.author_id === userId)
 
   return (
     <Card variant="outlined">
@@ -1029,42 +1110,43 @@ function MentorObservationSection({
           Mentor observation · Cycle {cycleNumber}
         </Typography>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          {observations.length === 0 && !canAuthor && (
+          {!observation && !canAuthor && (
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               No mentor observations for this cycle yet.
             </Typography>
           )}
-          {observations.map(o => (
+          {observation && (
             <Box
-              key={o.id}
               sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}
             >
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {new Date(o.updated_at ?? o.created_at).toLocaleString()}
+                {new Date(
+                  observation.updated_at ?? observation.created_at
+                ).toLocaleString()}
               </Typography>
               <Typography
                 variant="body2"
                 sx={{ whiteSpace: 'pre-wrap', my: 1 }}
               >
-                {o.observation}
+                {observation.observation}
               </Typography>
-              {o.strengths && (
+              {observation.strengths && (
                 <Typography variant="body2">
-                  <strong>Strengths:</strong> {o.strengths}
+                  <strong>Strengths:</strong> {observation.strengths}
                 </Typography>
               )}
-              {o.concerns && (
+              {observation.concerns && (
                 <Typography variant="body2">
-                  <strong>Concerns:</strong> {o.concerns}
+                  <strong>Concerns:</strong> {observation.concerns}
                 </Typography>
               )}
-              {o.action_items && (
+              {observation.action_items && (
                 <Typography variant="body2">
-                  <strong>Action items:</strong> {o.action_items}
+                  <strong>Action items:</strong> {observation.action_items}
                 </Typography>
               )}
-              {Array.isArray(o.evidence_reviewed) &&
-                o.evidence_reviewed.length > 0 && (
+              {Array.isArray(observation.evidence_reviewed) &&
+                observation.evidence_reviewed.length > 0 && (
                   <Box sx={{ mt: 1 }}>
                     <Typography
                       variant="caption"
@@ -1072,7 +1154,7 @@ function MentorObservationSection({
                     >
                       Evidence reviewed:
                     </Typography>
-                    {o.evidence_reviewed.map((idx, i) => {
+                    {observation.evidence_reviewed.map((idx, i) => {
                       const link = evidenceLinks[idx]
                       if (!link) return null
                       return (
@@ -1106,13 +1188,12 @@ function MentorObservationSection({
                   </Box>
                 )}
             </Box>
-          ))}
+          )}
 
           {canAuthor && (
             <ObservationForm
               cycleNumber={cycleNumber}
-              userId={userId}
-              existing={mine}
+              existing={observation}
               evidenceLinks={evidenceLinks}
               onSave={onSave}
             />
@@ -1125,12 +1206,11 @@ function MentorObservationSection({
 
 function ObservationForm({
   cycleNumber,
-  userId,
   existing,
   evidenceLinks,
   onSave,
 }) {
-  const [open, setOpen] = React.useState(!existing)
+  const [open, setOpen] = React.useState(false)
   const [f, setF] = React.useState({
     observation: existing?.observation ?? '',
     strengths: existing?.strengths ?? '',
@@ -1150,7 +1230,6 @@ function ObservationForm({
     setError('')
     onSave({
       cycle_number: cycleNumber,
-      author_id: userId,
       ...f,
       evidence_reviewed: reviewed,
     })
@@ -1161,7 +1240,7 @@ function ObservationForm({
     return (
       <Box>
         <Button size="small" variant="outlined" onClick={() => setOpen(true)}>
-          {existing ? 'Edit my observation' : 'Add observation'}
+          {existing ? 'Edit observation' : 'Add observation'}
         </Button>
       </Box>
     )
@@ -1298,6 +1377,196 @@ function Area({ label, value, onChange, disabled }) {
       fullWidth
       size="small"
     />
+  )
+}
+
+function EvaluationSection({ cycleNumber, evaluation, canAuthor, onSave }) {
+  const monthNumber = Math.ceil(cycleNumber / 2)
+  const [open, setOpen] = React.useState(false)
+  const [scores, setScores] = React.useState({
+    execution_score: evaluation?.execution_score ?? 0,
+    customer_score: evaluation?.customer_score ?? 0,
+    business_score: evaluation?.business_score ?? 0,
+    behavior_score: evaluation?.behavior_score ?? 0,
+  })
+
+  const totalScore =
+    (Number(scores.execution_score) || 0) +
+    (Number(scores.customer_score) || 0) +
+    (Number(scores.business_score) || 0) +
+    (Number(scores.behavior_score) || 0)
+
+  const derivedStatus =
+    totalScore >= 75 ? 'green' : totalScore >= 50 ? 'yellow' : 'red'
+
+  const handleSave = () => {
+    onSave({
+      checklist_id: cycleNumber,
+      month_number: monthNumber,
+      year: new Date().getFullYear(),
+      execution_score: Number(scores.execution_score) || 0,
+      customer_score: Number(scores.customer_score) || 0,
+      business_score: Number(scores.business_score) || 0,
+      behavior_score: Number(scores.behavior_score) || 0,
+      total_score: totalScore,
+      status: derivedStatus,
+    })
+    setOpen(false)
+  }
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={1}
+        >
+          <Box>
+            <Typography variant="h6">
+              Cycle {cycleNumber} Evaluation (Month {monthNumber})
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Faculty pillar assessment (0–100 per pillar)
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {evaluation ? (
+              <Chip
+                size="small"
+                label={`Score: ${evaluation.total_score ?? totalScore} (${
+                  evaluation.status ?? derivedStatus
+                })`}
+                color={
+                  STATUS_COLOR[evaluation.status ?? derivedStatus] || 'default'
+                }
+                variant="outlined"
+              />
+            ) : (
+              <Chip size="small" label="Not evaluated" variant="outlined" />
+            )}
+            {canAuthor && (
+              <Button
+                size="small"
+                variant={open ? 'outlined' : 'contained'}
+                onClick={() => setOpen(!open)}
+              >
+                {open
+                  ? 'Close'
+                  : evaluation
+                    ? 'Edit evaluation'
+                    : 'Add evaluation'}
+              </Button>
+            )}
+          </Stack>
+        </Stack>
+
+        {open && canAuthor ? (
+          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' },
+                gap: 2,
+                mb: 2,
+              }}
+            >
+              <TextField
+                label="Execution (0-100)"
+                type="number"
+                size="small"
+                slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                value={scores.execution_score}
+                onChange={e =>
+                  setScores({ ...scores, execution_score: e.target.value })
+                }
+              />
+              <TextField
+                label="Customer (0-100)"
+                type="number"
+                size="small"
+                slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                value={scores.customer_score}
+                onChange={e =>
+                  setScores({ ...scores, customer_score: e.target.value })
+                }
+              />
+              <TextField
+                label="Business (0-100)"
+                type="number"
+                size="small"
+                slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                value={scores.business_score}
+                onChange={e =>
+                  setScores({ ...scores, business_score: e.target.value })
+                }
+              />
+              <TextField
+                label="Behavior (0-100)"
+                type="number"
+                size="small"
+                slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                value={scores.behavior_score}
+                onChange={e =>
+                  setScores({ ...scores, behavior_score: e.target.value })
+                }
+              />
+            </Box>
+
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              flexWrap="wrap"
+              gap={1}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Total: {totalScore} / 400 · Status:{' '}
+                <Box
+                  component="span"
+                  sx={{
+                    textTransform: 'capitalize',
+                    color: `${STATUS_COLOR[derivedStatus]}.main`,
+                  }}
+                >
+                  {derivedStatus}
+                </Box>
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                <Button size="small" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button size="small" variant="contained" onClick={handleSave}>
+                  Save Evaluation
+                </Button>
+              </Stack>
+            </Stack>
+          </Box>
+        ) : evaluation ? (
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: 'repeat(2, 1fr)',
+                sm: 'repeat(4, 1fr)',
+              },
+              gap: 2,
+              mt: 2,
+              pt: 2,
+              borderTop: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Stat label="Execution" value={evaluation.execution_score ?? 0} />
+            <Stat label="Customer" value={evaluation.customer_score ?? 0} />
+            <Stat label="Business" value={evaluation.business_score ?? 0} />
+            <Stat label="Behavior" value={evaluation.behavior_score ?? 0} />
+          </Box>
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }
 

@@ -5,7 +5,7 @@ import Tab from '@mui/material/Tab'
 import Box from '@mui/material/Box'
 
 import BiWeekly from './BiWeekly'
-import { useLoaderData } from 'react-router'
+import { useLoaderData, useOutletContext } from 'react-router'
 
 function CustomTabPanel(props) {
   const { children, value, index, ...other } = props
@@ -40,8 +40,19 @@ function a11yProps(index) {
 export default function BasicTabs() {
   const [value, setValue] = React.useState(0)
   const biweeklyData = useLoaderData()
+  const currentUser = useOutletContext()
+  const isAdmin = currentUser?.role?.name === 'admin'
+
   const handleChange = (event, newValue) => {
     setValue(newValue)
+  }
+
+  if (!isAdmin) {
+    return (
+      <Box sx={{ width: '100%' }}>
+        <BiWeekly data={biweeklyData} />
+      </Box>
+    )
   }
 
   return (
@@ -60,7 +71,7 @@ export default function BasicTabs() {
         Item One
       </CustomTabPanel>
       <CustomTabPanel value={value} index={1}>
-        <BiWeekly value={biweeklyData} />
+        <BiWeekly data={biweeklyData} />
       </CustomTabPanel>
     </Box>
   )

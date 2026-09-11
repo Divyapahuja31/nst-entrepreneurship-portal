@@ -41,6 +41,7 @@ const getFounders = async (_, res) => {
       const score = Math.round(Math.random() * 100)
 
       return venture.founders.map(founder => ({
+        id: founder._id,
         founder: founder.username,
         startup: venture.name,
         campus: venture.campus?.name ?? null,
@@ -359,10 +360,54 @@ const deleteFounders = async (req, res) => {
   }
 }
 
+const getBiWeekly = async (req, res) => {
+  try {
+    const { founderId } = req.query
+    if (!founderId || !mongoose.isValidObjectId(founderId)) {
+      return res.status(400).json({ error: 'Valid founderId is required' })
+    }
+
+    const founder = await User.findById(founderId)
+      .populate({
+        path: 'biWeeklySubmission',
+        populate: [
+          { path: 'biWeeklyEvaluation' },
+          { path: 'biWeeklyObservationSchema' },
+        ],
+      })
+      .exec()
+
+    if (!founder) {
+      return res.status(404).json({ error: 'Founder not found' })
+    }
+
+    const submissions = founder.biWeeklySubmission || []
+    const evaluations = submissions
+      .map(sub => sub.biWeeklyEvaluation)
+      .filter(Boolean)
+    const observations = submissions
+      .map(sub => sub.biWeeklyObservationSchema)
+      .filter(Boolean)
+
+    return res.json({
+      founder,
+      submissions,
+      evaluations,
+      observations,
+    })
+  } catch (err) {
+    console.error('Get biweekly error:', err)
+    return res.status(500).json({
+      error: 'Failed to load bi-weekly data',
+    })
+  }
+}
+
 export {
   getFounders,
   getFounderOptions,
   createFounder,
   getOverview,
   deleteFounders,
+  getBiWeekly,
 }

@@ -57,7 +57,8 @@
     "waitlist",
     "kpis",
     "subkpis",
-    "subkpi"
+    "subkpi",
+    "virtuals"
   ],
   "ignorePaths": [
     "node_modules/**",

@@ -1,70 +1,108 @@
 import {
   Box,
+  Divider,
   Typography,
-} from "@mui/material";
+} from '@mui/material'
 
 export default function Step5({ formData }) {
   return (
     <Box>
-      <Typography variant="h4">
+      <Typography variant="h5" fontWeight={600} gutterBottom>
         Review & submit
       </Typography>
 
       <Typography
+        variant="body2"
         color="text.secondary"
         sx={{ mb: 4 }}
       >
-        Once submitted, this becomes the baseline your
-        bi-weekly reviews are scored against.
+        Once submitted, this becomes the baseline your bi-weekly
+        reviews are scored against.
       </Typography>
 
-      <Typography variant="h6">
-        One-liner
-      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography>
+          <strong>Startup name:</strong>{' '}
+          {formData.startupName || '-'}
+        </Typography>
 
-      <Typography sx={{ mb: 3 }}>
-        {formData.oneLiner}
-      </Typography>
+        <Typography>
+          <strong>Problem:</strong>{' '}
+          {formData.description || '-'}
+        </Typography>
 
-      <Typography variant="h6">
-        Stage
-      </Typography>
+        <Typography>
+          <strong>Target customer:</strong>{' '}
+          {formData.targetCustomer || '-'}
+        </Typography>
 
-      <Typography sx={{ mb: 3 }}>
-        {formData.currentStage}
-      </Typography>
+        <Typography>
+          <strong>Industry:</strong>{' '}
+          {formData.industryName || formData.industry || '-'}
+        </Typography>
 
-      <Typography variant="h6">
-        Target customer
-      </Typography>
+        <Divider />
 
-      <Typography sx={{ mb: 3 }}>
-        {formData.targetCustomer}
-      </Typography>
+        <Typography>
+          <strong>Stage:</strong>{' '}
+          {formData.stage || '-'}
+        </Typography>
 
-      <Typography variant="h6">
-        Traction
-      </Typography>
+        <Typography>
+          <strong>Traction:</strong>{' '}
+          {formData.currentTraction || '-'}
+        </Typography>
 
-      <Typography sx={{ mb: 3 }}>
-        {formData.currentTraction}
-      </Typography>
+        <Typography>
+          <strong>Business model:</strong>{' '}
+          {formData.businessModel || '-'}
+        </Typography>
 
-      <Typography variant="h6">
-        Six-month goals
-      </Typography>
+        <Divider />
 
-      <Typography sx={{ mb: 3 }}>
-        {formData.sixMonthGoals}
-      </Typography>
+        <Typography>
+          <strong>Assumptions:</strong>
+        </Typography>
+        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+          {formData.assumption1 && <li>{formData.assumption1}</li>}
+          {formData.assumption2 && <li>{formData.assumption2}</li>}
+          {formData.assumption3 && <li>{formData.assumption3}</li>}
+        </Box>
 
-      <Typography variant="h6">
-        Weekly hours
-      </Typography>
+        <Typography>
+          <strong>Risks:</strong>
+        </Typography>
+        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+          {formData.risk1 && <li>{formData.risk1}</li>}
+          {formData.risk2 && <li>{formData.risk2}</li>}
+          {formData.risk3 && <li>{formData.risk3}</li>}
+        </Box>
 
-      <Typography>
-        {formData.weeklyHours}
-      </Typography>
+        <Typography>
+          <strong>Six-month goals:</strong>{' '}
+          {formData.sixMonthGoals || '-'}
+        </Typography>
+
+        <Typography>
+          <strong>Tech stack:</strong>{' '}
+          {formData.techStack || '-'}
+        </Typography>
+
+        <Typography>
+          <strong>Capital:</strong>{' '}
+          {formData.capitalStatus || '-'}
+        </Typography>
+
+        <Typography>
+          <strong>Weekly hours:</strong>{' '}
+          {formData.weeklyHours || '-'}
+        </Typography>
+
+        <Typography>
+          <strong>Website:</strong>{' '}
+          {formData.website || '-'}
+        </Typography>
+      </Box>
     </Box>
-  );
+  )
 }

@@ -117,3 +117,29 @@ export const deleteSubKPI = async id => {
     )
   }
 }
+
+export const uploadKPIEvidence = async (kpiId, formData) => {
+  try {
+    const { data } = await api.post(`/kpis/${kpiId}/evidence`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return data
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || error.message || 'Failed to upload evidence', { cause: error }
+    )
+  }
+}
+
+export const deleteKPIEvidence = async kpiId => {
+  try {
+    const { data } = await api.delete(`/kpis/${kpiId}/evidence`)
+    return data
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || error.message || 'Failed to delete evidence', { cause: error }
+    )
+  }
+}

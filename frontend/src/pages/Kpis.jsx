@@ -8,7 +8,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 
 import AddKpi from '../components/AddKpi'
 import UploadEvidenceDialog from '../components/UploadEvidenceDialog'
-import { getVentureKPIs, createKPI, updateKPI, deleteKPI, createSubKPI, updateSubKPI, deleteSubKPI, submitKPIForApproval } from '../api/kpi'
+import { getVentureKPIs, createKPI, updateKPI, deleteKPI, createSubKPI, updateSubKPI, deleteSubKPI, submitKPIForApproval, uploadKPIEvidence, deleteKPIEvidence } from '../api/kpi'
 
 export default function Kpis() {
   const { ventureId: routeVentureId } = useParams()
@@ -396,6 +396,30 @@ export default function Kpis() {
                                   </Typography>
                                 </Box>
                               )}
+
+                              {kpi.evidence && (kpi.evidence.fileName || kpi.evidence.supportingText) && (
+                                <Box sx={{ mt: 2.5 }}>
+                                  <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.75 }}>
+                                    Uploaded Evidence
+                                  </Typography>
+                                  <Box sx={{ p: 1.5, border: '1px solid #d0d0d0', borderRadius: 1, backgroundColor: '#ffffff' }}>
+                                    {kpi.evidence.fileName && (
+                                      <Typography variant="body2" sx={{ fontWeight: 500, mb: kpi.evidence.supportingText ? 0.5 : 0 }}>
+                                        File: {kpi.evidence.fileUrl ? (
+                                          <a href={kpi.evidence.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none' }}>
+                                            {kpi.evidence.fileName}
+                                          </a>
+                                        ) : kpi.evidence.fileName}
+                                      </Typography>
+                                    )}
+                                    {kpi.evidence.supportingText && (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Note: {kpi.evidence.supportingText}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </Box>
+                              )}
                             </Box>
 
                             {kpi.dueDate && (
@@ -443,12 +467,30 @@ export default function Kpis() {
       />
 
       <UploadEvidenceDialog
+        key={selectedKpiForEvidence?._id || (evidenceDialogOpen ? 'open' : 'closed')}
         open={evidenceDialogOpen}
         onClose={() => {
           setEvidenceDialogOpen(false)
           setSelectedKpiForEvidence(null)
         }}
         kpi={selectedKpiForEvidence}
+        onSave={async ({ kpi, file, supportingText }) => {
+          if (!kpi?._id) return
+          const formData = new FormData()
+          if (file) {
+            formData.append('file', file)
+          }
+          if (supportingText) {
+            formData.append('supportingText', supportingText)
+          }
+          await uploadKPIEvidence(kpi._id, formData)
+          await fetchKPIs()
+        }}
+        onDelete={async ({ kpi }) => {
+          if (!kpi?._id) return
+          await deleteKPIEvidence(kpi._id)
+          await fetchKPIs()
+        }}
       />
     </>
   )

@@ -3,20 +3,42 @@ import { Dialog, DialogContent, Box, Typography, Button, IconButton, TextField }
 import CloseIcon from '@mui/icons-material/Close'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 
-export default function UploadEvidenceDialog({ open, onClose, kpi, onSave }) {
+export default function UploadEvidenceDialog({ open, onClose, kpi, onSave, onDelete }) {
+  const [prevOpen, setPrevOpen] = useState(false)
+  const [prevKpi, setPrevKpi] = useState(null)
   const [file, setFile] = useState(null)
   const [supportingText, setSupportingText] = useState('')
+  const [error, setError] = useState('')
   const fileInputRef = useRef(null)
+
+  if (open !== prevOpen || kpi !== prevKpi) {
+    setPrevOpen(open)
+    setPrevKpi(kpi)
+    if (open && kpi) {
+      setSupportingText(kpi.evidence?.supportingText || '')
+      setFile(null)
+      setError('')
+    }
+  }
 
   const handleClose = () => {
     setFile(null)
     setSupportingText('')
+    setError('')
     onClose()
   }
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
+      const selectedFile = e.target.files[0]
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError('File size exceeds the 10MB limit.')
+        setFile(null)
+        e.target.value = null
+        return
+      }
+      setError('')
+      setFile(selectedFile)
     }
   }
 
@@ -25,6 +47,24 @@ export default function UploadEvidenceDialog({ open, onClose, kpi, onSave }) {
       onSave({ kpi, file, supportingText })
     }
     handleClose()
+  }
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete({ kpi })
+    }
+    handleClose()
+  }
+
+  const hasExistingEvidence = Boolean(
+    kpi?.evidence?.fileName || kpi?.evidence?.supportingText
+  )
+
+  let dropzoneText = 'SUPPORTING FILES MUST NOT BE MORE THAN 10MB'
+  if (file) {
+    dropzoneText = `Selected: ${file.name}`
+  } else if (kpi?.evidence?.fileName) {
+    dropzoneText = `Current: ${kpi.evidence.fileName} (Click to replace file)`
   }
 
   return (
@@ -70,9 +110,14 @@ export default function UploadEvidenceDialog({ open, onClose, kpi, onSave }) {
         >
           <CloudUploadIcon sx={{ fontSize: 48, color: '#000000', mb: 1 }} />
           <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: 0.5, color: '#000000' }}>
-            {file ? file.name : 'SUPPORTING FILES MUST NOT BE MORE THAN 10MB'}
+            {dropzoneText}
           </Typography>
         </Box>
+        {error && (
+          <Typography color="error" variant="caption" sx={{ display: 'block', mb: 2, fontWeight: 600 }}>
+            {error}
+          </Typography>
+        )}
         <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.5, color: '#000000', display: 'block', mb: 1 }}>
           SUPPORTING TEXT:
         </Typography>
@@ -100,7 +145,19 @@ export default function UploadEvidenceDialog({ open, onClose, kpi, onSave }) {
           }}
         />
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {hasExistingEvidence ? (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleDelete}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Delete Evidence
+            </Button>
+          ) : (
+            <Box />
+          )}
           <Button
             variant="contained"
             onClick={handleSave}

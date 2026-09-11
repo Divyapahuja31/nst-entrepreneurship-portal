@@ -10,7 +10,7 @@ import { defineConfig } from 'eslint/config'
 export default defineConfig([
   // GLOBAL IGNORES
   {
-    ignores: ['node_modules/', 'dist/', 'build/'],
+    ignores: ['node_modules/', 'dist/', 'build/', 'package-lock.json'],
   },
   {
     files: ['**/*.{js,mjs,cjs}'],

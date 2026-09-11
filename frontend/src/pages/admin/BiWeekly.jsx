@@ -1,11 +1,5 @@
 import * as React from 'react'
-import { useOutletContext } from 'react-router'
-import {
-  submitBiWeeklyCycle,
-  saveBiWeeklyObservation,
-  saveBiWeeklyEvaluation,
-  reopenBiWeeklySubmission,
-} from '../../api/biweekly.js'
+import { useFetcher, useOutletContext } from 'react-router'
 
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -188,26 +182,15 @@ function shortDate(date) {
 
 function BiWeekly({ data }) {
   const currentUser = useOutletContext()
+  const fetcher = useFetcher()
   const isAdmin = currentUser?.role?.name === 'admin'
 
   const { founder } = data || {}
-  const [rows, setRows] = React.useState(data?.submissions ?? [])
-  const [observations, setObservations] = React.useState(
-    data?.observations ?? []
-  )
-  const [evaluations, setEvaluations] = React.useState(
-    data?.evaluations ?? []
-  )
+  const rows = data?.submissions ?? []
+  const observations = data?.observations ?? []
+  const evaluations = data?.evaluations ?? []
   const [selected, setSelected] = React.useState(null)
   const [message, setMessage] = React.useState('')
-
-  const [prevData, setPrevData] = React.useState(data)
-  if (data !== prevData) {
-    setPrevData(data)
-    setRows(data?.submissions ?? [])
-    setObservations(data?.observations ?? [])
-    setEvaluations(data?.evaluations ?? [])
-  }
 
   const cycles = React.useMemo(() => {
     const anchor =
@@ -241,90 +224,55 @@ function BiWeekly({ data }) {
       !rows.find(r => r.cycle_number === c.n && r.submitted_at)
   ).length
 
-  const saveSubmission = async (payload, submit) => {
-    try {
-      const res = await submitBiWeeklyCycle({
+  const saveSubmission = (payload, submit) => {
+    setMessage(submit ? 'Submitting to faculty...' : 'Saving draft...')
+    fetcher.submit(
+      {
+        intent: 'submitCycle',
         ...payload,
         isSubmit: submit,
-      })
-      const saved = res.submission
-      setRows(prev => {
-        const existing = prev.find(r => r.cycle_number === payload.cycle_number)
-        return existing
-          ? prev.map(r => (r.cycle_number === payload.cycle_number ? saved : r))
-          : [...prev, saved]
-      })
-      setMessage(submit ? 'Submitted to faculty' : 'Draft saved')
-    } catch (err) {
-      console.error('Failed to save submission:', err)
-      setMessage(err.response?.data?.error || 'Failed to save submission')
-    }
+        founderId: founder?._id,
+      },
+      { method: 'post', encType: 'application/json' }
+    )
   }
 
-  const reopenSubmission = async cycleNumber => {
+  const reopenSubmission = cycleNumber => {
     if (!window.confirm('Unlock to edit? Faculty will see this as re-opened.'))
       return
-    try {
-      await reopenBiWeeklySubmission(founder?._id, cycleNumber)
-      setRows(prev =>
-        prev.map(r =>
-          r.cycle_number === cycleNumber ? { ...r, submitted_at: null } : r
-        )
-      )
-      setMessage('Unlocked')
-    } catch (err) {
-      console.error('Failed to reopen:', err)
-      setMessage(err.response?.data?.error || 'Failed to unlock')
-    }
+    setMessage('Unlocking...')
+    fetcher.submit(
+      {
+        intent: 'reopenSubmission',
+        founderId: founder?._id,
+        cycle_number: cycleNumber,
+      },
+      { method: 'post', encType: 'application/json' }
+    )
   }
 
-  const saveObservation = async payload => {
-    try {
-      const res = await saveBiWeeklyObservation({
+  const saveObservation = payload => {
+    setMessage('Saving observation...')
+    fetcher.submit(
+      {
+        intent: 'saveObservation',
         ...payload,
         founderId: founder?._id,
-      })
-      const saved = res.observation
-      setObservations(prev => {
-        const existing = prev.find(o => o.cycle_number === payload.cycle_number)
-        return existing
-          ? prev.map(o => (o.cycle_number === payload.cycle_number ? saved : o))
-          : [...prev, saved]
-      })
-      setMessage('Observation saved')
-    } catch (err) {
-      console.error('Failed to save observation:', err)
-      setMessage(err.response?.data?.error || 'Failed to save observation')
-    }
+      },
+      { method: 'post', encType: 'application/json' }
+    )
   }
 
-  const saveEvaluation = async payload => {
-    try {
-      const res = await saveBiWeeklyEvaluation({
+  const saveEvaluation = payload => {
+    setMessage('Saving evaluation...')
+    fetcher.submit(
+      {
+        intent: 'saveEvaluation',
         ...payload,
         founderId: founder?._id,
-      })
-      const saved = res.evaluation
-      setEvaluations(prev => {
-        const existing = prev.find(
-          e =>
-            e.checklist_id === payload.checklist_id ||
-            e.month_number === payload.month_number
-        )
-        return existing
-          ? prev.map(e =>
-              e.checklist_id === payload.checklist_id ||
-              e.month_number === payload.month_number
-                ? saved
-                : e
-            )
-          : [saved, ...prev]
-      })
-      setMessage('Evaluation saved')
-    } catch (err) {
-      console.error('Failed to save evaluation:', err)
-      setMessage(err.response?.data?.error || 'Failed to save evaluation')
-    }
+      },
+      { method: 'post', encType: 'application/json' }
+    )
   }
 
   return (

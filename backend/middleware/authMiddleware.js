@@ -1,4 +1,4 @@
-import { validateToken } from './utils/token.js'
+import { validateToken } from '../utils/token.js'
 
 export default function authMiddleware(req, res, next) {
   const token = req.cookies.token

@@ -1,13 +1,33 @@
 import { useState, useRef } from 'react'
-import { Dialog, DialogContent, Box, Typography, Button, IconButton, TextField } from '@mui/material'
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Box,
+  Typography,
+  Button,
+  IconButton,
+  TextField,
+  Chip,
+} from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 
-export default function UploadEvidenceDialog({ open, onClose, kpi, onSave, onDelete }) {
+export default function UploadEvidenceDialog({
+  open,
+  onClose,
+  kpi,
+  onSave,
+  onDelete,
+}) {
   const [prevOpen, setPrevOpen] = useState(false)
   const [prevKpi, setPrevKpi] = useState(null)
-  const [file, setFile] = useState(null)
+
+  const [actualValue, setActualValue] = useState('')
   const [supportingText, setSupportingText] = useState('')
+  const [file, setFile] = useState(null)
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
 
@@ -15,6 +35,7 @@ export default function UploadEvidenceDialog({ open, onClose, kpi, onSave, onDel
     setPrevOpen(open)
     setPrevKpi(kpi)
     if (open && kpi) {
+      setActualValue(kpi.actualValue || '')
       setSupportingText(kpi.evidence?.supportingText || '')
       setFile(null)
       setError('')
@@ -24,11 +45,12 @@ export default function UploadEvidenceDialog({ open, onClose, kpi, onSave, onDel
   const handleClose = () => {
     setFile(null)
     setSupportingText('')
+    setActualValue('')
     setError('')
     onClose()
   }
 
-  const handleFileChange = (e) => {
+  const handleFileChange = e => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
       if (selectedFile.size > 10 * 1024 * 1024) {
@@ -44,7 +66,13 @@ export default function UploadEvidenceDialog({ open, onClose, kpi, onSave, onDel
 
   const handleSave = () => {
     if (onSave) {
-      onSave({ kpi, file, supportingText })
+      onSave({
+        kpi,
+        actualValue: actualValue.trim(),
+        supportingText: supportingText.trim(),
+        file,
+        fileName: file?.name || kpi?.evidence?.fileName || '',
+      })
     }
     handleClose()
   }
@@ -60,122 +88,165 @@ export default function UploadEvidenceDialog({ open, onClose, kpi, onSave, onDel
     kpi?.evidence?.fileName || kpi?.evidence?.supportingText
   )
 
-  let dropzoneText = 'SUPPORTING FILES MUST NOT BE MORE THAN 10MB'
-  if (file) {
-    dropzoneText = `Selected: ${file.name}`
-  } else if (kpi?.evidence?.fileName) {
-    dropzoneText = `Current: ${kpi.evidence.fileName} (Click to replace file)`
-  }
-
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          backgroundColor: '#0a0d14',
-          color: '#ffffff',
-          borderRadius: 2,
-          p: 1,
-          border: '1px solid #1e2530',
-        },
-      }}
-    >
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <IconButton onClick={handleClose} sx={{ color: '#000000' }}>
-          <CloseIcon />
-        </IconButton>
-      </Box>
-
-      <DialogContent sx={{ pt: 0, pb: 2, px: 3 }}>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          style={{ display: 'none' }}
-        />
-        <Box
-          onClick={() => fileInputRef.current?.click()}
-          sx={{
-            border: '2px dashed #4a5568',
-            borderRadius: 1.5,
-            p: 4,
-            textAlign: 'center',
-            cursor: 'pointer',
-            backgroundColor: '#ffffff',
-            mb: 3,
-          }}
-        >
-          <CloudUploadIcon sx={{ fontSize: 48, color: '#000000', mb: 1 }} />
-          <Typography variant="body2" sx={{ fontWeight: 600, letterSpacing: 0.5, color: '#000000' }}>
-            {dropzoneText}
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle
+        sx={{
+          m: 0,
+          p: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Input Progress & Evidence
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            KPI: <strong>{kpi?.title || 'Metric'}</strong>
           </Typography>
         </Box>
-        {error && (
-          <Typography color="error" variant="caption" sx={{ display: 'block', mb: 2, fontWeight: 600 }}>
-            {error}
-          </Typography>
-        )}
-        <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.5, color: '#000000', display: 'block', mb: 1 }}>
-          SUPPORTING TEXT:
-        </Typography>
-        <TextField
-          multiline
-          rows={4}
-          fullWidth
-          value={supportingText}
-          onChange={(e) => setSupportingText(e.target.value)}
-          sx={{
-            mb: 3,
-            '& .MuiOutlinedInput-root': {
-              color: '#000000',
-              backgroundColor: '#ffffff',
-              '& fieldset': {
-                borderColor: '#4a5568',
-              },
-              '&:hover fieldset': {
-                borderColor: '#90caf9',
-              },
-              '&.Mui-focused fieldset': {
-                borderColor: '#90caf9',
-              },
-            },
-          }}
-        />
+        <IconButton onClick={handleClose} size="small" aria-label="close">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {hasExistingEvidence ? (
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={handleDelete}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
-            >
-              Delete Evidence
-            </Button>
-          ) : (
-            <Box />
-          )}
-          <Button
-            variant="contained"
-            onClick={handleSave}
+      <DialogContent dividers sx={{ p: 3 }}>
+        <Box sx={{ mb: 2.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Achieved Metric / Number
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mb: 1 }}
+          >
+            Enter the actual result achieved (e.g. &ldquo;15 customers&rdquo;,
+            &ldquo;25 interviews&rdquo;, &ldquo;₹45,000&rdquo;)
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={actualValue}
+            onChange={e => setActualValue(e.target.value)}
+            placeholder="e.g. 15 customers talked to"
+          />
+        </Box>
+
+        <Box sx={{ mb: 2.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Supporting Notes & Observations
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mb: 1 }}
+          >
+            Summarize key insights, customer feedback, and milestones completed
+          </Typography>
+          <TextField
+            multiline
+            rows={4}
+            fullWidth
+            size="small"
+            value={supportingText}
+            onChange={e => setSupportingText(e.target.value)}
+            placeholder="Describe who you talked to, feedback gathered, or results observed..."
+          />
+        </Box>
+
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Attach Evidence File (Optional)
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mb: 1 }}
+          >
+            Upload customer interview logs, survey responses, screenshots, or
+            transcripts (Max 10MB)
+          </Typography>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+          />
+
+          <Box
+            onClick={() => fileInputRef.current?.click()}
             sx={{
-              backgroundColor: '#e2e8f0',
-              color: '#0f172a',
-              fontWeight: 600,
-              textTransform: 'none',
-              px: 3,
+              border: '2px dashed #cbd5e1',
+              borderRadius: 2,
+              p: 3,
+              textAlign: 'center',
+              cursor: 'pointer',
+              backgroundColor: '#f8fafc',
               '&:hover': {
-                backgroundColor: '#ffffff',
+                borderColor: 'primary.main',
+                backgroundColor: '#f1f5f9',
               },
             }}
           >
-            Save
-          </Button>
+            <CloudUploadIcon
+              sx={{ fontSize: 40, color: 'primary.main', mb: 0.5 }}
+            />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {file ? (
+                <Chip
+                  icon={<CheckCircleIcon />}
+                  label={`Selected: ${file.name}`}
+                  color="success"
+                  variant="outlined"
+                />
+              ) : kpi?.evidence?.fileName ? (
+                `Current file: ${kpi.evidence.fileName} (Click to replace)`
+              ) : (
+                'Click to choose file or drag & drop (Max 10MB)'
+              )}
+            </Typography>
+          </Box>
+          {error && (
+            <Typography
+              color="error"
+              variant="caption"
+              sx={{ display: 'block', mt: 1, fontWeight: 600 }}
+            >
+              {error}
+            </Typography>
+          )}
         </Box>
       </DialogContent>
+
+      <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+        {hasExistingEvidence ? (
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={handleDelete}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Delete Evidence
+          </Button>
+        ) : (
+          <Box />
+        )}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button onClick={handleClose} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            sx={{ fontWeight: 600, textTransform: 'none' }}
+          >
+            Submit Evidence & Numbers
+          </Button>
+        </Box>
+      </DialogActions>
     </Dialog>
   )
 }

@@ -25,6 +25,7 @@ import { NavLink, Outlet, useFetcher, useLocation } from 'react-router'
 
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import MilitaryTechIcon from '@mui/icons-material/MilitaryTech'
+import DateRangeIcon from '@mui/icons-material/DateRange'
 
 import { AppBar, Drawer, DrawerHeader } from '../components/Sidebar.style'
 
@@ -84,6 +85,18 @@ export default function MiniDrawer() {
     setOpen(false)
   }
 
+  const studentItems = React.useMemo(() => {
+    const items = [...menuItems]
+    if (data?._id) {
+      items.push({
+        menu: 'Bi-Weekly',
+        icon: DateRangeIcon,
+        path: `/profile/${data._id}`,
+      })
+    }
+    return items
+  }, [data])
+
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
@@ -117,7 +130,7 @@ export default function MiniDrawer() {
         </DrawerHeader>
         <Divider />
         <List>
-          {(data?.role?.name === 'admin' ? adminMenuItems : menuItems).map(
+          {(data?.role?.name === 'admin' ? adminMenuItems : studentItems).map(
             item => (
               <ListItem
                 key={item.path}

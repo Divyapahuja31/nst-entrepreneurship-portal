@@ -28,6 +28,53 @@ const kpiSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    submissionDate: {
+      type: Date,
+      default: null,
+    },
+    evaluationDate: {
+      type: Date,
+      default: null,
+    },
+    evaluatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    feedback: {
+      type: String,
+      default: '',
+    },
+    targetValue: {
+      type: String,
+      default: '',
+    },
+    actualValue: {
+      type: String,
+      default: '',
+    },
+    evidence: {
+      supportingText: {
+        type: String,
+        default: '',
+      },
+      fileName: {
+        type: String,
+        default: '',
+      },
+      fileUrl: {
+        type: String,
+        default: '',
+      },
+      submittedAt: {
+        type: Date,
+        default: null,
+      },
+      uploadedAt: {
+        type: Date,
+        default: null,
+      },
+    },
     venture: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Venture',
@@ -46,13 +93,6 @@ const kpiSchema = new mongoose.Schema(
         ref: 'SubKPI',
       },
     ],
-
-    evidence: {
-      fileUrl: { type: String, default: '' },
-      fileName: { type: String, default: '' },
-      supportingText: { type: String, default: '' },
-      uploadedAt: { type: Date },
-    },
   },
   {
     timestamps: true,

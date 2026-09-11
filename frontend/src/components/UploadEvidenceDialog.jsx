@@ -1,16 +1,5 @@
 import { useState, useRef } from 'react'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Typography,
-  Button,
-  IconButton,
-  TextField,
-  Chip,
-} from '@mui/material'
+import { Dialog , DialogContent, DialogActions, Box, Typography, Button, IconButton, TextField, Chip } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -89,61 +78,50 @@ export default function UploadEvidenceDialog({
   )
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { position: 'relative' } }}
+    >
+      <IconButton
+        onClick={handleClose}
+        size="small"
+        aria-label="close"
         sx={{
-          m: 0,
-          p: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          position: 'absolute',
+          right: 12,
+          top: 12,
+          color: theme => theme.palette.grey[500],
+          zIndex: 1,
         }}
       >
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Input Progress & Evidence
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            KPI: <strong>{kpi?.title || 'Metric'}</strong>
-          </Typography>
-        </Box>
-        <IconButton onClick={handleClose} size="small" aria-label="close">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent dividers sx={{ p: 3 }}>
+        <CloseIcon />
+      </IconButton>
+      <DialogContent sx={{ p: 3, pt: 3 }}>
         <Box sx={{ mb: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Achieved Metric / Number
+            Metric
           </Typography>
           <Typography
             variant="caption"
             color="text.secondary"
             sx={{ display: 'block', mb: 1 }}
           >
-            Enter the actual result achieved (e.g. &ldquo;15 customers&rdquo;,
-            &ldquo;25 interviews&rdquo;, &ldquo;₹45,000&rdquo;)
           </Typography>
           <TextField
             fullWidth
             size="small"
             value={actualValue}
             onChange={e => setActualValue(e.target.value)}
-            placeholder="e.g. 15 customers talked to"
+            placeholder="Title"
           />
         </Box>
 
         <Box sx={{ mb: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Supporting Notes & Observations
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mb: 1 }}
-          >
-            Summarize key insights, customer feedback, and milestones completed
+            Description
           </Typography>
           <TextField
             multiline
@@ -152,21 +130,13 @@ export default function UploadEvidenceDialog({
             size="small"
             value={supportingText}
             onChange={e => setSupportingText(e.target.value)}
-            placeholder="Describe who you talked to, feedback gathered, or results observed..."
+            placeholder="Description"
           />
         </Box>
 
         <Box sx={{ mb: 1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Attach Evidence File (Optional)
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mb: 1 }}
-          >
-            Upload customer interview logs, survey responses, screenshots, or
-            transcripts (Max 10MB)
+            Attach Evidence File
           </Typography>
 
           <input
@@ -243,7 +213,7 @@ export default function UploadEvidenceDialog({
             onClick={handleSave}
             sx={{ fontWeight: 600, textTransform: 'none' }}
           >
-            Submit Evidence & Numbers
+            Submit Evidence
           </Button>
         </Box>
       </DialogActions>

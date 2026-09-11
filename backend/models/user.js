@@ -30,13 +30,18 @@ const userSchema = new mongoose.Schema(
     campus: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Campus',
-      required: false,
     },
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Role',
       required: true,
     },
+    biWeeklySubmission: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'BiWeeklySubmission',
+      },
+    ],
     googleId: {
       type: String,
       unique: true,

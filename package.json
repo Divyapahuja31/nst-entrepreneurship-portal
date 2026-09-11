@@ -28,20 +28,19 @@
   },
   "homepage": "https://github.com/Divyapahuja31/nst-entrepreneurship-portal#readme",
   "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^9.4.0",
-    "@mui/icons-material": "^9.4.0",
-    "@mui/material": "^9.4.0",
+    "@emotion/react": "11.14.0",
+    "@emotion/styled": "11.14.1",
+    "@mui/icons-material": "9.4.0",
+    "@mui/material": "9.4.0",
     "@mui/x-charts": "9.13.0",
     "bcryptjs": "3.0.3",
     "jsonwebtoken": "9.0.3",
     "react-router": "8.3.1"
   },
   "devDependencies": {
-    "concurrently": "^10.0.5",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.4.1"
+    "concurrently": "10.0.5",
+    "husky": "9.1.7",
+    "lint-staged": "17.4.1"
   },
   "lint-staged": {
     "*.{js,mjs,cjs}": [

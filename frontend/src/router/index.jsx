@@ -29,6 +29,10 @@ import Portfolio from '../pages/admin/Portfolio.jsx'
 import Profile from '../pages/admin/Profile.jsx'
 import CompleteSignup from '../pages/CompleteSignup.jsx'
 import { Proposal } from '../pages/student/Proposal.jsx'
+import {
+  proposalLoader,
+  proposalAction,
+} from '../api/proposal.js'
 
 export const router = createBrowserRouter([
   {
@@ -45,7 +49,7 @@ export const router = createBrowserRouter([
             loader: kpisLoader,
             action: kpisAction,
           },
-          { path: 'proposal', Component: Proposal },
+          { path: 'proposal', Component: Proposal, loader: proposalLoader, action: proposalAction, },
           {
             path: 'profile/:userid',
             Component: Profile,

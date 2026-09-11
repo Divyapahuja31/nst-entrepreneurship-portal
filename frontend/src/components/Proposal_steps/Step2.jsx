@@ -1,115 +1,125 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react'
+
 import {
   Box,
-  Typography,
-  TextField,
   MenuItem,
-} from "@mui/material";
+  TextField,
+  Typography,
+} from '@mui/material'
 
-export default function Step2({ formData, setFormData }) {
-  const [stages, setStages] = useState([]);
-  const [loading, setLoading] = useState(true);
+import { getStages } from '../../api/stage'
+
+export default function Step2({ formData, setFormData, errors = {}, setErrors }) {
+  const [stages, setStages] = useState([])
+  const [loadingStages, setLoadingStages] = useState(true)
 
   useEffect(() => {
-    // Temporary mock API
-    async function fetchStages() {
-      const data = [
-        {
-          id: "discovery",
-          name: "Discovery",
-          description:
-            "Talking to users, validating problem",
-        },
-        {
-          id: "validation",
-          name: "Validation",
-          description:
-            "Testing the solution with real users",
-        },
-        {
-          id: "traction",
-          name: "Traction",
-          description:
-            "Getting consistent users or revenue",
-        },
-        {
-          id: "growth",
-          name: "Growth",
-          description:
-            "Scaling the business",
-        },
-      ];
+    const fetchStages = async () => {
+      try {
+        const data = await getStages()
 
-      setStages(data);
-      setLoading(false);
+        setStages(data)
+      } catch (error) {
+        console.error('Failed to fetch stages:', error)
+      } finally {
+        setLoadingStages(false)
+      }
     }
 
-    fetchStages();
-  }, []);
+    fetchStages()
+  }, [])
+
+  const handleChange = (event) => {
+    const { name, value } = event.target
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+
+    if (setErrors && errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: '',
+      }))
+    }
+  }
 
   return (
     <Box>
-      <Typography variant="h4">
-        Where you are today
-      </Typography>
-
-      <Typography color="text.secondary">
-        Help us understand your current stage.
-      </Typography>
-
-      <TextField
-        select
-        fullWidth
-        label="Current stage"
-        value={formData.currentStage}
-        onChange={(e) =>
-          setFormData({
-            ...formData,
-            currentStage: e.target.value,
-          })
-        }
-        disabled={loading}
-        sx={{ mt: 3 }}
+      <Typography
+        variant="h5"
+        fontWeight={600}
+        gutterBottom
       >
-        {stages.map((stage) => (
-          <MenuItem
-            key={stage.id}
-            value={stage.id}
-          >
-            {stage.name}
-          </MenuItem>
-        ))}
-      </TextField>
+        Business
+      </Typography>
 
-      <TextField
-        fullWidth
-        multiline
-        rows={4}
-        label="Current traction"
-        value={formData.currentTraction}
-        onChange={(e) =>
-          setFormData({
-            ...formData,
-            currentTraction: e.target.value,
-          })
-        }
-        sx={{ mt: 3 }}
-      />
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ mb: 4 }}
+      >
+        Where are you today?
+      </Typography>
 
-      <TextField
-        fullWidth
-        multiline
-        rows={4}
-        label="Business model"
-        value={formData.businessModel}
-        onChange={(e) =>
-          setFormData({
-            ...formData,
-            businessModel: e.target.value,
-          })
-        }
-        sx={{ mt: 3 }}
-      />
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+        }}
+      >
+        <TextField
+          select
+          label="Current stage"
+          name="stage"
+          value={formData.stage}
+          onChange={handleChange}
+          error={Boolean(errors.stage)}
+          helperText={errors.stage}
+          fullWidth
+          required
+          disabled={loadingStages}
+        >
+          {stages.map((stage) => (
+            <MenuItem
+              key={stage.key}
+              value={stage.key}
+            >
+              {stage.label}
+            </MenuItem>
+          ))}
+        </TextField>
+
+        <TextField
+          label="Current traction"
+          name="currentTraction"
+          value={formData.currentTraction}
+          onChange={handleChange}
+          error={Boolean(errors.currentTraction)}
+          helperText={errors.currentTraction}
+          fullWidth
+          required
+          multiline
+          rows={3}
+          placeholder="Users, revenue, LOIs, waitlist, interviews done. Numbers > adjectives."
+        />
+
+        <TextField
+          label="Business model"
+          name="businessModel"
+          value={formData.businessModel}
+          onChange={handleChange}
+          error={Boolean(errors.businessModel)}
+          helperText={errors.businessModel}
+          fullWidth
+          required
+          multiline
+          rows={3}
+          placeholder="How does money flow? Who pays what, when?"
+        />
+      </Box>
     </Box>
-  );
+  )
 }

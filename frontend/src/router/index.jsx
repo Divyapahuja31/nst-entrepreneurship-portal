@@ -15,7 +15,9 @@ import {
   foundersCount,
   foundersLoader,
   biWeeklyLoader,
+  profileAction,
 } from '../api/admin.js'
+import { kpisLoader, kpisAction } from '../api/kpi.js'
 import {
   credentialsAction,
   portfolioLoader,
@@ -36,12 +38,18 @@ export const router = createBrowserRouter([
         loader: portfolioLoader,
         children: [
           { index: true, Component: Dashboard },
-          { path: 'kpis', Component: Kpis },
+          {
+            path: 'kpis',
+            Component: Kpis,
+            loader: kpisLoader,
+            action: kpisAction,
+          },
           { path: 'proposal', Component: Proposal },
           {
             path: 'profile/:userid',
             Component: Profile,
             loader: biWeeklyLoader,
+            action: profileAction,
           },
           {
             path: 'admin',
@@ -63,6 +71,7 @@ export const router = createBrowserRouter([
                 path: 'profile/:userid',
                 Component: Profile,
                 loader: biWeeklyLoader,
+                action: profileAction,
               },
             ],
           },

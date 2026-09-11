@@ -112,7 +112,11 @@ const portfolio = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
-  const user = await User.findById(req.user.id).populate('role')
+  const user = await User.findById(req.user.id).populate([
+    'role',
+    'batch',
+    'campus',
+  ])
   const venture = await Venture.findOne({ founders: req.user.id })
   return res.json({
     ...(user ? user.toJSON() : req.user),

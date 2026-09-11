@@ -74,7 +74,7 @@ const calculateFounderStudents = async () => {
 
     const status = deriveStatus(score)
 
-    return venture.founders.map(founder => ({
+    return venture.founders.filter(Boolean).map(founder => ({
       id: founder._id,
       founder: founder.username,
       startup: venture.name,
@@ -414,42 +414,29 @@ const getOverview = async (_, res) => {
   }
 }
 
-const removeFounderFromVenture = async ({
-  founderId,
-  founderName,
-  ventureId,
-  startupName,
-}) => {
-  const founderQuery = founderId
-    ? { _id: founderId }
-    : { username: founderName }
-  const founder = await User.findOne(founderQuery)
-
-  if (!founder) {
+const removeFounderFromVenture = async founderId => {
+  if (!mongoose.isValidObjectId(founderId)) {
     return {
-      founder: founderName || founderId,
-      startup: startupName || ventureId,
-      message: 'Founder not found',
+      founderId,
+      message: 'Valid founderId is required',
     }
   }
 
-  const ventureQuery = ventureId ? { _id: ventureId } : { name: startupName }
   const venture = await Venture.findOneAndUpdate(
-    ventureQuery,
-    { $pull: { founders: founder._id } },
+    { founders: founderId },
+    { $pull: { founders: founderId } },
     { new: true }
   )
 
   if (!venture) {
     return {
-      founder: founder.username,
-      startup: startupName || ventureId,
-      message: 'Startup not found',
+      founderId,
+      message: 'Startup not found for founder',
     }
   }
 
   return {
-    founder: founder.username,
+    founderId,
     startup: venture.name,
     message: 'Founder removed successfully',
   }

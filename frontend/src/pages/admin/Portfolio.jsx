@@ -54,13 +54,7 @@ function Portfolio() {
       return
     }
 
-    const foundersToDelete = students
-      .filter(s => selectedRows.includes(s.id))
-      .map(s => ({
-        founderId: s.id,
-        founderName: s.founder,
-        startupName: s.startup,
-      }))
+    const foundersToDelete = selectedRows
 
     setSelectedRows([])
 

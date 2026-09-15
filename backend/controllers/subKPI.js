@@ -1,34 +1,7 @@
 import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
-
-const validateSubKPIRequest = req => {
-  const { kpiId } = req.params
-  const { name } = req.body
-  const userId = req.user?.id
-  if (!userId) {
-    return {
-      statusCode: 401,
-      message: 'User not authenticated',
-    }
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-    return {
-      statusCode: 400,
-      message: 'Invalid KPI ID',
-    }
-  }
-
-  if (!name?.trim()) {
-    return {
-      statusCode: 400,
-      message: 'SubKPI name is required',
-    }
-  }
-
-  return null
-}
+import { validateSubKPIRequest } from '../utils/kpiValidator.js'
 
 export const createSubKPI = async (req, res) => {
   try {

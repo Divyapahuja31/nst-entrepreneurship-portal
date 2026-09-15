@@ -29,21 +29,16 @@ const deriveStatus = score => {
 }
 
 const calculateFounderStudents = async () => {
-  const ventures = await Venture.find()
-    .populate('founders', 'username')
-    .populate('campus', 'name')
-    .sort({ name: 1 })
+  const [ventures, kpis] = await Promise.all([
+    Venture.find()
+      .populate('founders', 'username')
+      .populate('campus', 'name')
+      .sort({ name: 1 }),
 
-  const kpis = await KpiModel.find({
-    $or: [
-      { status: 'GRADED' },
-      { evaluationDate: { $ne: null } },
-      { score: { $gt: 0 } },
-    ],
-  })
+    KpiModel.find({ status: 'GRADED', score: { $gt: 0 } }),
+  ])
 
   const kpisByVenture = new Map()
-
   for (const kpi of kpis) {
     if (kpi.venture) {
       const vId = kpi.venture.toString()
@@ -56,23 +51,11 @@ const calculateFounderStudents = async () => {
 
   const students = ventures.flatMap(venture => {
     const ventureKpis = kpisByVenture.get(venture._id.toString()) || []
-
-    const gradedKpis = ventureKpis.filter(
-      k =>
-        (k.status === 'GRADED' ||
-          k.evaluationDate !== null ||
-          (typeof k.score === 'number' && k.score > 0)) &&
-        typeof k.score === 'number' &&
-        !Number.isNaN(k.score)
-    )
-
-    let score = null
-    if (gradedKpis.length > 0) {
-      const sum = gradedKpis.reduce((acc, curr) => acc + (curr.score || 0), 0)
-      score = Math.round(sum / gradedKpis.length)
-    }
-
-    const status = deriveStatus(score)
+    const score = ventureKpis.length
+      ? Math.round(
+          ventureKpis.reduce((sum, k) => sum + k.score, 0) / ventureKpis.length
+        )
+      : null
 
     return venture.founders.map(founder => ({
       id: founder._id,
@@ -82,7 +65,7 @@ const calculateFounderStudents = async () => {
       stage: venture.stage,
       team: venture.teamSize,
       score,
-      status,
+      status: deriveStatus(score),
     }))
   })
 
@@ -141,17 +124,6 @@ const getFounderOptions = async (_, res) => {
   }
 }
 
-const normalizeFounderPayload = body => ({
-  founder: String(body.founder ?? '').trim(),
-  email: String(body.email ?? '')
-    .trim()
-    .toLowerCase(),
-  startup: String(body.startup ?? '').trim(),
-  industry: body.industry,
-  batch: body.batch,
-  stage: body.stage,
-})
-
 const validateFounderPayload = payload => ({
   founder: validateName(payload.founder),
   email: validateEmail(payload.email),
@@ -165,12 +137,12 @@ const validateFounderPayload = payload => ({
     : 'Stage is required',
 })
 
-const resolveFounderRefs = async ({ founder, email, industry, batch }) => {
+const resolveFounderRefs = async ({ email, industry, batch }) => {
   const [batchDoc, industryDoc, studentRole, existingUser] = await Promise.all([
     Batch.findById(batch),
     Industry.findById(industry),
     Role.findOne({ name: 'student' }),
-    User.findOne({ $or: [{ email }, { username: founder }] }),
+    User.findOne({ email }),
   ])
 
   if (!studentRole) {
@@ -184,12 +156,10 @@ const resolveFounderRefs = async ({ founder, email, industry, batch }) => {
     return { status: 400, error: { industry: 'Industry does not exist' } }
   }
   if (existingUser) {
-    const conflict =
-      existingUser.email === email
-        ? { email: 'An account already exists with this email' }
-        : { founder: 'This founder name is already taken' }
-
-    return { status: 409, error: conflict }
+    return {
+      status: 409,
+      error: { email: 'An account already exists with this email' },
+    }
   }
 
   return { batchDoc, industryDoc, studentRole }
@@ -230,7 +200,7 @@ const createFounderAccount = async ({
 }
 
 const createFounder = async (req, res) => {
-  const payload = normalizeFounderPayload(req.body ?? {})
+  const payload = req.body ?? {}
   const error = validateFounderPayload(payload)
 
   if (Object.values(error).some(Boolean)) {
@@ -258,7 +228,7 @@ const createFounder = async (req, res) => {
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
-        error: { email: 'Email or founder name already in use' },
+        error: { email: 'Email already in use' },
       })
     }
 
@@ -294,38 +264,27 @@ async function getMonthlyAverageKPIScores({
   const [ventures, kpis] = await Promise.all([
     Venture.find().select('_id founders'),
     KpiModel.find({
+      score: { $gt: 0 },
       $or: [
-        { status: 'GRADED' },
-        { evaluationDate: { $ne: null } },
-        { score: { $gt: 0 } },
+        { evaluationDate: { $gte: startOfYear, $lt: endOfYear } },
+        { createdAt: { $gte: startOfYear, $lt: endOfYear } },
       ],
     }),
   ])
 
-  const ventureFoundersMap = new Map()
-  ventures.forEach(v => {
-    ventureFoundersMap.set(
-      v._id.toString(),
-      (v.founders || []).map(f => f.toString())
-    )
-  })
-
-  const validKPIs = kpis.filter(kpi => {
-    if (typeof kpi.score !== 'number' || Number.isNaN(kpi.score)) {
-      return false
-    }
-    const date = new Date(kpi.evaluationDate || kpi.createdAt)
-    return date >= startOfYear && date < endOfYear
-  })
+  const ventureFoundersCount = new Map(
+    ventures.map(v => [v._id.toString(), v.founders?.length || 0])
+  )
 
   const kpisByMonth = Array.from({ length: 12 }, () => [])
-  validKPIs.forEach(kpi => {
-    const month = new Date(kpi.evaluationDate || kpi.createdAt).getUTCMonth()
-    kpisByMonth[month].push(kpi)
-  })
+  for (const kpi of kpis) {
+    const date = new Date(kpi.evaluationDate || kpi.createdAt)
+    if (date >= startOfYear && date < endOfYear) {
+      kpisByMonth[date.getUTCMonth()].push(kpi)
+    }
+  }
 
   const result = {}
-
   MONTH_NAMES.forEach((monthName, monthIndex) => {
     const monthKpis = kpisByMonth[monthIndex]
     if (monthKpis.length === 0) {
@@ -333,33 +292,27 @@ async function getMonthlyAverageKPIScores({
       return
     }
 
-    const kpisByVenture = new Map()
-    monthKpis.forEach(kpi => {
+    const byVenture = new Map()
+    for (const kpi of monthKpis) {
       if (!kpi.venture) {
-        return
+        continue
       }
       const vId = kpi.venture.toString()
-      if (!kpisByVenture.has(vId)) {
-        kpisByVenture.set(vId, [])
-      }
-      kpisByVenture.get(vId).push(kpi)
-    })
-
-    const studentScores = []
-    kpisByVenture.forEach((vKpis, vId) => {
-      const vSum = vKpis.reduce((acc, k) => acc + (k.score || 0), 0)
-      const ventureAvg = vSum / vKpis.length
-      const founders = ventureFoundersMap.get(vId) || []
-      founders.forEach(() => studentScores.push(ventureAvg))
-    })
-
-    if (studentScores.length === 0) {
-      result[monthName] = 0
-      return
+      const current = byVenture.get(vId) || { sum: 0, count: 0 }
+      current.sum += kpi.score
+      current.count += 1
+      byVenture.set(vId, current)
     }
 
-    const totalScore = studentScores.reduce((acc, s) => acc + s, 0)
-    result[monthName] = Math.round(totalScore / studentScores.length)
+    let totalScore = 0
+    let totalWeight = 0
+    for (const [vId, { sum, count }] of byVenture) {
+      const weight = ventureFoundersCount.get(vId) || 0
+      totalScore += (sum / count) * weight
+      totalWeight += weight
+    }
+
+    result[monthName] = totalWeight ? Math.round(totalScore / totalWeight) : 0
   })
 
   return result
@@ -372,25 +325,11 @@ const getOverview = async (_, res) => {
       getMonthlyAverageKPIScores(),
     ])
 
-    let onTrack = 0
-    let watch = 0
-    let atRisk = 0
-
-    for (const student of students) {
-      if (student.status === ventureHealth.ON_TRACK) {
-        onTrack++
-      } else if (student.status === ventureHealth.WATCH) {
-        watch++
-      } else if (student.status === ventureHealth.AT_RISK) {
-        atRisk++
-      }
-    }
-
     const overview = {
       founder: students.length,
-      onTrack,
-      watch,
-      atRisk,
+      onTrack: students.filter(s => s.status === ventureHealth.ON_TRACK).length,
+      watch: students.filter(s => s.status === ventureHealth.WATCH).length,
+      atRisk: students.filter(s => s.status === ventureHealth.AT_RISK).length,
     }
 
     const result = ventures.reduce(
@@ -414,42 +353,29 @@ const getOverview = async (_, res) => {
   }
 }
 
-const removeFounderFromVenture = async ({
-  founderId,
-  founderName,
-  ventureId,
-  startupName,
-}) => {
-  const founderQuery = founderId
-    ? { _id: founderId }
-    : { username: founderName }
-  const founder = await User.findOne(founderQuery)
-
-  if (!founder) {
+const removeFounderFromVenture = async founderId => {
+  if (!mongoose.isValidObjectId(founderId)) {
     return {
-      founder: founderName || founderId,
-      startup: startupName || ventureId,
-      message: 'Founder not found',
+      founderId,
+      message: 'Valid founderId is required',
     }
   }
 
-  const ventureQuery = ventureId ? { _id: ventureId } : { name: startupName }
   const venture = await Venture.findOneAndUpdate(
-    ventureQuery,
-    { $pull: { founders: founder._id } },
+    { founders: founderId },
+    { $pull: { founders: founderId } },
     { new: true }
   )
 
   if (!venture) {
     return {
-      founder: founder.username,
-      startup: startupName || ventureId,
-      message: 'Startup not found',
+      founderId,
+      message: 'Startup not found for founder',
     }
   }
 
   return {
-    founder: founder.username,
+    founderId,
     startup: venture.name,
     message: 'Founder removed successfully',
   }

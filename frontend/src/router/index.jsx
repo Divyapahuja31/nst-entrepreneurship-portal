@@ -6,31 +6,30 @@ import Dashboard from '../pages/Dashboard.jsx'
 import Kpis from '../pages/Kpis.jsx'
 import SignIn from '../pages/SignIn.jsx'
 import SignUp from '../pages/SignUp.jsx'
+import CompleteSignup from '../pages/CompleteSignup.jsx'
+import { Proposal } from '../pages/student/Proposal.jsx'
 import Admin from '../pages/admin/Index.jsx'
-
+import Portfolio from '../pages/admin/Portfolio.jsx'
+import Profile from '../pages/admin/Profile.jsx'
+import Methodology from '../pages/admin/Methodology.jsx'
 import AddFounder from '../components/AddFounder.jsx'
-
-import {
-  addFounderAction,
-  addFounderLoader,
-  foundersCount,
-  foundersLoader,
-  portfolioAction,
-  biWeeklyLoader,
-  profileAction,
-} from '../api/admin.js'
-import { kpisLoader, kpisAction } from '../api/kpi.js'
 import {
   credentialsAction,
   portfolioLoader,
   signoutAction,
 } from '../api/auth.js'
-import Methodology from '../pages/admin/Methodology.jsx'
-import Portfolio from '../pages/admin/Portfolio.jsx'
-import Profile from '../pages/admin/Profile.jsx'
-import CompleteSignup from '../pages/CompleteSignup.jsx'
-import { Proposal } from '../pages/student/Proposal.jsx'
+
+import { kpisLoader, kpisAction } from '../api/kpi.js'
 import { proposalLoader, proposalAction } from '../api/proposal.js'
+import {
+  addFounderAction,
+  addFounderLoader,
+  biWeeklyLoader,
+  foundersCount,
+  foundersLoader,
+  portfolioAction,
+  profileAction,
+} from '../api/admin.js'
 
 export const router = createBrowserRouter([
   {

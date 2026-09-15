@@ -38,3 +38,31 @@ export const validateCreateKPI = ({ title, description, venture, userId }) => {
 
   return null
 }
+
+export const validateSubKPIRequest = req => {
+  const { kpiId } = req.params
+  const { name } = req.body
+  const userId = req.user?.id
+  if (!userId) {
+    return {
+      statusCode: 401,
+      message: 'User not authenticated',
+    }
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(kpiId)) {
+    return {
+      statusCode: 400,
+      message: 'Invalid KPI ID',
+    }
+  }
+
+  if (!name?.trim()) {
+    return {
+      statusCode: 400,
+      message: 'SubKPI name is required',
+    }
+  }
+
+  return null
+}

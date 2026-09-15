@@ -10,30 +10,24 @@ import {
   signGoogleSignupToken,
   verifyGoogleSignupToken,
 } from '../utils/token.js'
-import { OAuth2Client } from 'google-auth-library'
-import 'dotenv/config'
+import {
+  determineUserRole,
+  getGoogleAuthUrl,
+  verifyGoogleAuthCode,
+} from '../utils/authHelper.js'
 
-const client = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-)
-
-const ALLOWED_GOOGLE_DOMAINS = new Set(['newtonschool.co', 'adypu.edu.in'])
-
-const signUp = async (req, res) => {
+export const signUp = async (req, res) => {
   try {
     const { username, email, password, batch, campus } = req.body
 
-    let position = 'student'
-    const emailSplit = email.split('@')
-    if (emailSplit.length === 2 && emailSplit[1] === 'newtonschool.co') {
-      position = 'admin'
-    }
+    const position = determineUserRole(email)
+    const role = await Role.findOne({ name: position })
 
-    const roles = await Role.findOne({
-      name: position,
-    })
+    if (!role) {
+      return res.status(500).json({
+        error: `${position} role is not configured`,
+      })
+    }
 
     const error = await validateAll({
       username,
@@ -49,13 +43,13 @@ const signUp = async (req, res) => {
       username,
       email: email.toLowerCase(),
       password,
-      role: roles._id,
+      role: role._id,
       batch,
       campus,
     })
 
     await user.save()
-    await user.populate('role')
+    user.role = role
 
     return res
       .cookie('token', signToken(user), cookieOptions)
@@ -65,25 +59,23 @@ const signUp = async (req, res) => {
     if (err.code === 11000) {
       return res.status(409).json({
         error: {
-          email: 'Email or username already in use',
+          email: 'Email already in use',
         },
       })
     }
 
-    console.error(err)
-
+    console.error('SignUp error:', err)
     return res.status(500).json({
       error: 'Server error',
     })
   }
 }
 
-const signIn = async (req, res) => {
+export const signIn = async (req, res) => {
   try {
     const { email, password } = req.body
 
     const user = await User.findOne({ email }).populate('role')
-
     if (!user) {
       return res.status(401).json({
         error: 'Invalid email or password',
@@ -91,7 +83,6 @@ const signIn = async (req, res) => {
     }
 
     const isMatch = await user.comparePassword(password)
-
     if (!isMatch) {
       return res.status(401).json({
         error: 'Invalid email or password',
@@ -100,24 +91,27 @@ const signIn = async (req, res) => {
 
     return res.cookie('token', signToken(user), cookieOptions).json({ user })
   } catch (err) {
-    console.error(err)
-
+    console.error('SignIn error:', err)
     return res.status(500).json({
       error: 'Server error',
     })
   }
 }
 
-const portfolio = async (req, res) => {
+export const signOut = async (_, res) => {
+  return res.clearCookie('token', cookieOptions).json({ success: true })
+}
+
+export const portfolio = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
-  const user = await User.findById(req.user.id).populate([
-    'role',
-    'batch',
-    'campus',
+
+  const [user, venture] = await Promise.all([
+    User.findById(req.user.id).populate(['role', 'batch', 'campus']),
+    Venture.findOne({ founders: req.user.id }),
   ])
-  const venture = await Venture.findOne({ founders: req.user.id })
+
   return res.json({
     ...(user ? user.toJSON() : req.user),
     ventureId: venture?._id || null,
@@ -125,59 +119,29 @@ const portfolio = async (req, res) => {
   })
 }
 
-const googleAuth = (req, res) => {
-  const url = client.generateAuthUrl({
-    access_type: 'offline',
-
-    scope: ['openid', 'email'],
-
-    prompt: 'select_account',
-  })
-  res.redirect(url)
+export const googleAuth = (req, res) => {
+  const url = getGoogleAuthUrl()
+  return res.redirect(url)
 }
 
-const googleAuthCallback = async (req, res) => {
+export const googleAuthCallback = async (req, res) => {
   try {
     const { code } = req.query
-
     if (!code) {
       return res.status(400).send('Google authorization code is missing.')
     }
 
-    const { tokens } = await client.getToken(code)
-
-    client.setCredentials(tokens)
-    const ticket = await client.verifyIdToken({
-      idToken: tokens.id_token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    })
-
-    const payload = ticket.getPayload()
-
-    const { sub: googleId, email, email_verified: emailVerified } = payload
-
-    if (!email) {
-      return res.status(403).send('Google did not provide an email address.')
-    }
-
-    if (!emailVerified) {
+    const verificationResult = await verifyGoogleAuthCode(code)
+    if (verificationResult.error) {
       return res
-        .status(403)
-        .send(
-          'Your Google email address is not verified. Please verify it with Google first.'
-        )
+        .status(verificationResult.status)
+        .send(verificationResult.error)
     }
 
-    const domain = email.split('@')[1]?.toLowerCase()
-
-    if (!ALLOWED_GOOGLE_DOMAINS.has(domain)) {
-      return res
-        .status(403)
-        .send('Only ADYPU and Newton School Google accounts are allowed.')
-    }
+    const { googleId, email } = verificationResult
 
     const user = await User.findOne({
-      $or: [{ googleId }, { email: email.toLowerCase() }],
+      $or: [{ googleId }, { email }],
     }).populate('role')
 
     if (user) {
@@ -191,10 +155,7 @@ const googleAuthCallback = async (req, res) => {
         .redirect(process.env.FRONTEND_URL)
     }
 
-    const signupToken = signGoogleSignupToken({
-      googleId,
-      email: email.toLowerCase(),
-    })
+    const signupToken = signGoogleSignupToken({ googleId, email })
 
     return res.redirect(
       `${process.env.FRONTEND_URL}/complete-signup?token=${encodeURIComponent(
@@ -203,12 +164,11 @@ const googleAuthCallback = async (req, res) => {
     )
   } catch (error) {
     console.error('Authentication error:', error)
-
     return res.status(500).send('Authentication failed')
   }
 }
 
-const getGoogleSignupOptions = async (req, res) => {
+export const getGoogleSignupOptions = async (req, res) => {
   try {
     const [campuses, batches] = await Promise.all([
       Campus.find().sort({ name: 1 }),
@@ -221,14 +181,13 @@ const getGoogleSignupOptions = async (req, res) => {
     })
   } catch (error) {
     console.error('Get Google signup options error:', error)
-
     return res.status(500).json({
       error: 'Failed to load signup options',
     })
   }
 }
 
-const completeGoogleSignup = async (req, res) => {
+export const completeGoogleSignup = async (req, res) => {
   try {
     const { token, username, batch, campus } = req.body
     if (!token) {
@@ -238,11 +197,9 @@ const completeGoogleSignup = async (req, res) => {
     }
 
     let googleData
-
     try {
       googleData = verifyGoogleSignupToken(token)
-      // eslint-disable-next-line no-unused-vars
-    } catch (error) {
+    } catch {
       return res.status(401).json({
         error: 'Signup token is invalid or expired',
       })
@@ -256,13 +213,9 @@ const completeGoogleSignup = async (req, res) => {
       })
     }
 
-    const studentRole = await Role.findOne({
-      name: 'student',
-    })
-
+    const studentRole = await Role.findOne({ name: 'student' })
     if (!studentRole) {
       console.error('Student role does not exist in database')
-
       return res.status(500).json({
         error: 'Student role is not configured',
       })
@@ -271,7 +224,6 @@ const completeGoogleSignup = async (req, res) => {
     const existingUser = await User.findOne({
       $or: [{ email }, { googleId }],
     })
-
     if (existingUser) {
       return res.status(409).json({
         error: 'An account already exists with this Google account',
@@ -284,24 +236,21 @@ const completeGoogleSignup = async (req, res) => {
       googleId,
       batch,
       campus,
-
       role: studentRole._id,
     })
 
     await user.save()
     user.role = studentRole
+
     return res
       .cookie('token', signToken(user), cookieOptions)
       .status(201)
-      .json({
-        user,
-      })
+      .json({ user })
   } catch (error) {
     console.error('Complete Google signup error:', error)
-
     if (error.code === 11000) {
       return res.status(409).json({
-        error: 'Email or username already in use',
+        error: 'Email already in use',
       })
     }
 
@@ -309,19 +258,4 @@ const completeGoogleSignup = async (req, res) => {
       error: 'Server error',
     })
   }
-}
-
-const signOut = async (_, res) => {
-  return res.clearCookie('token', cookieOptions).json({ success: true })
-}
-
-export {
-  signUp,
-  signIn,
-  signOut,
-  googleAuthCallback,
-  googleAuth,
-  portfolio,
-  completeGoogleSignup,
-  getGoogleSignupOptions,
 }

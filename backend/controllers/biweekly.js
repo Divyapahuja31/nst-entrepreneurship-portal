@@ -17,15 +17,6 @@ const validateCycleNumber = n => {
   return num >= 1 && num <= 13 ? num : null
 }
 
-const isValidAdminTarget = (founderId, cycleNum) =>
-  Boolean(
-    founderId &&
-    mongoose.isValidObjectId(founderId) &&
-    cycleNum &&
-    cycleNum >= 1 &&
-    cycleNum <= 13
-  )
-
 export const getBiWeeklyData = async (req, res) => {
   try {
     const targetFounderId = resolveTargetFounderId(req.user, req.query)
@@ -73,29 +64,30 @@ export const getBiWeeklyData = async (req, res) => {
   }
 }
 
-const updateOrCreateSubmission = async (user, cycleNum, data, isSubmit) => {
-  let submission = user.biWeeklySubmission?.find(
-    s => s.cycle_number === cycleNum
-  )
+const updateOrCreateSubmission = async (
+  userId,
+  cycle_number,
+  data = {},
+  isSubmit = false
+) => {
+  const custom_id = `${userId}_cycle_${cycle_number}`
+  const updateData = { ...data, cycle_number }
 
   if (isSubmit) {
-    data.submitted_at = new Date()
+    updateData.submitted_at = new Date()
   }
 
-  if (submission) {
-    Object.assign(submission, data)
-    await submission.save()
-    return submission
-  }
+  const submission = await BiWeeklySubmission.findOneAndUpdate(
+    { custom_id },
+    { $set: updateData },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  )
 
-  const custom_id = `${user._id}_cycle_${cycleNum}`
-  submission = await BiWeeklySubmission.create({
-    ...data,
-    custom_id,
-    cycle_number: cycleNum,
-  })
-  user.biWeeklySubmission.push(submission._id)
-  await user.save()
+  await User.updateOne(
+    { _id: userId },
+    { $addToSet: { biWeeklySubmission: submission._id } }
+  )
+
   return submission
 }
 
@@ -118,13 +110,8 @@ export const submitBiWeeklyCycle = async (req, res) => {
       return res.status(400).json({ error: 'Invalid cycle number (1-13)' })
     }
 
-    const user = await User.findById(req.user.id).populate('biWeeklySubmission')
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' })
-    }
-
     const submission = await updateOrCreateSubmission(
-      user,
+      req.user.id,
       cycleNum,
       data,
       isSubmit
@@ -148,34 +135,22 @@ const getOrCreateSubmissionForAdmin = async (req, res) => {
   }
 
   const { founderId, cycle_number } = req.body
-  const cycleNum = Number(cycle_number)
+  const cycleNum = validateCycleNumber(cycle_number)
 
-  if (!isValidAdminTarget(founderId, cycleNum)) {
+  if (!mongoose.isValidObjectId(founderId) || !cycleNum) {
     res
       .status(400)
       .json({ error: 'Valid founderId and cycle_number (1-13) are required' })
     return null
   }
 
-  const founder = await User.findById(founderId).populate('biWeeklySubmission')
+  const founder = await User.findById(founderId)
   if (!founder) {
     res.status(404).json({ error: 'Founder not found' })
     return null
   }
 
-  let submission = founder.biWeeklySubmission?.find(
-    s => s.cycle_number === cycleNum
-  )
-
-  if (!submission) {
-    const custom_id = `${founderId}_cycle_${cycleNum}`
-    submission = await BiWeeklySubmission.create({
-      custom_id,
-      cycle_number: cycleNum,
-    })
-    founder.biWeeklySubmission.push(submission._id)
-    await founder.save()
-  }
+  const submission = await updateOrCreateSubmission(founderId, cycleNum)
 
   return { founder, submission, cycleNum }
 }

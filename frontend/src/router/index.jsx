@@ -35,6 +35,7 @@ import { proposalLoader, proposalAction } from '../api/proposal.js'
 export const router = createBrowserRouter([
   {
     Component: MainLayout,
+    loader: portfolioLoader,
     path: '/',
     children: [
       {
@@ -80,7 +81,10 @@ export const router = createBrowserRouter([
         Component: SignUp,
         action: credentialsAction('/auth/signup', 'Something went wrong'),
       },
-      { path: '/signout', action: signoutAction },
+      {
+        path: '/signout',
+        action: signoutAction,
+      },
       {
         path: '/complete-signup',
         Component: CompleteSignup,
@@ -91,6 +95,7 @@ export const router = createBrowserRouter([
   {
     path: '/admin',
     Component: MainLayout,
+    loader: portfolioLoader,
     children: [
       {
         path: '/admin',

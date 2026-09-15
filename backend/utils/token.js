@@ -9,21 +9,24 @@ export const cookieOptions = {
   sameSite: 'lax',
   maxAge: TOKEN_MAX_AGE,
 }
+
+const JWT_OPTIONS = {
+  algorithm: 'HS256',
+  expiresIn: '30d',
+}
+
 export const signToken = user => {
   const roleName = user.role?.name || user.role
   return jwt.sign(
     { userId: user._id, email: user.email, role: roleName },
     JWT_SECRET,
-    {
-      algorithm: 'HS256',
-      expiresIn: '30d',
-    }
+    JWT_OPTIONS
   )
 }
 
 export function validateToken(token) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] })
+    const decoded = jwt.verify(token, JWT_SECRET, JWT_OPTIONS)
     return { valid: true, payload: decoded }
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

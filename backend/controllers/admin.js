@@ -123,17 +123,6 @@ const getFounderOptions = async (_, res) => {
   }
 }
 
-const normalizeFounderPayload = body => ({
-  founder: String(body.founder ?? '').trim(),
-  email: String(body.email ?? '')
-    .trim()
-    .toLowerCase(),
-  startup: String(body.startup ?? '').trim(),
-  industry: body.industry,
-  batch: body.batch,
-  stage: body.stage,
-})
-
 const validateFounderPayload = payload => ({
   founder: validateName(payload.founder),
   email: validateEmail(payload.email),
@@ -147,12 +136,12 @@ const validateFounderPayload = payload => ({
     : 'Stage is required',
 })
 
-const resolveFounderRefs = async ({ founder, email, industry, batch }) => {
+const resolveFounderRefs = async ({ email, industry, batch }) => {
   const [batchDoc, industryDoc, studentRole, existingUser] = await Promise.all([
     Batch.findById(batch),
     Industry.findById(industry),
     Role.findOne({ name: 'student' }),
-    User.findOne({ $or: [{ email }, { username: founder }] }),
+    User.findOne({ email }),
   ])
 
   if (!studentRole) {
@@ -166,12 +155,10 @@ const resolveFounderRefs = async ({ founder, email, industry, batch }) => {
     return { status: 400, error: { industry: 'Industry does not exist' } }
   }
   if (existingUser) {
-    const conflict =
-      existingUser.email === email
-        ? { email: 'An account already exists with this email' }
-        : { founder: 'This founder name is already taken' }
-
-    return { status: 409, error: conflict }
+    return {
+      status: 409,
+      error: { email: 'An account already exists with this email' },
+    }
   }
 
   return { batchDoc, industryDoc, studentRole }
@@ -212,7 +199,7 @@ const createFounderAccount = async ({
 }
 
 const createFounder = async (req, res) => {
-  const payload = normalizeFounderPayload(req.body ?? {})
+  const payload = req.body ?? {}
   const error = validateFounderPayload(payload)
 
   if (Object.values(error).some(Boolean)) {
@@ -240,7 +227,7 @@ const createFounder = async (req, res) => {
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
-        error: { email: 'Email or founder name already in use' },
+        error: { email: 'Email already in use' },
       })
     }
 

@@ -3,7 +3,12 @@ import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
 import Venture from '../models/venture.js'
 import { validateCreateKPI } from '../utils/kpiValidator.js'
-import { uploadToS3 } from '../config/s3.js'
+import {
+  parseEvaluationScore,
+  applyKpiEvaluationUpdates,
+  buildKPIUpdateFields,
+  resolveEvidenceData,
+} from '../utils/kpiHelper.js'
 
 export const createKPI = async (req, res) => {
   try {
@@ -230,27 +235,6 @@ export const submitKPIForApproval = async (req, res) => {
   }
 }
 
-const parseEvaluationScore = score => {
-  if (score === undefined || score === null || score === '') {
-    return null
-  }
-  const num = Number(score)
-  return !Number.isNaN(num) && num >= 0 ? num : -1
-}
-
-const resolveEvaluationStatus = (status, currentStatus, score) => {
-  if (status) {
-    return status
-  }
-  if (score !== null && score !== undefined) {
-    return 'GRADED'
-  }
-  if (currentStatus === 'WAITING_FOR_APPROVAL' || currentStatus === 'DRAFT') {
-    return 'ACCEPTED'
-  }
-  return currentStatus
-}
-
 export const evaluateKPI = async (req, res) => {
   try {
     const { kpiId } = req.params
@@ -272,24 +256,13 @@ export const evaluateKPI = async (req, res) => {
         message: 'Score must be a valid non-negative number',
       })
     }
-    if (parsedScore !== null) {
-      kpi.score = parsedScore
-    }
 
-    const targetStatus = resolveEvaluationStatus(
+    applyKpiEvaluationUpdates(kpi, {
+      parsedScore,
       status,
-      kpi.status,
-      parsedScore
-    )
-    kpi.status = targetStatus
-
-    if (targetStatus === 'GRADED') {
-      kpi.evaluationDate = new Date()
-    }
-    kpi.evaluatedBy = req.user?.id || null
-    if (feedback !== undefined) {
-      kpi.feedback = String(feedback).trim()
-    }
+      feedback,
+      evaluatorId: req.user?.id || null,
+    })
 
     await kpi.save()
 
@@ -300,7 +273,9 @@ export const evaluateKPI = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `KPI status updated to ${targetStatus}`,
+      message: status
+        ? `KPI status updated to ${kpi.status}`
+        : 'KPI evaluation updated',
       data: populatedKPI,
     })
   } catch (error) {
@@ -365,39 +340,6 @@ export const submitKPIEvidence = async (req, res) => {
   }
 }
 
-const assignIfDefined = (target, key, val) => {
-  if (val !== undefined) {
-    target[key] = typeof val === 'string' ? val.trim() : val
-  }
-}
-
-const buildKPIUpdateFields = ({
-  title,
-  description,
-  dueDate,
-  status,
-  targetValue,
-  actualValue,
-}) => {
-  const fields = {}
-  assignIfDefined(fields, 'title', title)
-  assignIfDefined(fields, 'description', description)
-  if (dueDate !== undefined) {
-    fields.dueDate = dueDate || null
-  }
-  assignIfDefined(fields, 'targetValue', targetValue)
-  assignIfDefined(fields, 'actualValue', actualValue)
-  if (status !== undefined) {
-    const isSubmitting =
-      status === 'SUBMIT' || status === 'WAITING_FOR_APPROVAL'
-    fields.status = isSubmitting ? 'WAITING_FOR_APPROVAL' : status
-    if (isSubmitting) {
-      fields.submissionDate = new Date()
-    }
-  }
-  return fields
-}
-
 export const updateKPI = async (req, res) => {
   try {
     const { kpiId } = req.params
@@ -447,25 +389,6 @@ export const deleteKPI = async (req, res) => {
       error: error.message,
     })
   }
-}
-
-async function resolveEvidenceData(
-  file,
-  currentEvidence = {},
-  newSupportingText
-) {
-  let fileUrl = currentEvidence.fileUrl || ''
-  let fileName = currentEvidence.fileName || ''
-
-  if (file) {
-    fileUrl = await uploadToS3(file.buffer, file.originalname, file.mimetype)
-    fileName = file.originalname
-  }
-
-  const supportingText = newSupportingText
-    ? newSupportingText.trim()
-    : currentEvidence.supportingText || ''
-  return { fileUrl, fileName, supportingText, uploadedAt: new Date() }
 }
 
 export const uploadKPIEvidence = async (req, res) => {

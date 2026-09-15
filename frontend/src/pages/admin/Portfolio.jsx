@@ -54,12 +54,10 @@ function Portfolio() {
       return
     }
 
-    const foundersToDelete = selectedRows
-
     setSelectedRows([])
 
     fetcher.submit(
-      { intent: 'deleteFounders', founders: foundersToDelete },
+      { intent: 'deleteFounders', founders: selectedRows },
       { method: 'post', encType: 'application/json' }
     )
   }

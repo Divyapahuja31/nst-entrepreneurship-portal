@@ -8,6 +8,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') })
 
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
+import Industry from '../models/industry.js'
 
 const seedInitialData = async () => {
   try {
@@ -61,6 +62,41 @@ const seedInitialData = async () => {
       )
 
       console.log(`Batch ready: ${batch.name}`)
+    }
+
+    const industries = [
+      {
+        name: 'Technology',
+        description:
+          'Companies focused on software, hardware, and IT services.',
+      },
+      {
+        name: 'Healthcare',
+        description: 'Companies in the medical and healthcare sector.',
+      },
+      {
+        name: 'Finance',
+        description:
+          'Companies in banking, investment, and financial services.',
+      },
+      {
+        name: 'Education',
+        description: 'Companies providing educational services and products.',
+      },
+    ]
+
+    for (const industryData of industries) {
+      const industry = await Industry.findOneAndUpdate(
+        { name: industryData.name },
+        industryData,
+        {
+          upsert: true,
+          returnDocument: 'after',
+          setDefaultsOnInsert: true,
+        }
+      )
+
+      console.log(`Industry ready: ${industry.name}`)
     }
 
     console.log('Initial data seeded successfully')

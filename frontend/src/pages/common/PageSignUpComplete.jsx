@@ -4,7 +4,7 @@ import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
 import MenuItem from '@mui/material/MenuItem'
 
-import '../style/auth.css'
+// import '../style/auth.css'
 
 function CompleteSignup() {
   const navigate = useNavigate()

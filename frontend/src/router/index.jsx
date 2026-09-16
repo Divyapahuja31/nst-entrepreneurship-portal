@@ -1,24 +1,39 @@
 import { createBrowserRouter } from 'react-router'
+
 import EmptyLayout from '../layouts/EmptyLayout.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 
-import Dashboard from '../pages/Dashboard.jsx'
-import Kpis from '../pages/Kpis.jsx'
-import SignIn from '../pages/SignIn.jsx'
-import SignUp from '../pages/SignUp.jsx'
-import CompleteSignup from '../pages/CompleteSignup.jsx'
-import { Proposal } from '../pages/student/Proposal.jsx'
-import Admin from '../pages/admin/Index.jsx'
-import Portfolio from '../pages/admin/Portfolio.jsx'
-import Profile from '../pages/admin/Profile.jsx'
-import Methodology from '../pages/admin/Methodology.jsx'
+// Student pages
+
+import PageStudentOverview from '../pages/student/PageOverview.jsx'
+import PageOnboarding from '../pages/student/PageOnboarding.jsx'
+import PageKPIs from '../pages/student/PageKPIs.jsx'
+import PageCreateProposal from '../pages/student/PageCreateProposal.jsx'
+
+// Admin pages
+import PageAdminOverview from '../pages/admin/PageOverview.jsx'
+import PagePortfolios from '../pages/admin/PagePortfolios.jsx'
+import PageFounders from '../pages/admin/PageFounders.jsx'
+import PageReportBiWeekly from '../pages/admin/PageReportBiWeekly.jsx'
+
+// Common pages
+import PageSignIn from '../pages/common/PageSignIn.jsx'
+import PageSignUp from '../pages/common/PageSignUp.jsx'
+import PageSignUpComplete from '../pages/common/PageSignUpComplete.jsx'
+import PageMethodology from '../pages/common/PageMethodology.jsx'
+
+import PageAllPages from '../pages/common/PageAllPages.jsx'
+
+// TODO: make this a pop up modal instead of a page
 import AddFounder from '../components/AddFounder.jsx'
+
 import {
   credentialsAction,
-  portfolioLoader,
+  portfolioLoader as profileLoader,
   signoutAction,
 } from '../api/auth.js'
 
+// TODO: clean up unnecessary actions by writing them as functions in the component itself instead of in the router. The router should only be used for routing and data fetching, not for handling actions that are specific to a component.
 import { kpisLoader, kpisAction } from '../api/kpi.js'
 import { proposalLoader, proposalAction } from '../api/proposal.js'
 import {
@@ -34,35 +49,38 @@ import {
 export const router = createBrowserRouter([
   {
     Component: MainLayout,
-    loader: portfolioLoader,
-    path: '/',
+    loader: profileLoader,
     children: [
       {
         path: '/',
         index: true,
-        Component: Dashboard,
+        Component: PageStudentOverview,
+      },
+      {
+        path: '/onboarding',
+        Component: PageOnboarding,
       },
       {
         path: '/kpis',
-        Component: Kpis,
+        Component: PageKPIs,
         loader: kpisLoader,
-        action: kpisAction,
+        // action: kpisAction,
       },
       {
-        path: '/proposal',
-        Component: Proposal,
+        path: '/create-proposal',
+        Component: PageCreateProposal,
         loader: proposalLoader,
-        action: proposalAction,
+        // action: proposalAction,
       },
       {
         path: '/methodology',
-        Component: Methodology,
+        Component: PageMethodology,
       },
       {
         path: '/profile/:userid',
-        Component: Profile,
+        Component: PageReportBiWeekly,
         loader: biWeeklyLoader,
-        action: profileAction,
+        // action: profileAction,
       },
     ],
   },
@@ -72,12 +90,12 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/signin',
-        Component: SignIn,
+        Component: PageSignIn,
         action: credentialsAction('/auth/signin', 'Invalid credentials'),
       },
       {
         path: '/signup',
-        Component: SignUp,
+        Component: PageSignUp,
         action: credentialsAction('/auth/signup', 'Something went wrong'),
       },
       {
@@ -86,40 +104,55 @@ export const router = createBrowserRouter([
       },
       {
         path: '/complete-signup',
-        Component: CompleteSignup,
+        Component: PageSignUpComplete,
       },
     ],
   },
 
   {
-    path: '/admin',
     Component: MainLayout,
-    loader: portfolioLoader,
+    loader: profileLoader,
     children: [
       {
         path: '/admin',
         index: true,
-        Component: Admin,
+        Component: PageAdminOverview,
         loader: foundersCount,
       },
       {
-        path: '/admin/portfolio',
-        Component: Portfolio,
+        path: '/admin/founders',
+        Component: PageFounders,
         loader: foundersLoader,
-        action: portfolioAction,
+        // action: portfolioAction,
+      },
+      {
+        path: '/admin/portfolio',
+        Component: PagePortfolios,
+        loader: foundersLoader,
+        // action: portfolioAction,
       },
       {
         path: '/admin/founders/new',
         Component: AddFounder,
         loader: addFounderLoader,
-        action: addFounderAction,
+        // action: addFounderAction,
       },
 
       {
         path: '/admin/profile/:userid',
-        Component: Profile,
+        Component: PageReportBiWeekly,
         loader: biWeeklyLoader,
-        action: profileAction,
+        // action: profileAction,
+      },
+    ],
+  },
+
+  {
+    Component: MainLayout,
+    children: [
+      {
+        path: '/test/all-pages',
+        Component: PageAllPages,
       },
     ],
   },

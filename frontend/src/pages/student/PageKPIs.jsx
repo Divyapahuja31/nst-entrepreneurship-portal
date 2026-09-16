@@ -29,9 +29,9 @@ import SendIcon from '@mui/icons-material/Send'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 
-import AddKpi from '../components/AddKpi'
-import UploadEvidenceDialog from '../components/UploadEvidenceDialog'
-import { uploadKPIEvidence, deleteKPIEvidence } from '../api/kpi'
+import AddKpi from '../../components/AddKpi'
+import UploadEvidenceDialog from '../../components/UploadEvidenceDialog'
+import { uploadKPIEvidence, deleteKPIEvidence } from '../../api/kpi'
 
 const STATUS_COLORS = {
   DRAFT: 'default',
@@ -636,29 +636,64 @@ export default function Kpis() {
                                 </Box>
                               )}
 
-                              {kpi.evidence && (kpi.evidence.fileName || kpi.evidence.supportingText) && (
-                                <Box sx={{ mt: 2.5 }}>
-                                  <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.75 }}>
-                                    Uploaded Evidence
-                                  </Typography>
-                                  <Box sx={{ p: 1.5, border: '1px solid #d0d0d0', borderRadius: 1, backgroundColor: '#ffffff' }}>
-                                    {kpi.evidence.fileName && (
-                                      <Typography variant="body2" sx={{ fontWeight: 500, mb: kpi.evidence.supportingText ? 0.5 : 0 }}>
-                                        File: {kpi.evidence.fileUrl ? (
-                                          <a href={kpi.evidence.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none' }}>
-                                            {kpi.evidence.fileName}
-                                          </a>
-                                        ) : kpi.evidence.fileName}
-                                      </Typography>
-                                    )}
-                                    {kpi.evidence.supportingText && (
-                                      <Typography variant="body2" color="text.secondary">
-                                        Note: {kpi.evidence.supportingText}
-                                      </Typography>
-                                    )}
+                              {kpi.evidence &&
+                                (kpi.evidence.fileName ||
+                                  kpi.evidence.supportingText) && (
+                                  <Box sx={{ mt: 2.5 }}>
+                                    <Typography
+                                      variant="subtitle2"
+                                      color="text.secondary"
+                                      sx={{ fontWeight: 600, mb: 0.75 }}
+                                    >
+                                      Uploaded Evidence
+                                    </Typography>
+                                    <Box
+                                      sx={{
+                                        p: 1.5,
+                                        border: '1px solid #d0d0d0',
+                                        borderRadius: 1,
+                                        backgroundColor: '#ffffff',
+                                      }}
+                                    >
+                                      {kpi.evidence.fileName && (
+                                        <Typography
+                                          variant="body2"
+                                          sx={{
+                                            fontWeight: 500,
+                                            mb: kpi.evidence.supportingText
+                                              ? 0.5
+                                              : 0,
+                                          }}
+                                        >
+                                          File:{' '}
+                                          {kpi.evidence.fileUrl ? (
+                                            <a
+                                              href={kpi.evidence.fileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              style={{
+                                                color: '#1976d2',
+                                                textDecoration: 'none',
+                                              }}
+                                            >
+                                              {kpi.evidence.fileName}
+                                            </a>
+                                          ) : (
+                                            kpi.evidence.fileName
+                                          )}
+                                        </Typography>
+                                      )}
+                                      {kpi.evidence.supportingText && (
+                                        <Typography
+                                          variant="body2"
+                                          color="text.secondary"
+                                        >
+                                          Note: {kpi.evidence.supportingText}
+                                        </Typography>
+                                      )}
+                                    </Box>
                                   </Box>
-                                </Box>
-                              )}
+                                )}
                             </Box>
 
                             <Box
@@ -895,7 +930,10 @@ export default function Kpis() {
       />
 
       <UploadEvidenceDialog
-        key={selectedKpiForEvidence?._id || (evidenceDialogOpen ? 'open' : 'closed')}
+        key={
+          selectedKpiForEvidence?._id ||
+          (evidenceDialogOpen ? 'open' : 'closed')
+        }
         open={evidenceDialogOpen}
         onClose={() => {
           setEvidenceDialogOpen(false)

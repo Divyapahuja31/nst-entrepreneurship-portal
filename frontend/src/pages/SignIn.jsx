@@ -1,57 +1,118 @@
 import { Form, useActionData } from 'react-router'
-import TextField from '@mui/material/TextField'
-import Button from '@mui/material/Button'
-import { Link } from 'react-router'
-import { Typography } from '@mui/material'
+import {
+  Button,
+  Divider,
+  Grid,
+  TextField,
+  Typography,
+} from '@mui/material'
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
 
 import '../style/auth.css'
 
 function SignIn() {
   const action = useActionData()
+
   return (
-    <div className="container">
-      <div className="box">
-        <h1 style={{ marginBottom: '10px' }}>Sign In</h1>
-        <p> {action && action.error}</p>
+    <>
+      <Grid container spacing={2} justifyContent="center" sx={{ pt: 4 }}>
+        <Grid
+          size={{ xs: 10, sm: 8, md: 6, lg: 4 }}
+          offset={{ xs: 1, sm: 2, md: 3, lg: 4 }}
+        >
+          <Grid container>
+            <Grid size={12} sx={{ padding: 2 }}>
+              <Typography
+                variant="h4"
+                component="h1"
+                gutterBottom
+                sx={{ my: 2 }}
+              >
+                Sign In
+              </Typography>
 
-        <Form method="post">
-          <TextField
-            error={Boolean(action && action.error)}
-            label="Email"
-            type="email"
-            name="email"
-          />
+              <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+                Sign in to your account to access the NST Entrepreneurship
+                Portal.
+              </Typography>
+            </Grid>
 
-          <TextField
-            error={Boolean(action && action.error)}
-            label="Password"
-            type="password"
-            name="password"
-          />
+            <Grid size={12} sx={{ padding: 2 }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                type="button"
+                size="large"
+                onClick={() => {
+                  window.location.href = '/api/auth/google'
+                }}
+              >
+                Continue with Google
+              </Button>
 
-          <Button fullWidth variant="contained" type="submit" sx={{ mt: 2 }}>
-            SignIn
-          </Button>
-          <div style={{ margin: '5px', textAlign: 'center' }}>OR</div>
+              <Divider sx={{ my: 2 }}>
+                <Typography variant="body2" color="textSecondary">
+                  OR
+                </Typography>
+              </Divider>
 
-          <Button
-            fullWidth
-            variant="outlined"
-            type="button"
-            onClick={() => {
-              window.location.href = '/api/auth/google'
-            }}
-          >
-            Continue with Google
-          </Button>
-        </Form>
+              <Form method="post" sx={{ my: 2 }}>
+                <TextField
+                  error={Boolean(action && action.error)}
+                  label="Email"
+                  type="email"
+                  name="email"
+                  fullWidth
+                />
 
-        <Typography>
-          {' '}
-          Don't have account ? <Link to="/signup">SignUp</Link>
-        </Typography>
-      </div>
-    </div>
+                <TextField
+                  error={Boolean(action && action.error)}
+                  label="Password"
+                  type="password"
+                  name="password"
+                  fullWidth
+                />
+
+                <Grid container sx={{ mt: 1, justifyContent: 'space-between' }}>
+                  <Grid size="auto">
+                    <Button variant="text" type="button" size="large">
+                      Forgot Password?
+                    </Button>
+                  </Grid>
+
+                  <Grid size="auto">
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      type="submit"
+                      sx={{ mb: 1 }}
+                      size="large"
+                      endIcon={<ArrowForwardRoundedIcon />}
+                    >
+                      Sign In
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Form>
+            </Grid>
+
+            <Grid size={12} sx={{ padding: 2 }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                type="button"
+                size="large"
+                onClick={() => {
+                  window.location.href = '/signup'
+                }}
+              >
+                New here? Sign up
+              </Button>
+            </Grid>
+          </Grid>
+        </Grid>
+      </Grid>
+    </>
   )
 }
 

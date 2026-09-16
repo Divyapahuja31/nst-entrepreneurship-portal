@@ -1,8 +1,8 @@
 import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
-import Venture from '../models/venture.js'
 import { validateCreateKPI } from '../utils/kpiValidator.js'
+import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   parseEvaluationScore,
   applyKpiEvaluationUpdates,
@@ -113,7 +113,7 @@ export const getMyKPIs = async (req, res) => {
       })
     }
 
-    const venture = await Venture.findOne({ founders: req.user.id })
+    const venture = await findVentureForUser(req.user.id)
     if (!venture) {
       return res.status(200).json({
         success: true,
@@ -157,7 +157,7 @@ export const getFounderKPIs = async (req, res) => {
       })
     }
 
-    const venture = await Venture.findOne({ founders: founderId })
+    const venture = await findVentureForUser(founderId)
     if (!venture) {
       return res.status(200).json({
         success: true,

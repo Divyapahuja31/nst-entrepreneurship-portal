@@ -1,9 +1,10 @@
 import mongoose from 'mongoose'
 import User from '../models/user.js'
-import Venture from '../models/venture.js'
+
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import BiWeeklyEvaluation from '../models/biWeeklyEvaluation.js'
 import BiWeeklyObservation from '../models/biWeeklyObservation.js'
+import { findVentureForUser } from '../utils/founderHelper.js'
 
 const resolveTargetFounderId = (user, query) => {
   if (user?.role === 'admin') {
@@ -39,7 +40,7 @@ export const getBiWeeklyData = async (req, res) => {
       return res.status(404).json({ error: 'Founder not found' })
     }
 
-    const venture = await Venture.findOne({ founders: targetFounderId })
+    const venture = await findVentureForUser(targetFounderId)
 
     const submissions = founder.biWeeklySubmission || []
     const evaluations = submissions

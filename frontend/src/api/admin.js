@@ -132,9 +132,3 @@ export const portfolioAction = async ({ request }) => {
 
   return { success: true }
 }
-
-export const ventureLoader = async () => {
-  const { data } = await api.get('/venture')
-  console.log(data)
-  return data
-}

@@ -2,7 +2,9 @@ import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
 import Role from '../models/role.js'
-import Venture from '../models/venture.js'
+import { findVentureForUser } from '../utils/founderHelper.js'
+import VentureProposal from '../models/ventureProposal.js'
+import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { validateAll } from '../utils/validator.js'
 import {
   cookieOptions,
@@ -102,6 +104,42 @@ export const signOut = async (_, res) => {
   return res.clearCookie('token', cookieOptions).json({ success: true })
 }
 
+const getPendingApplication = async userId => {
+  const [proposal, joinRequest] = await Promise.all([
+    VentureProposal.findOne({ submittedBy: userId }).sort({ createdAt: -1 }),
+    VentureJoinRequest.findOne({ requestedBy: userId })
+      .sort({ createdAt: -1 })
+      .populate('venture', 'name'),
+  ])
+
+  const applications = []
+
+  if (proposal) {
+    applications.push({
+      type: 'PROPOSAL',
+      id: proposal._id,
+      status: proposal.status,
+      ventureName: proposal.startupName,
+      submittedAt: proposal.createdAt,
+    })
+  }
+
+  if (joinRequest) {
+    applications.push({
+      type: 'JOIN_REQUEST',
+      id: joinRequest._id,
+      status: joinRequest.status,
+      ventureName: joinRequest.venture?.name || null,
+      submittedAt: joinRequest.createdAt,
+    })
+  }
+
+  const pending = applications.filter(item => item.status === 'PENDING')
+  const candidates = pending.length ? pending : applications
+
+  return candidates.sort((a, b) => b.submittedAt - a.submittedAt)[0] || null
+}
+
 export const portfolio = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' })
@@ -109,13 +147,27 @@ export const portfolio = async (req, res) => {
 
   const [user, venture] = await Promise.all([
     User.findById(req.user.id).populate(['role', 'batch', 'campus']),
-    Venture.findOne({ founders: req.user.id }),
+    findVentureForUser(req.user.id),
   ])
+
+  if (venture) {
+    await venture.populate({
+      path: 'founders',
+      populate: { path: 'user', select: 'username email' },
+    })
+  }
+
+  const founders = venture
+    ? venture.founders.map(founder => founder.user).filter(Boolean)
+    : []
+
+  const application = venture ? null : await getPendingApplication(req.user.id)
 
   return res.json({
     ...(user ? user.toJSON() : req.user),
     ventureId: venture?._id || null,
-    venture: venture || null,
+    venture: venture ? { ...venture.toJSON(), founders } : null,
+    application,
   })
 }
 

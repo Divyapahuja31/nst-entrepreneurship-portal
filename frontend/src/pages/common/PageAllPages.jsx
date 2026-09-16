@@ -14,9 +14,6 @@ export default function PageAllPages() {
           <a href="/kpis">KPIs</a>
         </li>
         <li>
-          <a href="/create-proposal">Create Proposal</a>
-        </li>
-        <li>
           <a href="/methodology">Methodology</a>
         </li>
         <li>

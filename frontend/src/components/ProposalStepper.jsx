@@ -4,22 +4,27 @@ import {
   Box,
   Button,
   CircularProgress,
-  LinearProgress,
-  Paper,
   Step,
   StepLabel,
   Stepper,
-  Typography,
 } from '@mui/material'
 
 const STEP_FIELDS = [
   ['startupName', 'description', 'targetCustomer', 'industry'],
   ['stage', 'currentTraction', 'businessModel'],
-  ['assumption1', 'assumption2', 'assumption3', 'risk1', 'risk2', 'risk3', 'sixMonthGoals'],
+  [
+    'assumption1',
+    'assumption2',
+    'assumption3',
+    'risk1',
+    'risk2',
+    'risk3',
+    'sixMonthGoals',
+  ],
   ['techStack', 'capitalStatus', 'weeklyHours', 'website'],
 ]
 
-const validateForm = (data) => {
+const validateForm = data => {
   const errs = {}
 
   // Step 1
@@ -87,7 +92,8 @@ const validateForm = (data) => {
     errs.weeklyHours = 'Weekly hours must be a valid non-negative number'
   }
   if (data.website?.trim()) {
-    const urlPattern = /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/
+    const urlPattern =
+      /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/
     if (!urlPattern.test(data.website.trim())) {
       errs.website = 'Please enter a valid website URL'
     }
@@ -96,9 +102,9 @@ const validateForm = (data) => {
   return errs
 }
 
-const getFirstInvalidStep = (errs) => {
+const getFirstInvalidStep = errs => {
   for (let i = 0; i < STEP_FIELDS.length; i++) {
-    if (STEP_FIELDS[i].some((field) => errs[field])) {
+    if (STEP_FIELDS[i].some(field => errs[field])) {
       return i
     }
   }
@@ -119,17 +125,15 @@ export default function ProposalStepper({
 
   const isLastStep = activeStep === steps.length - 1
 
-  const progress = ((activeStep + 1) / steps.length) * 100
-
   const handleNext = () => {
     if (!isLastStep) {
-      setActiveStep((prev) => prev + 1)
+      setActiveStep(prev => prev + 1)
     }
   }
 
   const handlePrevious = () => {
     if (activeStep > 0 && !isSubmitting) {
-      setActiveStep((prev) => prev - 1)
+      setActiveStep(prev => prev - 1)
     }
   }
 
@@ -154,15 +158,7 @@ export default function ProposalStepper({
   }
 
   return (
-    <Paper
-      elevation={2}
-      sx={{
-        maxWidth: 900,
-        mx: 'auto',
-        p: 4,
-        borderRadius: 3,
-      }}
-    >
+    <Box>
       <Stepper activeStep={activeStep} alternativeLabel>
         {steps.map((step, index) => (
           <Step key={index}>
@@ -170,18 +166,6 @@ export default function ProposalStepper({
           </Step>
         ))}
       </Stepper>
-
-      <Box sx={{ mt: 3 }}>
-        <LinearProgress variant="determinate" value={progress} />
-
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ mt: 1 }}
-        >
-          Step {activeStep + 1} of {steps.length}
-        </Typography>
-      </Box>
 
       <Box sx={{ mt: 5 }}>
         <CurrentStep
@@ -230,6 +214,6 @@ export default function ProposalStepper({
           </Button>
         )}
       </Box>
-    </Paper>
+    </Box>
   )
 }

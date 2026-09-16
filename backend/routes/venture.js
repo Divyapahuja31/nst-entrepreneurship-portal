@@ -1,9 +1,17 @@
 import { Router } from 'express'
 
-import { getVenture } from '../controllers/venture.js'
+import {
+  getVentures,
+  getVentureById,
+  getMyJoinRequest,
+  createJoinRequest,
+} from '../controllers/venture.js'
 
 const router = Router()
 
-router.get('/', getVenture)
+router.get('/', getVentures)
+router.get('/join-requests/me', getMyJoinRequest)
+router.get('/:ventureId', getVentureById)
+router.post('/:ventureId/join', createJoinRequest)
 
 export default router

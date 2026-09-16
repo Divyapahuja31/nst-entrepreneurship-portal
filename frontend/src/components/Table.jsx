@@ -14,6 +14,7 @@ export default function CustomizedTable({
   selectedRows = [],
   setSelectedRows = () => {},
   columnNames,
+  targetRoute,
 }) {
   const handleRowSelect = rowId => {
     if (selectedRows.includes(rowId)) {
@@ -59,39 +60,40 @@ export default function CustomizedTable({
           </TableRow>
         </TableHead>
         <TableBody>
-          {data.map((row, idx) => {
-            const userId = row.id ?? idx
-            return (
-              <StyledTableRow key={userId}>
-                <StyledTableCell>
-                  <Checkbox
-                    checked={selectedRows.includes(userId)}
-                    onClick={() => handleRowSelect(userId)}
-                    data-testid={`select-row-checkbox-${idx}`}
-                  />
-                </StyledTableCell>
-                <StyledTableCell component="th" scope="row">
-                  <Link
-                    component={RouterLink}
-                    to={`/profile/${row.id}`}
-                    underline="hover"
-                    sx={{
-                      color: 'primary.main',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {row[columnNames[0]]}
-                  </Link>
-                </StyledTableCell>
-                {columnNames.slice(1).map(columnName => (
-                  <StyledTableCell align="right">
-                    {row[columnName]}
+          {data &&
+            data.map((row, idx) => {
+              const id = row.id
+              return (
+                <StyledTableRow key={id}>
+                  <StyledTableCell>
+                    <Checkbox
+                      checked={selectedRows.includes(id)}
+                      onClick={() => handleRowSelect(id)}
+                      data-testid={`select-row-checkbox-${idx}`}
+                    />
                   </StyledTableCell>
-                ))}
-              </StyledTableRow>
-            )
-          })}
+                  <StyledTableCell component="th" scope="row">
+                    <Link
+                      component={RouterLink}
+                      to={`${targetRoute}/${row.id}`}
+                      underline="hover"
+                      sx={{
+                        color: 'primary.main',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {row[columnNames[0]]}
+                    </Link>
+                  </StyledTableCell>
+                  {columnNames.slice(1).map(columnName => (
+                    <StyledTableCell align="right">
+                      {row[columnName]}
+                    </StyledTableCell>
+                  ))}
+                </StyledTableRow>
+              )
+            })}
         </TableBody>
       </Table>
     </TableContainer>

@@ -1,4 +1,6 @@
-import { Form, useActionData, Link } from 'react-router'
+import { useState } from 'react'
+
+import { Link, Navigate, useNavigate } from 'react-router'
 
 import { Button, Divider, Grid, TextField, Typography } from '@mui/material'
 
@@ -6,8 +8,38 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
 
 import AuthScreen from '../../components/AuthScreen'
 
+import { useAuthStore } from '../../stores/auth'
+import { signIn, homePathFor } from '../../api/auth'
+
 function SignIn() {
-  const action = useActionData()
+  const navigate = useNavigate()
+  const login = useAuthStore(state => state.login)
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+  const user = useAuthStore(state => state.user)
+
+  const [action, setAction] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async event => {
+    event.preventDefault()
+    setSubmitting(true)
+    setAction(null)
+
+    const payload = Object.fromEntries(new FormData(event.currentTarget))
+    const result = await signIn(payload)
+
+    setSubmitting(false)
+    if (result.error) {
+      setAction(result)
+      return
+    }
+    login(result.user)
+    navigate(homePathFor(result.user), { replace: true })
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={homePathFor(user)} replace />
+  }
 
   return (
     <AuthScreen
@@ -33,7 +65,7 @@ function SignIn() {
           </Typography>
         </Divider>
 
-        <Form method="post" sx={{ my: 2 }}>
+        <form onSubmit={handleSubmit}>
           <TextField
             error={Boolean(action && action.error)}
             label="Email"
@@ -66,13 +98,14 @@ function SignIn() {
                 type="submit"
                 sx={{ mb: 1 }}
                 size="large"
+                disabled={submitting}
                 endIcon={<ArrowForwardRoundedIcon />}
               >
                 Sign In
               </Button>
             </Grid>
           </Grid>
-        </Form>
+        </form>
       </Grid>
 
       <Grid size={12} sx={{ padding: 2 }}>

@@ -66,6 +66,7 @@
     "dist/**",
     "build/**",
     ".git/**",
-    ".vscode/**"
+    ".vscode/**",
+    "*.svg"
   ]
 }

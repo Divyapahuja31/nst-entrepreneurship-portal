@@ -2,7 +2,9 @@ import * as React from 'react'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import Box from '@mui/material/Box'
-import { useLoaderData, useOutletContext, useParams } from 'react-router'
+import { useLoaderData, useParams } from 'react-router'
+
+import { useAuthStore } from '../../stores/auth'
 
 import BiWeekly from './PageReportBiWeekly'
 import KPIReview from '../../components/KPIReview'
@@ -34,7 +36,7 @@ function a11yProps(index) {
 export default function BasicTabs() {
   const [value, setValue] = React.useState(0)
   const biweeklyData = useLoaderData()
-  const currentUser = useOutletContext()
+  const currentUser = useAuthStore(state => state.user)
   const params = useParams()
 
   const roleName = currentUser?.role?.name?.toLowerCase()

@@ -16,11 +16,11 @@ import {
 
 import ProposalStepper from '../../components/ProposalStepper.jsx'
 
-import Step1 from '../../components/Proposal_steps/Step1'
-import Step2 from '../../components/Proposal_steps/Step2'
-import Step3 from '../../components/Proposal_steps/Step3'
-import Step4 from '../../components/Proposal_steps/Step4'
-import Step5 from '../../components/Proposal_steps/Step5'
+import Step1 from '../../components/Proposal_steps/Step1.jsx'
+import Step2 from '../../components/Proposal_steps/Step2.jsx'
+import Step3 from '../../components/Proposal_steps/Step3.jsx'
+import Step4 from '../../components/Proposal_steps/Step4.jsx'
+import Step5 from '../../components/Proposal_steps/Step5.jsx'
 
 const steps = [
   {
@@ -71,7 +71,7 @@ const initialEmptyData = {
   website: '',
 }
 
-const getPrefilledData = (proposal) => {
+const getPrefilledData = proposal => {
   if (!proposal) return initialEmptyData
 
   return {
@@ -97,13 +97,12 @@ const getPrefilledData = (proposal) => {
 
     techStack: proposal.techStack || '',
     capitalStatus: proposal.capitalStatus || '',
-    weeklyHours:
-      proposal.weeklyHours !== undefined ? proposal.weeklyHours : '',
+    weeklyHours: proposal.weeklyHours !== undefined ? proposal.weeklyHours : '',
     website: proposal.website || '',
   }
 }
 
-export const Proposal = () => {
+export default function Proposal() {
   const submit = useSubmit()
   const navigation = useNavigation()
   const loaderData = useLoaderData()
@@ -119,7 +118,7 @@ export const Proposal = () => {
 
   const errorMessage = actionData?.error || loaderData?.error
 
-  const handleSubmit = (data) => {
+  const handleSubmit = data => {
     if (isSubmitting) {
       return
     }
@@ -133,11 +132,7 @@ export const Proposal = () => {
         data.assumption3,
       ].filter(Boolean),
 
-      risks: [
-        data.risk1,
-        data.risk2,
-        data.risk3,
-      ].filter(Boolean),
+      risks: [data.risk1, data.risk2, data.risk3].filter(Boolean),
 
       weeklyHours: Number(data.weeklyHours),
     }

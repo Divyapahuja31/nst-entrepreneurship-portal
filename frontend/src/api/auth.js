@@ -6,8 +6,12 @@ export const credentialsAction =
   async ({ request }) => {
     const formData = await request.formData()
     try {
-      await api.post(path, Object.fromEntries(formData))
-      return redirect('/')
+      const response = await api.post(path, Object.fromEntries(formData))
+      if (response.data.user?.role.name === 'admin') {
+        return redirect('/admin')
+      } else {
+        return redirect('/')
+      }
     } catch (err) {
       if (!err.response) {
         return { error: 'Network error. Try again.' }

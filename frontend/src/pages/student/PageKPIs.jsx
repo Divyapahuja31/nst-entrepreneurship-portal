@@ -2,8 +2,8 @@ import { useState, Fragment } from 'react'
 import {
   useLoaderData,
   useParams,
-  useFetcher,
   useNavigation,
+  useRevalidator,
 } from 'react-router'
 import {
   Typography,
@@ -31,7 +31,15 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import AddKpi from '../../components/AddKpi'
 import UploadEvidenceDialog from '../../components/UploadEvidenceDialog'
 import { useAuthStore } from '../../stores/auth'
-import { uploadKPIEvidence, deleteKPIEvidence } from '../../api/kpi'
+import {
+  createKPIWithSubKpis,
+  deleteKPI,
+  deleteKPIEvidence,
+  submitKPIEvidence,
+  submitKPIForApproval,
+  updateKPIWithSubKpis,
+  uploadKPIEvidence,
+} from '../../api/kpi'
 
 const STATUS_COLORS = {
   DRAFT: 'default',
@@ -58,8 +66,8 @@ export default function Kpis() {
   const loaderData = useLoaderData()
   const { ventureId: routeVentureId } = useParams()
   const userProfile = useAuthStore(state => state.user)
-  const fetcher = useFetcher()
   const navigation = useNavigation()
+  const revalidator = useRevalidator()
 
   const ventureId =
     routeVentureId ||
@@ -74,11 +82,40 @@ export default function Kpis() {
   const [evidenceDialogOpen, setEvidenceDialogOpen] = useState(false)
   const [selectedKpiForEvidence, setSelectedKpiForEvidence] = useState(null)
 
-  const isLoading = navigation.state === 'loading' || fetcher.state !== 'idle'
-  const actionError = fetcher.data?.error || loaderData?.error || ''
+  const [busy, setBusy] = useState(false)
+  const [actionErrorMsg, setActionErrorMsg] = useState('')
+
+  const isLoading = navigation.state === 'loading' || busy
+  const actionError = actionErrorMsg || loaderData?.error || ''
   const displayError = !ventureId
     ? 'No venture associated with your account.'
     : actionError
+
+  // Runs an API operation, surfaces its error, and refreshes the loader data —
+  // what the route action used to do via its intent switch.
+  // Some API helpers return { error }, others throw — handle both so a failure
+  // always surfaces instead of becoming an unhandled rejection.
+  const run = async operation => {
+    setBusy(true)
+    setActionErrorMsg('')
+
+    try {
+      const result = await operation()
+
+      if (result?.error) {
+        setActionErrorMsg(result.error)
+        return false
+      }
+
+      revalidator.revalidate()
+      return true
+    } catch (err) {
+      setActionErrorMsg(err.message || 'Action failed')
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const handleSaveKPI = async kpiData => {
     if (!ventureId) {
@@ -86,36 +123,23 @@ export default function Kpis() {
       return
     }
 
-    if (editingKpi) {
-      fetcher.submit(
-        {
-          intent: 'updateKPI',
-          kpiId: editingKpi._id,
-          title: kpiData.title,
-          description: kpiData.description,
-          dueDate: kpiData.dueDate,
-          status: kpiData.status,
-          subKpis: kpiData.subKpis,
-        },
-        { method: 'post', encType: 'application/json' }
-      )
-    } else {
-      fetcher.submit(
-        {
-          intent: 'createKPI',
-          title: kpiData.title,
-          description: kpiData.description,
-          dueDate: kpiData.dueDate,
-          venture: ventureId,
-          status: kpiData.status,
-          subKpis: kpiData.subKpis,
-        },
-        { method: 'post', encType: 'application/json' }
-      )
+    const payload = {
+      title: kpiData.title,
+      description: kpiData.description,
+      dueDate: kpiData.dueDate,
+      status: kpiData.status,
+      subKpis: kpiData.subKpis,
+      venture: ventureId,
     }
 
     setEditingKpi(null)
     setOpenAddKpi(false)
+
+    await run(() =>
+      editingKpi
+        ? updateKPIWithSubKpis({ ...payload, kpiId: editingKpi._id })
+        : createKPIWithSubKpis(payload)
+    )
   }
 
   const handleSaveEvidence = async ({
@@ -137,21 +161,16 @@ export default function Kpis() {
           formData.append('actualValue', actualValue)
         }
         await uploadKPIEvidence(kpi._id, formData)
-        fetcher.submit(
-          { intent: 'revalidate' },
-          { method: 'post', encType: 'application/json' }
-        )
+        revalidator.revalidate()
       } else {
-        fetcher.submit(
-          {
-            intent: 'submitEvidence',
+        await run(() =>
+          submitKPIEvidence({
             kpiId: kpi._id,
             actualValue,
             supportingText,
             fileName: fileName || kpi.evidence?.fileName || '',
             fileUrl: kpi.evidence?.fileUrl || '',
-          },
-          { method: 'post', encType: 'application/json' }
+          })
         )
       }
     } catch (err) {
@@ -166,16 +185,14 @@ export default function Kpis() {
     if (!kpi?._id) return
     try {
       await deleteKPIEvidence(kpi._id)
-      fetcher.submit(
-        {
-          intent: 'submitEvidence',
+      await run(() =>
+        submitKPIEvidence({
           kpiId: kpi._id,
           actualValue: kpi.actualValue || '',
           supportingText: '',
           fileName: '',
           fileUrl: '',
-        },
-        { method: 'post', encType: 'application/json' }
+        })
       )
     } catch (err) {
       console.error('Failed to delete evidence:', err)
@@ -448,26 +465,18 @@ export default function Kpis() {
                     <TableCell align="center">
                       {(kpi.status === 'DRAFT' ||
                         kpi.status === 'REJECTED') && (
-                        <fetcher.Form
-                          method="post"
-                          style={{ display: 'inline' }}
-                        >
-                          <input
-                            type="hidden"
-                            name="intent"
-                            value="submitKPI"
-                          />
-                          <input type="hidden" name="kpiId" value={kpi._id} />
-                          <Tooltip title="Submit for Mentor Approval">
-                            <IconButton
-                              type="submit"
-                              size="small"
-                              color="primary"
-                            >
-                              <SendIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </fetcher.Form>
+                        <Tooltip title="Submit for Mentor Approval">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            disabled={busy}
+                            onClick={() =>
+                              run(() => submitKPIForApproval(kpi._id))
+                            }
+                          >
+                            <SendIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       )}
                       <Tooltip
                         title={
@@ -486,36 +495,27 @@ export default function Kpis() {
                           </IconButton>
                         </span>
                       </Tooltip>
-                      <fetcher.Form
-                        method="post"
-                        style={{ display: 'inline' }}
-                        onSubmit={e => {
-                          if (!window.confirm('Delete this KPI?')) {
-                            e.preventDefault()
-                          }
-                        }}
+                      <Tooltip
+                        title={
+                          kpi.status === 'ACCEPTED'
+                            ? 'Accepted KPI cannot be deleted'
+                            : 'Delete KPI'
+                        }
                       >
-                        <input type="hidden" name="intent" value="deleteKPI" />
-                        <input type="hidden" name="kpiId" value={kpi._id} />
-                        <Tooltip
-                          title={
-                            kpi.status === 'ACCEPTED'
-                              ? 'Accepted KPI cannot be deleted'
-                              : 'Delete KPI'
-                          }
-                        >
-                          <span>
-                            <IconButton
-                              disabled={kpi.status === 'ACCEPTED'}
-                              type="submit"
-                              size="small"
-                              color="error"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </fetcher.Form>
+                        <span>
+                          <IconButton
+                            disabled={kpi.status === 'ACCEPTED' || busy}
+                            size="small"
+                            color="error"
+                            onClick={() => {
+                              if (!window.confirm('Delete this KPI?')) return
+                              run(() => deleteKPI(kpi._id))
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
 

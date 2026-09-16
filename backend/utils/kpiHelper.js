@@ -1,3 +1,5 @@
+import mongoose from 'mongoose'
+
 import { uploadToS3 } from '../config/s3.js'
 
 export const parseEvaluationScore = score => {
@@ -77,4 +79,18 @@ export const resolveEvidenceData = async (
     ? newSupportingText.trim()
     : currentEvidence?.supportingText || ''
   return { fileUrl, fileName, supportingText, uploadedAt: new Date() }
+}
+
+// A KPI is either venture-wide or tied to one founder. Returns the fields to
+// store, or an error message when the two inputs disagree.
+export const resolveKPIScope = ({ scope, founder }) => {
+  if (scope !== 'FOUNDER') {
+    return { scope: 'VENTURE', founder: null }
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(founder)) {
+    return { error: 'A founder KPI needs a valid founder' }
+  }
+
+  return { scope: 'FOUNDER', founder }
 }

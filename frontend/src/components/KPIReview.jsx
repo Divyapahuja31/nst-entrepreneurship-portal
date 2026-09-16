@@ -1,5 +1,7 @@
 import { useState, Fragment } from 'react'
-import { useFetcher, useLoaderData, useNavigation } from 'react-router'
+import { useLoaderData, useNavigation, useRevalidator } from 'react-router'
+
+import { evaluateKPI } from '../api/kpi'
 import {
   Box,
   Typography,
@@ -58,11 +60,11 @@ const formatDate = dateStr => {
 export default function KPIReview({ kpis: propKpis, founder, venture }) {
   const loaderData = useLoaderData()
   const navigation = useNavigation()
-  const fetcher = useFetcher()
+  const revalidator = useRevalidator()
 
   const kpis = propKpis || loaderData?.kpis || []
   const loading = navigation.state === 'loading'
-  const savingEval = fetcher.state !== 'idle'
+  const [savingEval, setSavingEval] = useState(false)
 
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -78,17 +80,27 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
     setEvalDialogOpen(true)
   }
 
-  const handleSaveEvaluation = ({ kpiId, status, score, feedback }) => {
-    fetcher.submit(
-      { intent: 'evaluateKPI', kpiId, status, score, feedback },
-      { method: 'post', encType: 'application/json' }
-    )
+  const handleSaveEvaluation = async ({ kpiId, status, score, feedback }) => {
+    setSavingEval(true)
+    setErrorMsg('')
+    setEvalDialogOpen(false)
+
+    try {
+      await evaluateKPI({ kpiId, score, status, feedback })
+    } catch (err) {
+      setSavingEval(false)
+      setErrorMsg(err.message || 'Failed to evaluate KPI')
+      return
+    }
+
+    setSavingEval(false)
+
     setSuccessMsg(
       status === 'GRADED'
         ? `KPI graded successfully.`
         : `KPI status updated to ${status}.`
     )
-    setEvalDialogOpen(false)
+    revalidator.revalidate()
     setTimeout(() => setSuccessMsg(''), 4000)
   }
 
@@ -139,7 +151,7 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
     },
   ]
 
-  const displayError = errorMsg || fetcher.data?.error || ''
+  const displayError = errorMsg
 
   return (
     <Box sx={{ width: '100%', py: 1 }}>
@@ -368,48 +380,29 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
                         >
                           {kpi.status === 'WAITING_FOR_APPROVAL' && (
                             <>
-                              <fetcher.Form
-                                method="post"
-                                style={{ display: 'inline' }}
-                              >
-                                <input
-                                  type="hidden"
-                                  name="intent"
-                                  value="evaluateKPI"
-                                />
-                                <input
-                                  type="hidden"
-                                  name="kpiId"
-                                  value={kpi._id}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="status"
-                                  value="ACCEPTED"
-                                />
-                                <input
-                                  type="hidden"
-                                  name="feedback"
-                                  value={kpi.feedback || ''}
-                                />
-                                <Tooltip title="Accept KPI definition">
-                                  <Button
-                                    type="submit"
-                                    variant="contained"
-                                    color="success"
-                                    size="small"
-                                    startIcon={<CheckCircleIcon />}
-                                    disabled={savingEval}
-                                    sx={{
-                                      textTransform: 'none',
-                                      fontWeight: 600,
-                                      py: 0.5,
-                                    }}
-                                  >
-                                    Accept
-                                  </Button>
-                                </Tooltip>
-                              </fetcher.Form>
+                              <Tooltip title="Accept KPI definition">
+                                <Button
+                                  variant="contained"
+                                  color="success"
+                                  size="small"
+                                  startIcon={<CheckCircleIcon />}
+                                  disabled={savingEval}
+                                  onClick={() =>
+                                    handleSaveEvaluation({
+                                      kpiId: kpi._id,
+                                      status: 'ACCEPTED',
+                                      feedback: kpi.feedback || '',
+                                    })
+                                  }
+                                  sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    py: 0.5,
+                                  }}
+                                >
+                                  Accept
+                                </Button>
+                              </Tooltip>
                               <Tooltip title="Reject KPI definition">
                                 <Button
                                   variant="outlined"

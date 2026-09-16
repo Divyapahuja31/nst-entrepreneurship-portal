@@ -4,15 +4,61 @@ import KPI from '../models/kpi.js'
 import { validateCreateKPI } from '../utils/kpiValidator.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import {
+  resolveKPIScope,
   parseEvaluationScore,
   applyKpiEvaluationUpdates,
   buildKPIUpdateFields,
   resolveEvidenceData,
 } from '../utils/kpiHelper.js'
 
+// What one founder can see in their venture: the venture-wide KPIs plus the
+// ones assigned to them personally — never another founder's.
+const kpisVisibleTo = (ventureId, founderId) => ({
+  venture: ventureId,
+  $or: [{ scope: 'VENTURE' }, { founder: founderId }],
+})
+
+// Admin-only: every KPI across every venture, for the admin KPIs page.
+export const getAllKPIs = async (req, res) => {
+  try {
+    const { scope, status } = req.query
+
+    const filter = {}
+    if (scope === 'VENTURE' || scope === 'FOUNDER') {
+      filter.scope = scope
+    }
+    if (status) {
+      filter.status = status
+    }
+
+    const kpis = await KPI.find(filter)
+      .populate('venture', 'name')
+      .populate('founder', 'username email')
+      .populate('createdBy', 'username email')
+      .populate('evaluatedBy', 'username email')
+      .populate('subKPIs')
+      .sort({ createdAt: -1 })
+
+    return res.status(200).json({
+      success: true,
+      count: kpis.length,
+      data: kpis,
+    })
+  } catch (error) {
+    console.error('Get all KPIs error:', error)
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch KPIs',
+      error: error.message,
+    })
+  }
+}
+
 export const createKPI = async (req, res) => {
   try {
-    const { title, description, dueDate, venture, status } = req.body
+    const { title, description, dueDate, venture, status, scope, founder } =
+      req.body
     if (!req.user?.id) {
       return res.status(401).json({
         success: false,
@@ -34,10 +80,12 @@ export const createKPI = async (req, res) => {
       })
     }
 
-    if (!mongoose.Types.ObjectId.isValid(venture)) {
+    const resolvedScope = resolveKPIScope({ scope, founder })
+
+    if (resolvedScope.error) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid venture ID',
+        message: resolvedScope.error,
       })
     }
 
@@ -47,6 +95,8 @@ export const createKPI = async (req, res) => {
       description: description.trim(),
       dueDate: dueDate || null,
       venture,
+      scope: resolvedScope.scope,
+      founder: resolvedScope.founder,
       createdBy: req.user.id,
       subKPIs: [],
       status: isSubmitted ? 'WAITING_FOR_APPROVAL' : 'DRAFT',
@@ -123,9 +173,10 @@ export const getMyKPIs = async (req, res) => {
       })
     }
 
-    const kpis = await KPI.find({ venture: venture._id })
+    const kpis = await KPI.find(kpisVisibleTo(venture._id, req.user.id))
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
+      .populate('founder', 'username email')
       .populate('subKPIs')
       .sort({ createdAt: 1 })
 
@@ -167,9 +218,10 @@ export const getFounderKPIs = async (req, res) => {
       })
     }
 
-    const kpis = await KPI.find({ venture: venture._id })
+    const kpis = await KPI.find(kpisVisibleTo(venture._id, founderId))
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
+      .populate('founder', 'username email')
       .populate('subKPIs')
       .sort({ createdAt: 1 })
 

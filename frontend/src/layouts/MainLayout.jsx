@@ -64,6 +64,11 @@ const adminMenuItems = [
     icon: PeopleIcon,
     path: '/admin/founders',
   },
+  {
+    menu: 'KPIs',
+    icon: MilitaryTechIcon,
+    path: '/admin/kpis',
+  },
 ]
 
 const commonMenuItems = [

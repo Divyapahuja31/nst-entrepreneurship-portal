@@ -1,5 +1,7 @@
 import mongoose from 'mongoose'
 
+import KPIScope from './enums/KPIScope.js'
+
 const evidenceLinkSchema = new mongoose.Schema(
   {
     title: {
@@ -37,6 +39,29 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       index: true,
+    },
+
+    // A report is filed either for the venture as a whole or by one founder.
+    // Until now the owner was only encoded in custom_id and in the reverse
+    // reference on User, which made reports impossible to query directly.
+    scope: {
+      type: String,
+      enum: Object.keys(KPIScope),
+      default: 'FOUNDER',
+      required: true,
+    },
+
+    venture: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Venture',
+      default: null,
+    },
+
+    // Set only for FOUNDER-scoped reports.
+    founder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     submitted_at: {
       type: Date,
@@ -120,6 +145,19 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
     timestamps: true,
   }
 )
+
+biWeeklySubmissionSchema.pre('validate', function () {
+  if (this.scope === 'FOUNDER' && !this.founder) {
+    this.invalidate('founder', 'A founder report must have a founder')
+  }
+
+  if (this.scope === 'VENTURE' && !this.venture) {
+    this.invalidate('venture', 'A venture report must have a venture')
+  }
+})
+
+biWeeklySubmissionSchema.index({ founder: 1, cycle_number: 1 })
+biWeeklySubmissionSchema.index({ venture: 1, cycle_number: 1 })
 
 export const modelName = 'BiWeeklySubmission'
 const BiWeeklySubmission = mongoose.model(modelName, biWeeklySubmissionSchema)

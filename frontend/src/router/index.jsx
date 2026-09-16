@@ -24,6 +24,7 @@ import PageSignUpComplete from '../pages/common/PageSignUpComplete.jsx'
 import PageMethodology from '../pages/common/PageMethodology.jsx'
 
 import PageAllPages from '../pages/common/PageAllPages.jsx'
+import PageError, { PageNotFound } from '../pages/common/PageError.jsx'
 
 // TODO: make this a pop up modal instead of a page
 import AddFounder from '../components/AddFounder.jsx'
@@ -45,6 +46,7 @@ import {
 export const router = createBrowserRouter([
   {
     Component: MainLayout,
+    ErrorBoundary: PageError,
     children: [
       {
         path: '/',
@@ -82,6 +84,7 @@ export const router = createBrowserRouter([
 
   {
     Component: EmptyLayout,
+    ErrorBoundary: PageError,
     children: [
       {
         path: '/signin',
@@ -100,6 +103,7 @@ export const router = createBrowserRouter([
 
   {
     Component: MainLayout,
+    ErrorBoundary: PageError,
     children: [
       {
         path: '/admin',
@@ -142,10 +146,22 @@ export const router = createBrowserRouter([
 
   {
     Component: MainLayout,
+    ErrorBoundary: PageError,
     children: [
       {
         path: '/test/all-pages',
         Component: PageAllPages,
+      },
+    ],
+  },
+
+  {
+    path: '*',
+    Component: MainLayout,
+    children: [
+      {
+        path: '*',
+        Component: PageNotFound,
       },
     ],
   },

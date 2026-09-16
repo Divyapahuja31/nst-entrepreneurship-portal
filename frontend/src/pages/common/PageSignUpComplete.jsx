@@ -8,8 +8,12 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
 
 import AuthScreen from '../../components/AuthScreen'
 
+import { useAuthStore } from '../../stores/auth'
+import { completeGoogleSignup } from '../../api/auth'
+
 function CompleteSignup() {
   const navigate = useNavigate()
+  const login = useAuthStore(state => state.login)
   const [searchParams] = useSearchParams()
 
   const token = searchParams.get('token')
@@ -81,39 +85,22 @@ function CompleteSignup() {
     setLoading(true)
     setError('')
 
-    try {
-      const response = await fetch('/api/auth/google/complete-signup', {
-        method: 'POST',
+    const result = await completeGoogleSignup({
+      token,
+      username: form.username.trim(),
+      batch: form.batch,
+      campus: form.campus,
+    })
 
-        headers: {
-          'Content-Type': 'application/json',
-        },
+    setLoading(false)
 
-        credentials: 'include',
-
-        body: JSON.stringify({
-          token,
-          username: form.username.trim(),
-          batch: form.batch,
-          campus: form.campus,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to create account.')
-        return
-      }
-
-      navigate('/')
-    } catch (error) {
-      console.error('Complete Google signup error:', error)
-
-      setError('Network error. Please try again.')
-    } finally {
-      setLoading(false)
+    if (result.error) {
+      setError(result.error)
+      return
     }
+
+    login(result.user)
+    navigate('/', { replace: true })
   }
 
   if (!token) {

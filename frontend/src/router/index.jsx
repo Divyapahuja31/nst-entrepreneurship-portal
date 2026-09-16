@@ -27,12 +27,6 @@ import PageAllPages from '../pages/common/PageAllPages.jsx'
 // TODO: make this a pop up modal instead of a page
 import AddFounder from '../components/AddFounder.jsx'
 
-import {
-  credentialsAction,
-  portfolioLoader as profileLoader,
-  signoutAction,
-} from '../api/auth.js'
-
 // TODO: clean up unnecessary actions by writing them as functions in the component itself instead of in the router. The router should only be used for routing and data fetching, not for handling actions that are specific to a component.
 import { kpisLoader, kpisAction } from '../api/kpi.js'
 import { proposalLoader, proposalAction } from '../api/proposal.js'
@@ -49,7 +43,6 @@ import {
 export const router = createBrowserRouter([
   {
     Component: MainLayout,
-    loader: profileLoader,
     children: [
       {
         path: '/',
@@ -91,16 +84,10 @@ export const router = createBrowserRouter([
       {
         path: '/signin',
         Component: PageSignIn,
-        action: credentialsAction('/auth/signin', 'Invalid credentials'),
       },
       {
         path: '/signup',
         Component: PageSignUp,
-        action: credentialsAction('/auth/signup', 'Something went wrong'),
-      },
-      {
-        path: '/signout',
-        action: signoutAction,
       },
       {
         path: '/complete-signup',
@@ -111,7 +98,6 @@ export const router = createBrowserRouter([
 
   {
     Component: MainLayout,
-    loader: profileLoader,
     children: [
       {
         path: '/admin',

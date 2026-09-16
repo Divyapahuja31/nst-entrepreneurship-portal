@@ -1,5 +1,7 @@
 import * as React from 'react'
-import { useFetcher, useOutletContext } from 'react-router'
+import { useFetcher } from 'react-router'
+
+import { useAuthStore } from '../../stores/auth'
 
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -181,7 +183,7 @@ function shortDate(date) {
 }
 
 function BiWeekly({ data }) {
-  const currentUser = useOutletContext()
+  const currentUser = useAuthStore(state => state.user)
   const fetcher = useFetcher()
   const isAdmin = currentUser?.role?.name === 'admin'
 

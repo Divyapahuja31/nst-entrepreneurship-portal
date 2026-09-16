@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { Form, useActionData, Link } from 'react-router'
+import { Link, Navigate, useNavigate } from 'react-router'
 
 import {
   Button,
@@ -19,8 +19,17 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
 
 import AuthScreen from '../../components/AuthScreen'
 
+import { useAuthStore } from '../../stores/auth'
+import { signUp, homePathFor } from '../../api/auth'
+
 function SignUp() {
-  const action = useActionData()
+  const navigate = useNavigate()
+  const login = useAuthStore(state => state.login)
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+  const user = useAuthStore(state => state.user)
+
+  const [action, setAction] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const [options, setOptions] = useState({
     campuses: [],
@@ -54,6 +63,27 @@ function SignUp() {
     loadOptions()
   }, [])
 
+  const handleSubmit = async event => {
+    event.preventDefault()
+    setSubmitting(true)
+    setAction(null)
+
+    const payload = Object.fromEntries(new FormData(event.currentTarget))
+    const result = await signUp(payload)
+
+    setSubmitting(false)
+    if (result.error) {
+      setAction(result)
+      return
+    }
+    login(result.user)
+    navigate(homePathFor(result.user), { replace: true })
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={homePathFor(user)} replace />
+  }
+
   return (
     <AuthScreen
       title="Sign Up"
@@ -78,7 +108,7 @@ function SignUp() {
           </Typography>
         </Divider>
 
-        <Form method="post" sx={{ my: 2 }}>
+        <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
             error={Boolean(action && action.error?.username)}
@@ -159,14 +189,14 @@ function SignUp() {
                 type="submit"
                 sx={{ mb: 1 }}
                 size="large"
-                disabled={loadingOptions}
+                disabled={loadingOptions || submitting}
                 endIcon={<ArrowForwardRoundedIcon />}
               >
                 Sign Up
               </Button>
             </Grid>
           </Grid>
-        </Form>
+        </form>
       </Grid>
 
       <Grid size={12} sx={{ padding: 2 }}>

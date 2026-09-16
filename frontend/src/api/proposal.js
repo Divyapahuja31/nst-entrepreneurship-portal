@@ -1,4 +1,5 @@
 import { api } from './client'
+import toError from './toError'
 
 export const getMyProposal = async () => {
   const { data } = await api.get('/proposals/me')
@@ -12,12 +13,6 @@ export const createProposal = async payload => {
 
     return { proposal: data.proposal }
   } catch (err) {
-    if (!err.response) {
-      return { error: 'Network error. Try again.' }
-    }
-
-    return {
-      error: err.response.data?.error || 'Could not submit proposal',
-    }
+    return toError(err, 'Could not submit proposal')
   }
 }

@@ -1,12 +1,5 @@
 import { api } from './client'
-
-// Normalize axios errors into the `{ error }` shape for Auth pages.
-const toError = (err, fallbackError) => {
-  if (!err.response) {
-    return { error: 'Network error. Try again.' }
-  }
-  return { error: err.response.data?.error || fallbackError }
-}
+import toError from './toError'
 
 export const signIn = async payload => {
   try {
@@ -44,4 +37,5 @@ export const signOut = async () => {
   }
 }
 
-export const homePathFor = user => (user?.role?.name === 'admin' ? '/admin' : '/')
+export const homePathFor = user =>
+  user?.role?.name === 'admin' ? '/admin' : '/'

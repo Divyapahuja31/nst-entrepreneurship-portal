@@ -1,44 +1,47 @@
-import { redirect } from 'react-router'
 import { api } from './client'
 
-export const credentialsAction =
-  (path, fallbackError) =>
-  async ({ request }) => {
-    const formData = await request.formData()
-    try {
-      const response = await api.post(path, Object.fromEntries(formData))
-      if (response.data.user?.role.name === 'admin') {
-        return redirect('/admin')
-      } else {
-        return redirect('/')
-      }
-    } catch (err) {
-      if (!err.response) {
-        return { error: 'Network error. Try again.' }
-      }
-      return { error: err.response.data?.error || fallbackError }
-    }
+// Normalize axios errors into the `{ error }` shape for Auth pages.
+const toError = (err, fallbackError) => {
+  if (!err.response) {
+    return { error: 'Network error. Try again.' }
   }
+  return { error: err.response.data?.error || fallbackError }
+}
 
-export const signoutAction = async () => {
+export const signIn = async payload => {
+  try {
+    const { data } = await api.post('/auth/signin', payload)
+    return { user: data.user }
+  } catch (err) {
+    return toError(err, 'Invalid credentials')
+  }
+}
+
+export const signUp = async payload => {
+  try {
+    const { data } = await api.post('/auth/signup', payload)
+    return { user: data.user }
+  } catch (err) {
+    return toError(err, 'Something went wrong')
+  }
+}
+
+export const completeGoogleSignup = async payload => {
+  try {
+    const { data } = await api.post('/auth/google/complete-signup', payload)
+    return { user: data.user }
+  } catch (err) {
+    return toError(err, 'Failed to create account.')
+  }
+}
+
+export const signOut = async () => {
   try {
     await api.post('/auth/signout')
-    return redirect('/signin')
+    return {}
   } catch (err) {
-    if (!err.response) {
-      return { error: 'Network error. Try again.' }
-    }
-    return { error: err.response.data?.error || 'Could not sign out' }
+    return toError(err, 'Could not sign out')
   }
 }
 
-export const portfolioLoader = async () => {
-  try {
-    const { data } = await api.get('/auth/portfolio')
-    return data
-  } catch (err) {
-    if (err.response?.status === 401) {
-      return redirect('/signup')
-    }
-  }
-}
+export const homePathFor = user => (user?.role?.name === 'admin' ? '/admin' : '/')

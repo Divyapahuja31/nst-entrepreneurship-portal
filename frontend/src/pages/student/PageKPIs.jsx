@@ -1,7 +1,6 @@
 import { useState, Fragment } from 'react'
 import {
   useLoaderData,
-  useOutletContext,
   useParams,
   useFetcher,
   useNavigation,
@@ -31,6 +30,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 
 import AddKpi from '../../components/AddKpi'
 import UploadEvidenceDialog from '../../components/UploadEvidenceDialog'
+import { useAuthStore } from '../../stores/auth'
 import { uploadKPIEvidence, deleteKPIEvidence } from '../../api/kpi'
 
 const STATUS_COLORS = {
@@ -57,7 +57,7 @@ const formatDate = dateStr => {
 export default function Kpis() {
   const loaderData = useLoaderData()
   const { ventureId: routeVentureId } = useParams()
-  const userProfile = useOutletContext()
+  const userProfile = useAuthStore(state => state.user)
   const fetcher = useFetcher()
   const navigation = useNavigation()
 

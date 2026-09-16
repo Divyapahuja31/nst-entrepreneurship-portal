@@ -1,37 +1,35 @@
-import * as React from 'react'
-import { useTheme } from '@mui/material/styles'
-import Box from '@mui/material/Box'
+import { useState, useEffect } from 'react'
 
-import Toolbar from '@mui/material/Toolbar'
-import List from '@mui/material/List'
-import CssBaseline from '@mui/material/CssBaseline'
-import Typography from '@mui/material/Typography'
-import Divider from '@mui/material/Divider'
-import IconButton from '@mui/material/IconButton'
-import MenuIcon from '@mui/icons-material/Menu'
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
-import ChevronRightIcon from '@mui/icons-material/ChevronRight'
-import ListItem from '@mui/material/ListItem'
-import ListItemButton from '@mui/material/ListItemButton'
-import ListItemIcon from '@mui/material/ListItemIcon'
-import ListItemText from '@mui/material/ListItemText'
-import LogoutIcon from '@mui/icons-material/Logout'
-import PeopleIcon from '@mui/icons-material/People'
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
-import AutoStoriesIcon from '@mui/icons-material/AutoStories'
-import { useLoaderData } from 'react-router'
+import {
+  Box,
+  Divider,
+  IconButton,
+  List,
+  Toolbar,
+  Typography,
+} from '@mui/material'
 
-import { NavLink, Outlet, useFetcher, useLocation } from 'react-router'
+import {
+  Menu as MenuIcon,
+  ChevronLeft as ChevronLeftIcon,
+  Logout as LogoutIcon,
+  People as PeopleIcon,
+  Dashboard as DashboardIcon,
+  MilitaryTech as MilitaryTechIcon,
+  DateRange as DateRangeIcon,
+  AutoAwesome as AutoAwesomeIcon,
+  AutoStories as AutoStoriesIcon,
+} from '@mui/icons-material'
 
-import DashboardIcon from '@mui/icons-material/Dashboard'
-import MilitaryTechIcon from '@mui/icons-material/MilitaryTech'
-import DateRangeIcon from '@mui/icons-material/DateRange'
+import { useLoaderData, Outlet, useFetcher } from 'react-router'
 
 import { AppBar, Drawer, DrawerHeader } from '../components/Sidebar.style'
 
-const menuItems = [
+import DrawerItem from '../components/DrawerItem'
+
+const studentMenuItems = [
   {
-    menu: 'Dashboard',
+    menu: 'Overview',
     icon: DashboardIcon,
     path: '/',
   },
@@ -49,15 +47,18 @@ const adminMenuItems = [
     path: '/admin',
   },
   {
-    menu: 'Portfolio',
+    menu: 'Portfolios',
     icon: PeopleIcon,
     path: '/admin/portfolio',
   },
   {
-    menu: 'Venture OS ',
+    menu: 'Venture OS',
     icon: AutoAwesomeIcon,
     path: '/admin/venture',
   },
+]
+
+const commonMenuItems = [
   {
     menu: 'Methodology',
     icon: AutoStoriesIcon,
@@ -66,183 +67,96 @@ const adminMenuItems = [
 ]
 
 export default function MiniDrawer() {
-  const theme = useTheme()
-  const data = useLoaderData()
-  const { pathname } = useLocation()
-  const [open, setOpen] = React.useState(false)
+  const [drawerItems, setDrawerItems] = useState([])
+
+  const loggedInUserData = useLoaderData()
+
+  useEffect(() => {
+    function getDrawerItems() {
+      if (loggedInUserData?.role?.name === 'admin') {
+        setDrawerItems([...adminMenuItems, ...commonMenuItems])
+      } else if (loggedInUserData?.role?.name === 'student') {
+        setDrawerItems([
+          ...studentMenuItems,
+          {
+            menu: 'Bi-Weekly',
+            icon: DateRangeIcon,
+            path: `/profile/${loggedInUserData._id}`,
+          },
+          ...commonMenuItems,
+        ])
+      } else {
+        setDrawerItems([...commonMenuItems])
+      }
+    }
+
+    getDrawerItems()
+  }, [loggedInUserData])
+
   const signout = useFetcher()
   const signingOut = signout.state !== 'idle'
-
   const handleSignOut = () => {
     signout.submit(null, { method: 'post', action: '/signout' })
   }
 
-  const handleDrawerOpen = () => {
-    setOpen(true)
-  }
-
-  const handleDrawerClose = () => {
-    setOpen(false)
-  }
-
-  const studentItems = React.useMemo(() => {
-    const items = [...menuItems]
-    if (data?._id) {
-      items.push({
-        menu: 'Bi-Weekly',
-        icon: DateRangeIcon,
-        path: `/profile/${data._id}`,
-      })
-    }
-    return items
-  }, [data])
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const openDrawer = () => setIsDrawerOpen(true)
+  const closeDrawer = () => setIsDrawerOpen(false)
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <CssBaseline />
-      <AppBar position="fixed" open={open}>
+      <AppBar position="fixed" open={isDrawerOpen}>
         <Toolbar>
           <IconButton
             color="inherit"
             aria-label="open drawer"
-            onClick={handleDrawerOpen}
+            onClick={openDrawer}
             edge="start"
             sx={[
               {
                 marginRight: 5,
               },
-              open && { display: 'none' },
+              isDrawerOpen && { display: 'none' },
             ]}
           >
             <MenuIcon />
           </IconButton>
         </Toolbar>
       </AppBar>
-      <Drawer variant="permanent" open={open}>
+
+      <Drawer variant="permanent" open={isDrawerOpen}>
         <DrawerHeader>
-          <IconButton onClick={handleDrawerClose}>
-            {theme.direction === 'rtl' ? (
-              <ChevronRightIcon />
-            ) : (
-              <ChevronLeftIcon />
-            )}
+          <IconButton onClick={closeDrawer}>
+            <ChevronLeftIcon />
           </IconButton>
         </DrawerHeader>
+
         <Divider />
+
         <List>
-          {(data?.role?.name === 'admin' ? adminMenuItems : studentItems).map(
-            item => (
-              <ListItem
-                key={item.path}
-                disablePadding
-                sx={{ display: 'block' }}
-              >
-                <ListItemButton
-                  component={NavLink}
-                  to={item.path}
-                  selected={pathname === item.path}
-                  sx={[
-                    {
-                      minHeight: 48,
-                      px: 2.5,
-                    },
-                    open
-                      ? {
-                          justifyContent: 'initial',
-                        }
-                      : {
-                          justifyContent: 'center',
-                        },
-                  ]}
-                >
-                  <ListItemIcon
-                    sx={[
-                      {
-                        minWidth: 0,
-                        justifyContent: 'center',
-                      },
-                      open
-                        ? {
-                            mr: 3,
-                          }
-                        : {
-                            mr: 'auto',
-                          },
-                    ]}
-                  >
-                    <item.icon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={item.menu}
-                    sx={[
-                      open
-                        ? {
-                            opacity: 1,
-                          }
-                        : {
-                            opacity: 0,
-                          },
-                    ]}
-                  />
-                </ListItemButton>
-              </ListItem>
-            )
-          )}
+          {drawerItems.map(item => (
+            <DrawerItem
+              key={item.path}
+              open={isDrawerOpen}
+              icon={item.icon}
+              label={item.menu}
+              path={item.path}
+            />
+          ))}
         </List>
+
         <Box sx={{ marginTop: 'auto' }}>
           <Divider />
           <List>
-            <ListItem disablePadding sx={{ display: 'block' }}>
-              <ListItemButton
-                onClick={handleSignOut}
-                disabled={signingOut}
-                sx={[
-                  {
-                    minHeight: 48,
-                    px: 2.5,
-                  },
-                  open
-                    ? {
-                        justifyContent: 'initial',
-                      }
-                    : {
-                        justifyContent: 'center',
-                      },
-                ]}
-              >
-                <ListItemIcon
-                  sx={[
-                    {
-                      minWidth: 0,
-                      justifyContent: 'center',
-                    },
-                    open
-                      ? {
-                          mr: 3,
-                        }
-                      : {
-                          mr: 'auto',
-                        },
-                  ]}
-                >
-                  <LogoutIcon />
-                </ListItemIcon>
-                <ListItemText
-                  primary={signingOut ? 'Signing out...' : 'Sign Out'}
-                  sx={[
-                    open
-                      ? {
-                          opacity: 1,
-                        }
-                      : {
-                          opacity: 0,
-                        },
-                  ]}
-                />
-              </ListItemButton>
-            </ListItem>
+            <DrawerItem
+              open={isDrawerOpen}
+              icon={LogoutIcon}
+              label={signingOut ? 'Signing out...' : 'Sign Out'}
+              onClick={handleSignOut}
+              disabled={signingOut}
+            />
           </List>
-          {open && signout.data?.error && (
+          {isDrawerOpen && signout.data?.error && (
             <Typography
               variant="caption"
               color="error"
@@ -255,7 +169,7 @@ export default function MiniDrawer() {
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
         <DrawerHeader />
-        <Outlet context={data} />
+        <Outlet context={loggedInUserData} />
       </Box>
     </Box>
   )

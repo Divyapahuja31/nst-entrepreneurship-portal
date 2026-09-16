@@ -16,6 +16,16 @@ const FILTER_LABELS = {
   status: 'All statuses',
 }
 
+const columnsName = [
+  'founder',
+  'startup',
+  'campus',
+  'stage',
+  'team',
+  'score',
+  'status',
+]
+
 function Portfolio() {
   const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
@@ -135,6 +145,7 @@ function Portfolio() {
         data={visibleStudents}
         selectedRows={selectedRows}
         setSelectedRows={setSelectedRows}
+        columnsName={columnsName}
       />
     </div>
   )

@@ -25,6 +25,8 @@ import PageMethodology from '../pages/common/PageMethodology.jsx'
 
 import PageAllPages from '../pages/common/PageAllPages.jsx'
 import PageError, { PageNotFound } from '../pages/common/PageError.jsx'
+import RequireAuth from '../components/RequireAuth.jsx'
+import RequireRole from '../components/RequireRole.jsx'
 
 // TODO: make this a pop up modal instead of a page
 import AddFounder from '../components/AddFounder.jsx'
@@ -43,38 +45,7 @@ import {
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 
 export const router = createBrowserRouter([
-  {
-    Component: MainLayout,
-    ErrorBoundary: PageError,
-    children: [
-      {
-        path: '/',
-        index: true,
-        Component: PageStudentOverview,
-      },
-      {
-        path: '/onboarding',
-        Component: PageOnboarding,
-      },
-      {
-        path: '/kpis',
-        Component: PageKPIs,
-        loader: kpisLoader,
-        // action: kpisAction,
-      },
-      {
-        path: '/methodology',
-        Component: PageMethodology,
-      },
-      {
-        path: '/profile/:userid',
-        Component: PageReportBiWeekly,
-        loader: biWeeklyLoader,
-        // action: profileAction,
-      },
-    ],
-  },
-
+  // Public: the only routes a signed-out visitor may reach.
   {
     Component: EmptyLayout,
     ErrorBoundary: PageError,
@@ -94,73 +65,103 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // Signed in.
   {
-    Component: MainLayout,
     ErrorBoundary: PageError,
+    Component: RequireAuth,
     children: [
       {
-        path: '/admin',
-        index: true,
-        Component: PageAdminOverview,
-        loader: foundersCount,
-      },
-      {
-        path: '/admin/founders',
-        Component: PageFounders,
-        loader: foundersLoader,
-        // action: portfolioAction,
-      },
-      {
-        path: '/admin/venture',
-        Component: PageVentures,
-        loader: venturesPageLoader,
-      },
-      {
-        path: '/admin/venture/:ventureId',
-        Component: PageVentureDetail,
-        loader: ventureDetailLoader,
-      },
-      {
-        path: '/admin/portfolio',
-        Component: PagePortfolios,
-        loader: foundersLoader,
-        // action: portfolioAction,
-      },
-      {
-        path: '/admin/founders/new',
-        Component: AddFounder,
-        loader: addFounderLoader,
-        // action: addFounderAction,
-      },
-
-      {
-        path: '/admin/profile/:userid',
-        Component: PageReportBiWeekly,
-        loader: biWeeklyLoader,
-        // action: profileAction,
+        Component: MainLayout,
+        children: [
+          {
+            path: '/',
+            index: true,
+            Component: PageStudentOverview,
+          },
+          {
+            path: '/onboarding',
+            Component: PageOnboarding,
+          },
+          {
+            path: '/kpis',
+            Component: PageKPIs,
+            loader: kpisLoader,
+            // action: kpisAction,
+          },
+          {
+            path: '/methodology',
+            Component: PageMethodology,
+          },
+          {
+            path: '/profile/:userid',
+            Component: PageReportBiWeekly,
+            loader: biWeeklyLoader,
+            // action: profileAction,
+          },
+          {
+            path: '/test/all-pages',
+            Component: PageAllPages,
+          },
+        ],
       },
     ],
   },
 
+  // Signed in as an admin.
   {
-    Component: MainLayout,
     ErrorBoundary: PageError,
+    element: <RequireRole role="admin" />,
     children: [
       {
-        path: '/test/all-pages',
-        Component: PageAllPages,
+        Component: MainLayout,
+        children: [
+          {
+            path: '/admin',
+            index: true,
+            Component: PageAdminOverview,
+            loader: foundersCount,
+          },
+          {
+            path: '/admin/founders',
+            Component: PageFounders,
+            loader: foundersLoader,
+            // action: portfolioAction,
+          },
+          {
+            path: '/admin/venture',
+            Component: PageVentures,
+            loader: venturesPageLoader,
+          },
+          {
+            path: '/admin/venture/:ventureId',
+            Component: PageVentureDetail,
+            loader: ventureDetailLoader,
+          },
+          {
+            path: '/admin/portfolio',
+            Component: PagePortfolios,
+            loader: foundersLoader,
+            // action: portfolioAction,
+          },
+          {
+            path: '/admin/founders/new',
+            Component: AddFounder,
+            loader: addFounderLoader,
+            // action: addFounderAction,
+          },
+          {
+            path: '/admin/profile/:userid',
+            Component: PageReportBiWeekly,
+            loader: biWeeklyLoader,
+            // action: profileAction,
+          },
+        ],
       },
     ],
   },
 
   {
     path: '*',
-    Component: MainLayout,
-    children: [
-      {
-        path: '*',
-        Component: PageNotFound,
-      },
-    ],
+    Component: PageNotFound,
   },
 ])

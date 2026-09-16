@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 
 import {
   Box,
-  CircularProgress,
   Divider,
   IconButton,
   List,
@@ -79,8 +78,6 @@ export default function MiniDrawer() {
   const [drawerItems, setDrawerItems] = useState([])
 
   const loggedInUserData = useAuthStore(state => state.user)
-  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
-  const isLoading = useAuthStore(state => state.isLoading)
   const logout = useAuthStore(state => state.logout)
 
   const location = useLocation()
@@ -127,26 +124,10 @@ export default function MiniDrawer() {
   const openDrawer = () => setIsDrawerOpen(true)
   const closeDrawer = () => setIsDrawerOpen(false)
 
-  if (isLoading) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    )
-  }
+  // Authentication is enforced by the RequireAuth / RequireRole route guards,
+  // so by the time this layout renders the user is known to be signed in.
 
-  if (!isAuthenticated) {
-    return <Navigate to="/signin" replace />
-  }
-
-  // redirect to /admin if the user is an admin and is on the root path
+  // Admins have no student dashboard, so send them to their own.
   if (loggedInUserData?.role?.name === 'admin' && location.pathname === '/') {
     return <Navigate to="/admin" replace />
   }

@@ -1,5 +1,13 @@
 import * as React from 'react'
-import { useFetcher } from 'react-router'
+import { useRevalidator } from 'react-router'
+
+import {
+  reopenBiWeeklySubmission,
+  saveBiWeeklyEvaluation,
+  saveBiWeeklyObservation,
+  submitBiWeeklyCycle,
+} from '../../api/biweekly'
+import toError from '../../api/toError'
 
 import { useAuthStore } from '../../stores/auth'
 
@@ -184,7 +192,7 @@ function shortDate(date) {
 
 function BiWeekly({ data }) {
   const currentUser = useAuthStore(state => state.user)
-  const fetcher = useFetcher()
+  const revalidator = useRevalidator()
   const isAdmin = currentUser?.role?.name === 'admin'
 
   const { founder } = data || {}
@@ -226,56 +234,47 @@ function BiWeekly({ data }) {
       !rows.find(r => r.cycle_number === c.n && r.submitted_at)
   ).length
 
-  const saveSubmission = (payload, submit) => {
-    setMessage(submit ? 'Submitting to faculty...' : 'Saving draft...')
-    fetcher.submit(
-      {
-        intent: 'submitCycle',
+  // Each of these calls the API directly and then asks the route loader to
+  // refetch, in place of the route action that used to dispatch on an intent.
+  const run = async (pending, operation) => {
+    setMessage(pending)
+
+    try {
+      await operation()
+      setMessage('')
+      revalidator.revalidate()
+    } catch (err) {
+      setMessage(toError(err, 'Action failed').error)
+    }
+  }
+
+  const saveSubmission = (payload, submit) =>
+    run(submit ? 'Submitting to faculty...' : 'Saving draft...', () =>
+      submitBiWeeklyCycle({
         ...payload,
         isSubmit: submit,
         founderId: founder?._id,
-      },
-      { method: 'post', encType: 'application/json' }
+      })
     )
-  }
 
   const reopenSubmission = cycleNumber => {
     if (!window.confirm('Unlock to edit? Faculty will see this as re-opened.'))
       return
-    setMessage('Unlocking...')
-    fetcher.submit(
-      {
-        intent: 'reopenSubmission',
-        founderId: founder?._id,
-        cycle_number: cycleNumber,
-      },
-      { method: 'post', encType: 'application/json' }
+
+    return run('Unlocking...', () =>
+      reopenBiWeeklySubmission(founder?._id, cycleNumber)
     )
   }
 
-  const saveObservation = payload => {
-    setMessage('Saving observation...')
-    fetcher.submit(
-      {
-        intent: 'saveObservation',
-        ...payload,
-        founderId: founder?._id,
-      },
-      { method: 'post', encType: 'application/json' }
+  const saveObservation = payload =>
+    run('Saving observation...', () =>
+      saveBiWeeklyObservation({ ...payload, founderId: founder?._id })
     )
-  }
 
-  const saveEvaluation = payload => {
-    setMessage('Saving evaluation...')
-    fetcher.submit(
-      {
-        intent: 'saveEvaluation',
-        ...payload,
-        founderId: founder?._id,
-      },
-      { method: 'post', encType: 'application/json' }
+  const saveEvaluation = payload =>
+    run('Saving evaluation...', () =>
+      saveBiWeeklyEvaluation({ ...payload, founderId: founder?._id })
     )
-  }
 
   return (
     <Stack spacing={3}>
@@ -599,7 +598,7 @@ function CycleForm({
   const submitted = !!existing?.submitted_at
   const pastDeadline = deadline < now
   // Admin view is read-only (admin cannot submit student progress). Student is locked if submitted or past deadline.
-  const locked = isAdmin ? true : (submitted || pastDeadline)
+  const locked = isAdmin ? true : submitted || pastDeadline
   const checklist = CHECKLISTS[cycleNumber + 1]
 
   const requiredCount = checklist?.items.length ?? 0
@@ -1154,12 +1153,7 @@ function MentorObservationSection({
   )
 }
 
-function ObservationForm({
-  cycleNumber,
-  existing,
-  evidenceLinks,
-  onSave,
-}) {
+function ObservationForm({ cycleNumber, existing, evidenceLinks, onSave }) {
   const [open, setOpen] = React.useState(false)
   const [f, setF] = React.useState({
     observation: existing?.observation ?? '',

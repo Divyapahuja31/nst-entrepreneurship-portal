@@ -12,7 +12,8 @@ import PageKPIs from '../pages/student/PageKPIs.jsx'
 // Admin pages
 import PageAdminOverview from '../pages/admin/PageOverview.jsx'
 import PagePortfolios from '../pages/admin/PagePortfolios.jsx'
-import PageFounders from '../pages/admin/PageFounders.jsx'
+import PageFounderProfile from '../pages/admin/PageFounderProfile.jsx'
+import PageAdminKPIs from '../pages/admin/PageKPIs.jsx'
 import PageReportBiWeekly from '../pages/admin/PageReportBiWeekly.jsx'
 import PageVentures from '../pages/admin/PageVentures.jsx'
 import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
@@ -31,16 +32,14 @@ import RequireRole from '../components/RequireRole.jsx'
 // TODO: make this a pop up modal instead of a page
 import AddFounder from '../components/AddFounder.jsx'
 
-// TODO: clean up unnecessary actions by writing them as functions in the component itself instead of in the router. The router should only be used for routing and data fetching, not for handling actions that are specific to a component.
-import { kpisLoader, kpisAction } from '../api/kpi.js'
+// Routes carry loaders only. Actions live in the components that trigger them,
+// calling the API directly and revalidating the loader afterwards.
+import { allKPIsLoader, kpisLoader } from '../api/kpi.js'
 import {
-  addFounderAction,
   addFounderLoader,
   biWeeklyLoader,
   foundersCount,
   foundersLoader,
-  portfolioAction,
-  profileAction,
 } from '../api/admin.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 
@@ -86,7 +85,6 @@ export const router = createBrowserRouter([
             path: '/kpis',
             Component: PageKPIs,
             loader: kpisLoader,
-            // action: kpisAction,
           },
           {
             path: '/methodology',
@@ -96,7 +94,6 @@ export const router = createBrowserRouter([
             path: '/profile/:userid',
             Component: PageReportBiWeekly,
             loader: biWeeklyLoader,
-            // action: profileAction,
           },
           {
             path: '/test/all-pages',
@@ -123,9 +120,13 @@ export const router = createBrowserRouter([
           },
           {
             path: '/admin/founders',
-            Component: PageFounders,
+            Component: PagePortfolios,
             loader: foundersLoader,
-            // action: portfolioAction,
+          },
+          {
+            path: '/admin/kpis',
+            Component: PageAdminKPIs,
+            loader: allKPIsLoader,
           },
           {
             path: '/admin/venture',
@@ -141,19 +142,16 @@ export const router = createBrowserRouter([
             path: '/admin/portfolio',
             Component: PagePortfolios,
             loader: foundersLoader,
-            // action: portfolioAction,
           },
           {
             path: '/admin/founders/new',
             Component: AddFounder,
             loader: addFounderLoader,
-            // action: addFounderAction,
           },
           {
             path: '/admin/profile/:userid',
-            Component: PageReportBiWeekly,
+            Component: PageFounderProfile,
             loader: biWeeklyLoader,
-            // action: profileAction,
           },
         ],
       },

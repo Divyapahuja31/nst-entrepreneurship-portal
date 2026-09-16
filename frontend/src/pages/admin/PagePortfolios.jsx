@@ -6,9 +6,10 @@ import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 
 import React from 'react'
-import { Link, useFetcher, useLoaderData } from 'react-router'
+import { Link, useLoaderData, useRevalidator } from 'react-router'
 
 import CustomizedTable from '../../components/Table'
+import { deleteFounders } from '../../api/admin'
 
 const FILTER_LABELS = {
   campus: 'All campuses',
@@ -29,8 +30,9 @@ const columnNames = [
 function Portfolio() {
   const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
-  const fetcher = useFetcher()
-  const isDeleting = fetcher.state !== 'idle'
+  const revalidator = useRevalidator()
+  const [isDeleting, setIsDeleting] = React.useState(false)
+  const [error, setError] = React.useState('')
   const [filters, setFilters] = React.useState({})
   const [selectedRows, setSelectedRows] = React.useState([])
   const founderQuery = (filters.founder ?? '').trim().toLowerCase()
@@ -51,7 +53,7 @@ function Portfolio() {
       )
     })
   })
-  const handleDeleteFounders = () => {
+  const handleDeleteFounders = async () => {
     if (selectedRows.length === 0) {
       alert('Please select at least one founder to delete.')
       return
@@ -64,12 +66,22 @@ function Portfolio() {
       return
     }
 
-    setSelectedRows([])
+    const founders = selectedRows
 
-    fetcher.submit(
-      { intent: 'deleteFounders', founders: selectedRows },
-      { method: 'post', encType: 'application/json' }
-    )
+    setSelectedRows([])
+    setIsDeleting(true)
+    setError('')
+
+    const result = await deleteFounders(founders)
+
+    setIsDeleting(false)
+
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+
+    revalidator.revalidate()
   }
   return (
     <div>
@@ -79,9 +91,9 @@ function Portfolio() {
         </Button>
       </div>
 
-      {fetcher.data?.error && (
+      {error && (
         <Alert severity="error" sx={{ my: 1 }}>
-          {fetcher.data.error}
+          {error}
         </Alert>
       )}
 

@@ -1,4 +1,5 @@
 import { api } from './client'
+import toError from './toError'
 
 export const getVentureKPIs = async ventureId => {
   try {
@@ -6,7 +7,8 @@ export const getVentureKPIs = async ventureId => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to fetch KPIs', { cause: error }
+      error.response?.data?.message || error.message || 'Failed to fetch KPIs',
+      { cause: error }
     )
   }
 }
@@ -17,7 +19,10 @@ export const getFounderKPIs = async founderId => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to fetch founder KPIs', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to fetch founder KPIs',
+      { cause: error }
     )
   }
 }
@@ -32,7 +37,10 @@ export const evaluateKPI = async ({ kpiId, score, status, feedback }) => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to evaluate KPI', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to evaluate KPI',
+      { cause: error }
     )
   }
 }
@@ -56,7 +64,10 @@ export const submitKPIEvidence = async ({
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to submit evidence', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to submit evidence',
+      { cause: error }
     )
   }
 }
@@ -79,16 +90,13 @@ export const createKPI = async ({
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to create KPI', { cause: error }
+      error.response?.data?.message || error.message || 'Failed to create KPI',
+      { cause: error }
     )
   }
 }
 
-export const createSubKPI = async ({
-  kpiId,
-  name,
-  description,
-}) => {
+export const createSubKPI = async ({ kpiId, name, description }) => {
   try {
     const { data } = await api.post(`/subkpis/kpi/${kpiId}`, {
       name,
@@ -97,7 +105,10 @@ export const createSubKPI = async ({
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to create SubKPI', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to create SubKPI',
+      { cause: error }
     )
   }
 }
@@ -108,7 +119,8 @@ export const submitKPIForApproval = async kpiId => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to submit KPI', { cause: error }
+      error.response?.data?.message || error.message || 'Failed to submit KPI',
+      { cause: error }
     )
   }
 }
@@ -132,7 +144,8 @@ export const updateKPI = async ({
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to update KPI', { cause: error }
+      error.response?.data?.message || error.message || 'Failed to update KPI',
+      { cause: error }
     )
   }
 }
@@ -143,7 +156,8 @@ export const deleteKPI = async kpiId => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to delete KPI', { cause: error }
+      error.response?.data?.message || error.message || 'Failed to delete KPI',
+      { cause: error }
     )
   }
 }
@@ -154,7 +168,10 @@ export const updateSubKPI = async ({ id, name, description }) => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to update SubKPI', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to update SubKPI',
+      { cause: error }
     )
   }
 }
@@ -165,7 +182,10 @@ export const deleteSubKPI = async id => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to delete SubKPI', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to delete SubKPI',
+      { cause: error }
     )
   }
 }
@@ -180,7 +200,10 @@ export const uploadKPIEvidence = async (kpiId, formData) => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to upload evidence', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to upload evidence',
+      { cause: error }
     )
   }
 }
@@ -191,7 +214,10 @@ export const deleteKPIEvidence = async kpiId => {
     return data
   } catch (error) {
     throw new Error(
-      error.response?.data?.message || error.message || 'Failed to delete evidence', { cause: error }
+      error.response?.data?.message ||
+        error.message ||
+        'Failed to delete evidence',
+      { cause: error }
     )
   }
 }
@@ -208,137 +234,110 @@ export const kpisLoader = async ({ request, params }) => {
       success: false,
       data: [],
       error:
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to load KPIs',
+        error.response?.data?.message || error.message || 'Failed to load KPIs',
     }
   }
 }
 
-export const kpisAction = async ({ request }) => {
-  let data
-  if (request.headers.get('content-type')?.includes('application/json')) {
-    data = await request.json()
-  } else {
-    const formData = await request.formData()
-    data = Object.fromEntries(formData)
-  }
-
-  const { intent, ...payload } = data
+// Creating or editing a KPI also reconciles its sub-KPIs, so both live here as
+// one operation rather than being re-assembled by every caller.
+export const createKPIWithSubKpis = async payload => {
+  const { title, description, dueDate, venture, status, subKpis } = payload
 
   try {
-    if (intent === 'createKPI') {
-      const { title, description, dueDate, venture, status, subKpis } = payload
-      const res = await api.post('/kpis', {
-        title,
-        description,
-        dueDate: dueDate || null,
-        venture,
-        status,
-      })
-      const newKpi = res.data?.data
-      if (newKpi?._id && Array.isArray(subKpis) && subKpis.length > 0) {
-        for (const sub of subKpis) {
-          if (sub.name?.trim()) {
-            await api.post(`/subkpis/kpi/${newKpi._id}`, {
-              name: sub.name.trim(),
-              description: sub.description || '',
-            })
-          }
+    const res = await api.post('/kpis', {
+      title,
+      description,
+      dueDate: dueDate || null,
+      venture,
+      status,
+    })
+
+    const newKpi = res.data?.data
+
+    if (newKpi?._id && Array.isArray(subKpis)) {
+      for (const sub of subKpis) {
+        if (sub.name?.trim()) {
+          await api.post(`/subkpis/kpi/${newKpi._id}`, {
+            name: sub.name.trim(),
+            description: sub.description || '',
+          })
         }
       }
-      return { success: true, data: newKpi }
     }
 
-    if (intent === 'updateKPI') {
-      const { kpiId, title, description, dueDate, status, subKpis } = payload
-      const { data: res } = await api.put(`/kpis/${kpiId}`, {
-        title,
-        description,
-        dueDate: dueDate || null,
-        status,
-      })
-      try {
-        const ventureId = payload.venture
-        const endpoint = ventureId ? `/kpis/venture/${ventureId}` : '/kpis'
-        const { data: data } = await api.get(endpoint)
-        const kpisList = data?.data || []
-        const existingKpi = kpisList.find(k => k._id === kpiId)
-        if (existingKpi && Array.isArray(existingKpi.subKPIs)) {
-          const oldSubIds = existingKpi.subKPIs.map(sub =>
-            (sub._id || sub.id || sub).toString()
-          )
-          const newSubIds = Array.isArray(subKpis)
-            ? subKpis
-                .map(sub => (sub._id || sub.id)?.toString())
-                .filter(id => id && id.length === 24)
-            : []
-          const removedSubIds = oldSubIds.filter(id => !newSubIds.includes(id))
-          for (const subId of removedSubIds) {
-            await api.delete(`/subkpis/${subId}`)
-          }
-        }
-      } catch (err) {
-        console.error(err)
-      }
-
-      if (Array.isArray(subKpis)) {
-        for (const sub of subKpis) {
-          if (!sub.name?.trim()) {
-            continue
-          }
-          const subId = sub._id || sub.id
-          if (subId && typeof subId === 'string' && subId.length === 24) {
-            await api.put(`/subkpis/${subId}`, {
-              name: sub.name.trim(),
-              description: sub.description || sub.name.trim(),
-            })
-          } else {
-            await api.post(`/subkpis/kpi/${kpiId}`, {
-              name: sub.name.trim(),
-              description: sub.description || sub.name.trim(),
-            })
-          }
-        }
-      }
-      return { success: true, data: res }
-    }
-
-    if (intent === 'deleteKPI') {
-      const { kpiId } = payload
-      const { data: res } = await api.delete(`/kpis/${kpiId}`)
-      return { success: true, data: res }
-    }
-
-    if (intent === 'submitKPI') {
-      const { kpiId } = payload
-      const { data: res } = await api.post(`/kpis/${kpiId}/submit`)
-      return { success: true, data: res }
-    }
-
-    if (intent === 'submitEvidence') {
-      const { kpiId, actualValue, targetValue, supportingText, fileName, fileUrl } = payload
-      const { data: res } = await api.put(`/kpis/${kpiId}/evidence`, {
-        actualValue,
-        targetValue,
-        supportingText,
-        fileName,
-        fileUrl,
-      })
-      return { success: true, data: res }
-    }
-
-    if (intent === 'deleteSubKPI') {
-      const { subKpiId } = payload
-      const { data: res } = await api.delete(`/subkpis/${subKpiId}`)
-      return { success: true, data: res }
-    }
-
-    return { success: true }
+    return { data: newKpi }
   } catch (err) {
-    return {
-      error:
-        err.response?.data?.message || err.message || 'Operation failed',
-    }
+    return toError(err, 'Could not create KPI')
   }
+}
+
+export const updateKPIWithSubKpis = async payload => {
+  const { kpiId, title, description, dueDate, status, subKpis, venture } =
+    payload
+
+  try {
+    const { data: res } = await api.put(`/kpis/${kpiId}`, {
+      title,
+      description,
+      dueDate: dueDate || null,
+      status,
+    })
+
+    // Sub-KPIs the user removed in the form have to be deleted explicitly.
+    try {
+      const endpoint = venture ? `/kpis/venture/${venture}` : '/kpis'
+      const { data } = await api.get(endpoint)
+      const existingKpi = (data?.data || []).find(k => k._id === kpiId)
+
+      if (existingKpi && Array.isArray(existingKpi.subKPIs)) {
+        const oldSubIds = existingKpi.subKPIs.map(sub =>
+          (sub._id || sub.id || sub).toString()
+        )
+        const newSubIds = Array.isArray(subKpis)
+          ? subKpis
+              .map(sub => (sub._id || sub.id)?.toString())
+              .filter(id => id && id.length === 24)
+          : []
+
+        for (const subId of oldSubIds.filter(id => !newSubIds.includes(id))) {
+          await api.delete(`/subkpis/${subId}`)
+        }
+      }
+    } catch (err) {
+      console.error(err)
+    }
+
+    if (Array.isArray(subKpis)) {
+      for (const sub of subKpis) {
+        if (!sub.name?.trim()) {
+          continue
+        }
+
+        const subId = sub._id || sub.id
+
+        if (subId && typeof subId === 'string' && subId.length === 24) {
+          await api.put(`/subkpis/${subId}`, {
+            name: sub.name.trim(),
+            description: sub.description || sub.name.trim(),
+          })
+        } else {
+          await api.post(`/subkpis/kpi/${kpiId}`, {
+            name: sub.name.trim(),
+            description: sub.description || sub.name.trim(),
+          })
+        }
+      }
+    }
+
+    return { data: res }
+  } catch (err) {
+    return toError(err, 'Could not update KPI')
+  }
+}
+
+export const allKPIsLoader = async () => {
+  const { data } = await api.get('/kpis/all')
+
+  return { kpis: data.data || [] }
 }

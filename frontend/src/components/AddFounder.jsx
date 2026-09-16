@@ -8,7 +8,9 @@ import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 
 import React from 'react'
-import { Form, useActionData, useLoaderData, useNavigation } from 'react-router'
+import { useLoaderData } from 'react-router'
+
+import { createFounder } from '../api/admin'
 
 const textFields = {
   founder: { label: 'Founder name', type: 'text' },
@@ -25,13 +27,32 @@ const selectLabels = {
 function AddFounder() {
   const labelId = React.useId()
   const options = useLoaderData()
-  const action = useActionData()
-  const navigation = useNavigation()
 
-  const saving = navigation.state === 'submitting'
-  const created = action?.created
-  const formError = typeof action?.error === 'string' ? action.error : ''
-  const fieldErrors = typeof action?.error === 'object' ? action.error : {}
+  const [saving, setSaving] = React.useState(false)
+  const [result, setResult] = React.useState(null)
+
+  const created = result?.created
+  const formError = typeof result?.error === 'string' ? result.error : ''
+  const fieldErrors = typeof result?.error === 'object' ? result.error : {}
+
+  const handleSubmit = async event => {
+    event.preventDefault()
+
+    const form = event.currentTarget
+    const payload = Object.fromEntries(new FormData(form))
+
+    setSaving(true)
+    setResult(null)
+
+    const response = await createFounder(payload)
+
+    setSaving(false)
+    setResult(response)
+
+    if (response.created) {
+      form.reset()
+    }
+  }
 
   return (
     <div style={{ maxWidth: '480px' }}>
@@ -49,7 +70,7 @@ function AddFounder() {
         </Alert>
       )}
 
-      <Form method="post" key={created?.email}>
+      <form onSubmit={handleSubmit}>
         {Object.keys(textFields).map(key => (
           <TextField
             key={key}
@@ -106,7 +127,7 @@ function AddFounder() {
         >
           {saving ? 'Creating...' : 'Create'}
         </Button>
-      </Form>
+      </form>
     </div>
   )
 }

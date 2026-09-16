@@ -4,7 +4,7 @@ import Tab from '@mui/material/Tab'
 import Box from '@mui/material/Box'
 import { useLoaderData, useOutletContext, useParams } from 'react-router'
 
-import BiWeekly from './BiWeekly'
+import BiWeekly from './PageReportBiWeekly'
 import KPIReview from '../../components/KPIReview'
 
 function CustomTabPanel(props) {

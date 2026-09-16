@@ -13,7 +13,7 @@ export default function CustomizedTable({
   data,
   selectedRows = [],
   setSelectedRows = () => {},
-  columnsName: columnsName,
+  columnNames,
 }) {
   const handleRowSelect = rowId => {
     if (selectedRows.includes(rowId)) {
@@ -50,8 +50,8 @@ export default function CustomizedTable({
                 }}
               >{`${selectedRows.length} selected`}</span>
             </StyledTableCell>
-            <StyledTableCell>{columnsName[0]}</StyledTableCell>
-            {columnsName.slice(1).map((columnName, idx) => (
+            <StyledTableCell>{columnNames[0]}</StyledTableCell>
+            {columnNames.slice(1).map((columnName, idx) => (
               <StyledTableCell key={idx} align="right">
                 {columnName}
               </StyledTableCell>
@@ -81,10 +81,10 @@ export default function CustomizedTable({
                       cursor: 'pointer',
                     }}
                   >
-                    {row[columnsName[0]]}
+                    {row[columnNames[0]]}
                   </Link>
                 </StyledTableCell>
-                {columnsName.slice(1).map(columnName => (
+                {columnNames.slice(1).map(columnName => (
                   <StyledTableCell align="right">
                     {row[columnName]}
                   </StyledTableCell>

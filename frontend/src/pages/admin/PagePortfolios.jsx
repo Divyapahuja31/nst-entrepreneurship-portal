@@ -16,7 +16,7 @@ const FILTER_LABELS = {
   status: 'All statuses',
 }
 
-const columnsName = [
+const columnNames = [
   'founder',
   'startup',
   'campus',
@@ -145,7 +145,7 @@ function Portfolio() {
         data={visibleStudents}
         selectedRows={selectedRows}
         setSelectedRows={setSelectedRows}
-        columnsName={columnsName}
+        columnNames={columnNames}
       />
     </div>
   )

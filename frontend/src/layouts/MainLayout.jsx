@@ -56,6 +56,11 @@ const adminMenuItems = [
     path: '/admin/portfolio',
   },
   {
+    menu: 'Founders',
+    icon: PeopleIcon,
+    path: '/admin/founders',
+  },
+  {
     menu: 'Venture OS',
     icon: AutoAwesomeIcon,
     path: '/admin/venture',
@@ -77,8 +82,6 @@ export default function MiniDrawer() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
   const isLoading = useAuthStore(state => state.isLoading)
   const logout = useAuthStore(state => state.logout)
-
-  console.log('loggedInUserData', loggedInUserData)
 
   const location = useLocation()
   const navigate = useNavigate()

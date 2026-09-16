@@ -4,7 +4,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 import routes from './routes/index.js'
-import authMiddleware from './middleware/authMiddleware.js'
+import attachUser from './middleware/attachUser.js'
 
 dotenv.config()
 
@@ -24,7 +24,7 @@ app.use(
 )
 app.use(express.json())
 app.use(cookieParser())
-app.use(authMiddleware)
+app.use(attachUser)
 
 app.use('/api', routes)
 

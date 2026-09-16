@@ -98,3 +98,25 @@ export const createProposal = async (req, res) => {
     })
   }
 }
+
+export const getAllProposals = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  const user = await User.findById(req.user.id)
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' })
+  }
+
+  const proposals = await VentureProposal.find({})
+    .populate('submittedBy', 'username email')
+    .populate('reviews.reviewer', 'username email')
+    .populate('industry', 'name')
+    .populate('campus', 'name')
+    .populate('venture')
+
+  return res.status(200).json({
+    proposals,
+  })
+}

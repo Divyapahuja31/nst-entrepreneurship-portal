@@ -3,6 +3,7 @@ import {
   Button,
   Divider,
   Grid,
+  Link,
   TextField,
   Typography,
 } from '@mui/material'
@@ -75,7 +76,7 @@ function SignIn() {
 
                 <Grid container sx={{ mt: 1, justifyContent: 'space-between' }}>
                   <Grid size="auto">
-                    <Button variant="text" type="button" size="large">
+                    <Button variant="text" type="button" size="large" sx={{ pl: 0}}>
                       Forgot Password?
                     </Button>
                   </Grid>
@@ -97,17 +98,12 @@ function SignIn() {
             </Grid>
 
             <Grid size={12} sx={{ padding: 2 }}>
-              <Button
-                fullWidth
-                variant="outlined"
-                type="button"
-                size="large"
-                onClick={() => {
-                  window.location.href = '/signup'
-                }}
-              >
-                New here? Sign up
-              </Button>
+              <Typography color="textSecondary" sx={{ mb: 1 }}>
+                Don't have an account?
+                <Link to="/signup" style={{ textDecoration: 'none', mx: 2 }}>
+                 {' '} Sign up with email
+                </Link>
+              </Typography>
             </Grid>
           </Grid>
         </Grid>

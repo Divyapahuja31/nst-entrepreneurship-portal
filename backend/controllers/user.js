@@ -265,11 +265,12 @@ export const completeGoogleSignup = async (req, res) => {
       })
     }
 
-    const studentRole = await Role.findOne({ name: 'student' })
-    if (!studentRole) {
-      console.error('Student role does not exist in database')
+    const position = determineUserRole(email)
+    const role = await Role.findOne({ name: position })
+    if (!role) {
+      console.error(`${position} role does not exist in database`)
       return res.status(500).json({
-        error: 'Student role is not configured',
+        error: `${position} role is not configured`,
       })
     }
 
@@ -288,11 +289,11 @@ export const completeGoogleSignup = async (req, res) => {
       googleId,
       batch,
       campus,
-      role: studentRole._id,
+      role: role._id,
     })
 
     await user.save()
-    user.role = studentRole
+    user.role = role
 
     return res
       .cookie('token', signToken(user), cookieOptions)

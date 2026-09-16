@@ -93,7 +93,6 @@ const updateOrCreateSubmission = async (
 
 export const submitBiWeeklyCycle = async (req, res) => {
   try {
-    // This isn't for protecting route. This
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Unauthorized' })
     }

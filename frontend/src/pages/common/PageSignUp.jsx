@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Form, useActionData } from 'react-router'
-import TextField from '@mui/material/TextField'
-import Button from '@mui/material/Button'
-import InputLabel from '@mui/material/InputLabel'
-import MenuItem from '@mui/material/MenuItem'
-import FormControl from '@mui/material/FormControl'
-import FormHelperText from '@mui/material/FormHelperText'
-import Select from '@mui/material/Select'
-import { Link } from 'react-router'
-import { Typography } from '@mui/material'
 
-// import '../style/auth.css'
+import { Form, useActionData, Link } from 'react-router'
+
+import {
+  Button,
+  Divider,
+  FormControl,
+  FormHelperText,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+} from '@mui/material'
+
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+
+import AuthScreen from '../../components/AuthScreen'
 
 function SignUp() {
   const action = useActionData()
@@ -25,16 +32,12 @@ function SignUp() {
   useEffect(() => {
     const loadOptions = async () => {
       try {
-        const response = await fetch(
-          '/api/auth/google/signup-options'
-        )
+        const response = await fetch('/api/auth/google/signup-options')
 
         const data = await response.json()
 
         if (!response.ok) {
-          throw new Error(
-            data.error || 'Failed to load signup options'
-          )
+          throw new Error(data.error || 'Failed to load signup options')
         }
 
         setOptions({
@@ -42,10 +45,7 @@ function SignUp() {
           batches: data.batches || [],
         })
       } catch (error) {
-        console.error(
-          'Failed to load signup options:',
-          error
-        )
+        console.error('Failed to load signup options:', error)
       } finally {
         setLoadingOptions(false)
       }
@@ -55,29 +55,39 @@ function SignUp() {
   }, [])
 
   return (
-    <div className="container">
-      <div className="box">
+    <AuthScreen
+      title="Sign Up"
+      subtitle="Create an account to access the NST Entrepreneurship Portal."
+    >
+      <Grid size={12} sx={{ padding: 2 }}>
+        <Button
+          fullWidth
+          variant="outlined"
+          type="button"
+          size="large"
+          onClick={() => {
+            window.location.href = '/api/auth/google'
+          }}
+        >
+          Continue with Google
+        </Button>
 
-        <h1 style={{marginBottom:"10px"}}>Sign Up</h1>
+        <Divider sx={{ my: 2 }}>
+          <Typography variant="body2" color="textSecondary">
+            OR
+          </Typography>
+        </Divider>
 
-
-
-        <Form method="post">
-
-
+        <Form method="post" sx={{ my: 2 }}>
           <TextField
             fullWidth
             error={Boolean(action && action.error?.username)}
             label="Name"
             name="username"
             type="text"
-            helperText={
-              action &&
-              action.error?.username &&
-              action.error.username
-            }
+            helperText={action && action.error?.username}
+            sx={{ mb: 2 }}
           />
-
 
           <TextField
             fullWidth
@@ -85,11 +95,8 @@ function SignUp() {
             label="Email"
             name="email"
             type="email"
-            helperText={
-              action &&
-              action.error?.email &&
-              action.error.email
-            }
+            helperText={action && action.error?.email}
+            sx={{ mb: 2 }}
           />
 
           <TextField
@@ -98,18 +105,11 @@ function SignUp() {
             label="Password"
             name="password"
             type="password"
-            helperText={
-              action &&
-              action.error?.password &&
-              action.error.password
-            }
+            helperText={action && action.error?.password}
+            sx={{ mb: 2 }}
           />
 
-          <FormControl
-            fullWidth
-            sx={{ mt: 2 }}
-            disabled={loadingOptions}
-          >
+          <FormControl fullWidth sx={{ mb: 2 }} disabled={loadingOptions}>
             <InputLabel>Campus</InputLabel>
 
             <Select
@@ -119,28 +119,18 @@ function SignUp() {
               error={Boolean(action && action.error?.campus)}
             >
               {options.campuses.map(campus => (
-                <MenuItem
-                  key={campus._id}
-                  value={campus._id}
-                >
+                <MenuItem key={campus._id} value={campus._id}>
                   {campus.name}
                 </MenuItem>
               ))}
             </Select>
 
             {action && action.error?.campus && (
-              <FormHelperText error>
-                {action.error.campus}
-              </FormHelperText>
+              <FormHelperText error>{action.error.campus}</FormHelperText>
             )}
           </FormControl>
 
-
-          <FormControl
-            fullWidth
-            sx={{ mt: 2 }}
-            disabled={loadingOptions}
-          >
+          <FormControl fullWidth sx={{ mb: 2 }} disabled={loadingOptions}>
             <InputLabel>Batch</InputLabel>
 
             <Select
@@ -150,62 +140,44 @@ function SignUp() {
               error={Boolean(action && action.error?.batch)}
             >
               {options.batches.map(batch => (
-                <MenuItem
-                  key={batch._id}
-                  value={batch._id}
-                >
+                <MenuItem key={batch._id} value={batch._id}>
                   {batch.name}
                 </MenuItem>
               ))}
             </Select>
 
             {action && action.error?.batch && (
-              <FormHelperText error>
-                {action.error.batch}
-              </FormHelperText>
+              <FormHelperText error>{action.error.batch}</FormHelperText>
             )}
           </FormControl>
 
-
-
-          <Button
-            fullWidth
-            variant="contained"
-            type="submit"
-            sx={{ mt: 2 }}
-            disabled={loadingOptions}
-          >
-            Sign Up
-          </Button>
-
-
-          <div
-            style={{
-              margin: '16px 0',
-              textAlign: 'center',
-            }}
-          >
-            OR
-          </div>
-
-
-
-          <Button
-            fullWidth
-            variant="outlined"
-            type="button"
-            onClick={() => {
-              window.location.href = '/api/auth/google'
-            }}
-          >
-            Continue with Google
-          </Button>
-
-         <Typography> If already have account ? <Link to="/signin">Login</Link></Typography>
-
+          <Grid container sx={{ mt: 1, justifyContent: 'flex-end' }}>
+            <Grid size="auto">
+              <Button
+                fullWidth
+                variant="contained"
+                type="submit"
+                sx={{ mb: 1 }}
+                size="large"
+                disabled={loadingOptions}
+                endIcon={<ArrowForwardRoundedIcon />}
+              >
+                Sign Up
+              </Button>
+            </Grid>
+          </Grid>
         </Form>
-      </div>
-    </div>
+      </Grid>
+
+      <Grid size={12} sx={{ padding: 2 }}>
+        <Typography color="textSecondary" sx={{ mb: 1 }}>
+          Already have an account?{' '}
+          <Link to="/signin" underline="hover">
+            Sign in
+          </Link>
+        </Typography>
+      </Grid>
+    </AuthScreen>
   )
 }
 

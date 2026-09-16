@@ -61,7 +61,7 @@ const adminMenuItems = [
   {
     menu: 'Methodology',
     icon: AutoStoriesIcon,
-    path: '/admin/methodology',
+    path: '/methodology',
   },
 ]
 

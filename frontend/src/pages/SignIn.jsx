@@ -1,9 +1,8 @@
-import { Form, useActionData } from 'react-router'
+import { Form, useActionData, Link } from 'react-router'
 import {
   Button,
   Divider,
   Grid,
-  Link,
   TextField,
   Typography,
 } from '@mui/material'
@@ -16,7 +15,7 @@ function SignIn() {
 
   return (
     <>
-      <Grid container spacing={2} justifyContent="center" sx={{ pt: 4 }}>
+      <Grid container spacing={2} sx={{ pt: 4 }}>
         <Grid
           size={{ xs: 10, sm: 8, md: 6, lg: 4 }}
           offset={{ xs: 1, sm: 2, md: 3, lg: 4 }}
@@ -99,9 +98,9 @@ function SignIn() {
 
             <Grid size={12} sx={{ padding: 2 }}>
               <Typography color="textSecondary" sx={{ mb: 1 }}>
-                Don't have an account?
-                <Link to="/signup" style={{ textDecoration: 'none', mx: 2 }}>
-                 {' '} Sign up with email
+                Don't have an account? {' '}
+                <Link to="/signup" underline="hover">
+                 Sign up with email
                 </Link>
               </Typography>
             </Grid>

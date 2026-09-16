@@ -258,6 +258,30 @@ export const kpisAction = async ({ request }) => {
         dueDate: dueDate || null,
         status,
       })
+      try {
+        const ventureId = payload.venture
+        const endpoint = ventureId ? `/kpis/venture/${ventureId}` : '/kpis'
+        const { data: data } = await api.get(endpoint)
+        const kpisList = data?.data || []
+        const existingKpi = kpisList.find(k => k._id === kpiId)
+        if (existingKpi && Array.isArray(existingKpi.subKPIs)) {
+          const oldSubIds = existingKpi.subKPIs.map(sub =>
+            (sub._id || sub.id || sub).toString()
+          )
+          const newSubIds = Array.isArray(subKpis)
+            ? subKpis
+                .map(sub => (sub._id || sub.id)?.toString())
+                .filter(id => id && id.length === 24)
+            : []
+          const removedSubIds = oldSubIds.filter(id => !newSubIds.includes(id))
+          for (const subId of removedSubIds) {
+            await api.delete(`/subkpis/${subId}`)
+          }
+        }
+      } catch (err) {
+        console.error(err)
+      }
+
       if (Array.isArray(subKpis)) {
         for (const sub of subKpis) {
           if (!sub.name?.trim()) {

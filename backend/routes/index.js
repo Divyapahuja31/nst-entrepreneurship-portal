@@ -7,6 +7,7 @@ import subKpiRoutes from './subkpi.js'
 import proposalRoutes from './proposal.js'
 import industryRoutes from './industry.js'
 import stageRoutes from './stage.js'
+import venture from './venture.js'
 import biweeklyRoutes from './biweekly.js'
 const router = Router()
 
@@ -18,5 +19,6 @@ router.use('/proposals', proposalRoutes)
 router.use('/industries', industryRoutes)
 router.use('/stages', stageRoutes)
 router.use('/biweekly', biweeklyRoutes)
+router.use('/venture', venture)
 
 export default router

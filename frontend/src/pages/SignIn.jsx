@@ -1,4 +1,4 @@
-import { Form, useActionData } from 'react-router'
+import { Form, useActionData, Link } from 'react-router'
 import {
   Button,
   Divider,
@@ -15,7 +15,7 @@ function SignIn() {
 
   return (
     <>
-      <Grid container spacing={2} justifyContent="center" sx={{ pt: 4 }}>
+      <Grid container spacing={2} sx={{ pt: 4 }}>
         <Grid
           size={{ xs: 10, sm: 8, md: 6, lg: 4 }}
           offset={{ xs: 1, sm: 2, md: 3, lg: 4 }}
@@ -75,7 +75,7 @@ function SignIn() {
 
                 <Grid container sx={{ mt: 1, justifyContent: 'space-between' }}>
                   <Grid size="auto">
-                    <Button variant="text" type="button" size="large">
+                    <Button variant="text" type="button" size="large" sx={{ pl: 0}}>
                       Forgot Password?
                     </Button>
                   </Grid>
@@ -97,17 +97,12 @@ function SignIn() {
             </Grid>
 
             <Grid size={12} sx={{ padding: 2 }}>
-              <Button
-                fullWidth
-                variant="outlined"
-                type="button"
-                size="large"
-                onClick={() => {
-                  window.location.href = '/signup'
-                }}
-              >
-                New here? Sign up
-              </Button>
+              <Typography color="textSecondary" sx={{ mb: 1 }}>
+                Don't have an account? {' '}
+                <Link to="/signup" underline="hover">
+                 Sign up with email
+                </Link>
+              </Typography>
             </Grid>
           </Grid>
         </Grid>

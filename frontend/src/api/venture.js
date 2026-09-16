@@ -1,4 +1,5 @@
 import { api } from './client'
+import toError from './toError'
 
 export const getVentures = async () => {
   const { data } = await api.get('/ventures')
@@ -18,13 +19,7 @@ export const applyToVenture = async (ventureId, message) => {
 
     return { joinRequest: data.joinRequest }
   } catch (err) {
-    if (!err.response) {
-      return { error: 'Network error. Try again.' }
-    }
-
-    return {
-      error: err.response.data?.error || 'Could not submit join request',
-    }
+    return toError(err, 'Could not submit join request')
   }
 }
 
@@ -47,14 +42,6 @@ export const venturesPageLoader = async () => {
   }
 }
 
-const toReviewError = (err, fallback) => {
-  if (!err.response) {
-    return { error: 'Network error. Try again.' }
-  }
-
-  return { error: err.response.data?.error || fallback }
-}
-
 export const reviewProposal = async (proposalId, status, remarks) => {
   try {
     const { data } = await api.patch(`/admin/proposals/${proposalId}/review`, {
@@ -64,7 +51,7 @@ export const reviewProposal = async (proposalId, status, remarks) => {
 
     return { proposal: data.proposal }
   } catch (err) {
-    return toReviewError(err, 'Could not review proposal')
+    return toError(err, 'Could not review proposal')
   }
 }
 
@@ -77,6 +64,6 @@ export const reviewJoinRequest = async (requestId, status) => {
 
     return { joinRequest: data.joinRequest }
   } catch (err) {
-    return toReviewError(err, 'Could not review join request')
+    return toError(err, 'Could not review join request')
   }
 }

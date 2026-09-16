@@ -8,6 +8,10 @@ import '@fontsource/roboto/700.css'
 import './index.css'
 
 import { router } from './router'
+import { useAuthStore } from './stores/auth'
+
+// fetch the auth store from the session cookie before the first render.
+useAuthStore.getState().fetchUser()
 
 createRoot(document.getElementById('root')).render(
   <RouterProvider router={router} />

@@ -146,6 +146,7 @@ function Portfolio() {
         selectedRows={selectedRows}
         setSelectedRows={setSelectedRows}
         columnNames={columnNames}
+        targetRoute="/admin/profile"
       />
     </div>
   )

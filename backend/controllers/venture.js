@@ -2,13 +2,14 @@ import Venture from '../models/venture.js'
 export const getVenture = async (req, res) => {
   try {
     const data = await Venture.find({})
-      .select('name campus stage industry')
+      .select('_id name campus stage industry')
       .populate([
         { path: 'campus', select: 'name' },
         { path: 'industry', select: 'name' },
       ])
 
     const venture = data.map(data => ({
+      id: data._id,
       name: data.name,
       campus: data.campus.name,
       stage: data.stage,

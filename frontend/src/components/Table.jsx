@@ -14,6 +14,7 @@ export default function CustomizedTable({
   selectedRows = [],
   setSelectedRows = () => {},
   columnNames,
+  targetRoute,
 }) {
   const handleRowSelect = rowId => {
     if (selectedRows.includes(rowId)) {
@@ -74,7 +75,7 @@ export default function CustomizedTable({
                   <StyledTableCell component="th" scope="row">
                     <Link
                       component={RouterLink}
-                      to={`/profile/${row.id}`}
+                      to={`${targetRoute}/${row.id}`}
                       underline="hover"
                       sx={{
                         color: 'primary.main',

@@ -6,7 +6,6 @@ const columnsName = ['name', 'campus', 'stage', 'industry']
 
 function Venture() {
   const data = useLoaderData()
-  console.log(data)
   const [selectedRows, setSelectedRows] = React.useState([])
   return (
     <div>
@@ -15,6 +14,7 @@ function Venture() {
         data={data}
         selectedRows={selectedRows}
         setSelectedRows={setSelectedRows}
+        targetRoute="/admin/venture"
       />
     </div>
   )

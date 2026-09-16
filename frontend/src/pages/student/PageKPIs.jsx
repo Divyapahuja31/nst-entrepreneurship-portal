@@ -469,13 +469,23 @@ export default function Kpis() {
                           </Tooltip>
                         </fetcher.Form>
                       )}
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditClick(kpi)}
-                        title="Edit KPI"
+                      <Tooltip
+                        title={
+                          kpi.status === 'ACCEPTED'
+                            ? 'Accepted KPI cannot be edited'
+                            : 'Edit KPI'
+                        }
                       >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
+                        <span>
+                          <IconButton
+                            disabled={kpi.status === 'ACCEPTED'}
+                            size="small"
+                            onClick={() => handleEditClick(kpi)}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       <fetcher.Form
                         method="post"
                         style={{ display: 'inline' }}
@@ -487,14 +497,24 @@ export default function Kpis() {
                       >
                         <input type="hidden" name="intent" value="deleteKPI" />
                         <input type="hidden" name="kpiId" value={kpi._id} />
-                        <IconButton
-                          type="submit"
-                          size="small"
-                          color="error"
-                          title="Delete KPI"
+                        <Tooltip
+                          title={
+                            kpi.status === 'ACCEPTED'
+                              ? 'Accepted KPI cannot be deleted'
+                              : 'Delete KPI'
+                          }
                         >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                          <span>
+                            <IconButton
+                              disabled={kpi.status === 'ACCEPTED'}
+                              type="submit"
+                              size="small"
+                              color="error"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       </fetcher.Form>
                     </TableCell>
                   </TableRow>

@@ -15,6 +15,7 @@ import PageAdminOverview from '../pages/admin/PageOverview.jsx'
 import PagePortfolios from '../pages/admin/PagePortfolios.jsx'
 import PageFounders from '../pages/admin/PageFounders.jsx'
 import PageReportBiWeekly from '../pages/admin/PageReportBiWeekly.jsx'
+import Venture from '../pages/admin/Venture.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -44,6 +45,7 @@ import {
   foundersLoader,
   portfolioAction,
   profileAction,
+  ventureLoader,
 } from '../api/admin.js'
 
 export const router = createBrowserRouter([
@@ -124,6 +126,11 @@ export const router = createBrowserRouter([
         Component: PageFounders,
         loader: foundersLoader,
         // action: portfolioAction,
+      },
+      {
+        path: '/admin/venture',
+        Component: Venture,
+        loader: ventureLoader,
       },
       {
         path: '/admin/portfolio',

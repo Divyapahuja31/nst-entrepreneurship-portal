@@ -7,13 +7,6 @@ const ventureSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    founders: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-      },
-    ],
     campus: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Campus',
@@ -38,11 +31,24 @@ const ventureSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 )
 
-ventureSchema.virtual('teamSize').get(function () {
-  return this.founders.length
+ventureSchema.virtual('founders', {
+  ref: 'Founder',
+  localField: '_id',
+  foreignField: 'venture',
+  match: { status: 'ACTIVE' },
+})
+
+ventureSchema.virtual('teamSize', {
+  ref: 'Founder',
+  localField: '_id',
+  foreignField: 'venture',
+  match: { status: 'ACTIVE' },
+  count: true,
 })
 
 export const modelName = 'Venture'

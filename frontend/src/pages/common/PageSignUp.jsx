@@ -10,7 +10,7 @@ import Select from '@mui/material/Select'
 import { Link } from 'react-router'
 import { Typography } from '@mui/material'
 
-import '../style/auth.css'
+// import '../style/auth.css'
 
 function SignUp() {
   const action = useActionData()

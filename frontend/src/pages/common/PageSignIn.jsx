@@ -8,7 +8,7 @@ import {
 } from '@mui/material'
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
 
-import '../style/auth.css'
+// import '../style/auth.css'
 
 function SignIn() {
   const action = useActionData()

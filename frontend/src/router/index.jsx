@@ -8,14 +8,14 @@ import MainLayout from '../layouts/MainLayout.jsx'
 import PageStudentOverview from '../pages/student/PageOverview.jsx'
 import PageOnboarding from '../pages/student/PageOnboarding.jsx'
 import PageKPIs from '../pages/student/PageKPIs.jsx'
-import PageCreateProposal from '../pages/student/PageCreateProposal.jsx'
 
 // Admin pages
 import PageAdminOverview from '../pages/admin/PageOverview.jsx'
 import PagePortfolios from '../pages/admin/PagePortfolios.jsx'
 import PageFounders from '../pages/admin/PageFounders.jsx'
 import PageReportBiWeekly from '../pages/admin/PageReportBiWeekly.jsx'
-import Venture from '../pages/admin/Venture.jsx'
+import PageVentures from '../pages/admin/PageVentures.jsx'
+import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -31,7 +31,6 @@ import AddFounder from '../components/AddFounder.jsx'
 
 // TODO: clean up unnecessary actions by writing them as functions in the component itself instead of in the router. The router should only be used for routing and data fetching, not for handling actions that are specific to a component.
 import { kpisLoader, kpisAction } from '../api/kpi.js'
-import { proposalLoader, proposalAction } from '../api/proposal.js'
 import {
   addFounderAction,
   addFounderLoader,
@@ -40,8 +39,8 @@ import {
   foundersLoader,
   portfolioAction,
   profileAction,
-  ventureLoader,
 } from '../api/admin.js'
+import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 
 export const router = createBrowserRouter([
   {
@@ -62,12 +61,6 @@ export const router = createBrowserRouter([
         Component: PageKPIs,
         loader: kpisLoader,
         // action: kpisAction,
-      },
-      {
-        path: '/create-proposal',
-        Component: PageCreateProposal,
-        loader: proposalLoader,
-        // action: proposalAction,
       },
       {
         path: '/methodology',
@@ -119,8 +112,13 @@ export const router = createBrowserRouter([
       },
       {
         path: '/admin/venture',
-        Component: Venture,
-        loader: ventureLoader,
+        Component: PageVentures,
+        loader: venturesPageLoader,
+      },
+      {
+        path: '/admin/venture/:ventureId',
+        Component: PageVentureDetail,
+        loader: ventureDetailLoader,
       },
       {
         path: '/admin/portfolio',

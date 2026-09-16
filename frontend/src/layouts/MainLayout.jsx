@@ -51,19 +51,19 @@ const adminMenuItems = [
     path: '/admin',
   },
   {
-    menu: 'Portfolios',
-    icon: PeopleIcon,
-    path: '/admin/portfolio',
+    menu: 'Ventures',
+    icon: AutoAwesomeIcon,
+    path: '/admin/venture',
   },
+  // {
+  //   menu: 'Portfolios',
+  //   icon: PeopleIcon,
+  //   path: '/admin/portfolio',
+  // },
   {
     menu: 'Founders',
     icon: PeopleIcon,
     path: '/admin/founders',
-  },
-  {
-    menu: 'Venture OS',
-    icon: AutoAwesomeIcon,
-    path: '/admin/venture',
   },
 ]
 

@@ -17,6 +17,9 @@
     "uuid",
     "unlisten",
 
+    "useRevalidator",
+    "revalidator",
+
     "Divya",
     "Pahuja",
     "Kanishk",

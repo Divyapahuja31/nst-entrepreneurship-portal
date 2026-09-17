@@ -1,4 +1,8 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3'
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -7,14 +11,6 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
 })
-
-/**
- * Upload a file buffer to S3 bucket
- * @param {Buffer} fileBuffer
- * @param {string} fileName
- * @param {string} mimeType
- * @returns {Promise<string>} S3 object URL
- */
 
 export async function uploadToS3(fileBuffer, fileName, mimeType) {
   const bucketName =
@@ -33,6 +29,20 @@ export async function uploadToS3(fileBuffer, fileName, mimeType) {
   await s3Client.send(command)
   const region = process.env.AWS_REGION || 'us-east-1'
   return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`
+}
+
+export async function downloadFromS3(key) {
+  const bucketName =
+    process.env.AWS_S3_BUCKET_NAME ||
+    process.env.AWS_S3_BUCKET ||
+    'nst-evidence-uploads'
+
+  const command = new GetObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+  })
+
+  return await s3Client.send(command)
 }
 
 export default s3Client

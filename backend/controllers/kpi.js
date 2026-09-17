@@ -9,16 +9,15 @@ import {
   buildEvaluationFields,
   buildKPIUpdateFields,
   resolveEvidenceData,
+  checkKPILockStatus,
 } from '../utils/kpiHelper.js'
+import { downloadFromS3 } from '../config/s3.js'
 
-// What one founder can see in their venture: the venture-wide KPIs plus the
-// ones assigned to them personally — never another founder's.
 const kpisVisibleTo = (ventureId, founderId) => ({
   venture: ventureId,
   $or: [{ scope: 'VENTURE' }, { founder: founderId }],
 })
 
-// Admin-only: every KPI across every venture, for the admin KPIs page.
 export const getAllKPIs = async (req, res) => {
   try {
     const { scope, status } = req.query
@@ -358,6 +357,11 @@ export const submitKPIEvidence = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
+    const lockError = checkKPILockStatus(kpi)
+    if (lockError) {
+      return res.status(400).json({ success: false, message: lockError })
+    }
+
     if (actualValue !== undefined) {
       kpi.actualValue = String(actualValue).trim()
     }
@@ -403,12 +407,25 @@ export const updateKPI = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
     }
 
-    const updateFields = buildKPIUpdateFields(req.body)
-    const kpi = await KPI.findByIdAndUpdate(kpiId, updateFields, { new: true })
-
+    const kpi = await KPI.findById(kpiId)
     if (!kpi) {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
+
+    if (kpi.status === 'ACCEPTED') {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Accepted KPI cannot be edited' })
+    }
+
+    const lockError = checkKPILockStatus(kpi)
+    if (lockError) {
+      return res.status(400).json({ success: false, message: lockError })
+    }
+
+    const updateFields = buildKPIUpdateFields(req.body)
+    Object.assign(kpi, updateFields)
+    await kpi.save()
 
     return res
       .status(200)
@@ -458,6 +475,11 @@ export const uploadKPIEvidence = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
+    const lockError = checkKPILockStatus(kpi)
+    if (lockError) {
+      return res.status(400).json({ success: false, message: lockError })
+    }
+
     kpi.evidence = await resolveEvidenceData(
       req.file,
       kpi.evidence,
@@ -500,6 +522,11 @@ export const deleteKPIEvidence = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
+    const lockError = checkKPILockStatus(kpi)
+    if (lockError) {
+      return res.status(400).json({ success: false, message: lockError })
+    }
+
     kpi.evidence = {
       fileUrl: '',
       fileName: '',
@@ -519,6 +546,61 @@ export const deleteKPIEvidence = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to delete evidence',
+      error: error.message,
+    })
+  }
+}
+
+const streamS3ToResponse = async (s3Data, res) => {
+  if (s3Data.ContentType) {
+    res.setHeader('Content-Type', s3Data.ContentType)
+  }
+  if (s3Data.ContentLength) {
+    res.setHeader('Content-Length', s3Data.ContentLength)
+  }
+
+  if (typeof s3Data.Body?.pipe === 'function') {
+    return s3Data.Body.pipe(res)
+  }
+  const buffer = Buffer.from(await s3Data.Body.transformToByteArray())
+  return res.send(buffer)
+}
+
+export const downloadKPIEvidence = async (req, res) => {
+  try {
+    const { kpiId } = req.params
+    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
+      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    }
+
+    const kpi = await KPI.findById(kpiId)
+    const fileUrl = kpi?.evidence?.fileUrl
+    if (!fileUrl) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Evidence file not found' })
+    }
+
+    const downloadName = kpi.evidence.fileName || 'evidence_file'
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(downloadName)}"`
+    )
+
+    const isS3 = fileUrl.includes('.s3.') || fileUrl.includes('amazonaws.com')
+    if (isS3) {
+      const pathname = new URL(fileUrl).pathname
+      const key = pathname.startsWith('/') ? pathname.slice(1) : pathname
+      const s3Data = await downloadFromS3(key)
+      return await streamS3ToResponse(s3Data, res)
+    }
+
+    return res.redirect(fileUrl)
+  } catch (error) {
+    console.error('Download KPI evidence error:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to download evidence',
       error: error.message,
     })
   }

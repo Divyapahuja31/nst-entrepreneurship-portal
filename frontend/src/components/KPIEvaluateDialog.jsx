@@ -10,8 +10,11 @@ import {
   TextField,
   MenuItem,
   CircularProgress,
+  Chip,
+  Divider,
 } from '@mui/material'
 import RateReviewIcon from '@mui/icons-material/RateReview'
+import DownloadIcon from '@mui/icons-material/Download'
 
 const formatDate = dateStr => {
   if (!dateStr) return '-'
@@ -84,59 +87,177 @@ export default function KPIEvaluateDialog({
         {evalStatus === 'GRADED' ? 'Grade KPI' : 'Review KPI'}: {kpi?.title}
       </DialogTitle>
       <DialogContent dividers>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="text.secondary" display="block">
-            Student / Venture: <strong>{founder?.username}</strong>{' '}
-            {venture?.name ? `(${venture.name})` : ''}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" display="block">
-            Submission Date: <strong>{formatDate(kpi?.submissionDate)}</strong>
-          </Typography>
-        </Box>
-
-        {kpi?.actualValue && (
-          <Box
-            sx={{
-              mb: 2,
-              p: 1.5,
-              backgroundColor: '#f0fdf4',
-              borderRadius: 1.5,
-              border: '1px solid #bbf7d0',
-            }}
-          >
+        {/* KPI Overview & Submission Details */}
+        <Box
+          sx={{
+            mb: 2.5,
+            p: 2,
+            backgroundColor: '#f8fafc',
+            borderRadius: 2,
+            border: '1px solid #e2e8f0',
+          }}
+        >
+          <Box sx={{ mb: 1.5 }}>
             <Typography
               variant="caption"
               color="text.secondary"
               display="block"
             >
-              Student Achieved Metric / Number:
+              Student / Venture:{' '}
+              <strong>
+                {founder?.username || kpi?.founder?.username || 'Student'}
+              </strong>{' '}
+              {venture?.name || kpi?.venture?.name
+                ? `(${venture?.name || kpi?.venture?.name})`
+                : ''}
             </Typography>
             <Typography
-              variant="body1"
-              sx={{ fontWeight: 700, color: 'success.dark' }}
+              variant="caption"
+              color="text.secondary"
+              display="block"
             >
-              {kpi.actualValue}
+              Due Date: <strong>{formatDate(kpi?.dueDate)}</strong> |
+              Submission Date:{' '}
+              <strong>
+                {formatDate(kpi?.submissionDate || kpi?.evidence?.submittedAt)}
+              </strong>
             </Typography>
-            {kpi.evidence?.supportingText && (
-              <Typography
-                variant="body2"
-                sx={{ mt: 0.5, color: 'text.secondary' }}
-              >
-                <strong>Notes:</strong> {kpi.evidence.supportingText}
-              </Typography>
-            )}
-            {kpi.evidence?.fileName && (
+          </Box>
+
+          {kpi?.description && (
+            <Box sx={{ mb: 1.5 }}>
               <Typography
                 variant="caption"
                 color="text.secondary"
-                display="block"
-                sx={{ mt: 0.5 }}
+                sx={{ fontWeight: 600 }}
               >
-                <strong>File:</strong> {kpi.evidence.fileName}
+                Description:
               </Typography>
+              <Typography
+                variant="body2"
+                sx={{ whiteSpace: 'pre-line', color: 'text.primary' }}
+              >
+                {kpi.description}
+              </Typography>
+            </Box>
+          )}
+
+          {kpi?.subKPIs?.length > 0 && (
+            <Box sx={{ mb: 1.5 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}
+              >
+                SubKPIs:
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {kpi.subKPIs.map((sub, i) => (
+                  <Chip
+                    key={sub._id || i}
+                    label={sub.name}
+                    size="small"
+                    variant="outlined"
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          <Divider sx={{ my: 1.5 }} />
+
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 700, mb: 1, color: 'primary.dark' }}
+          >
+            Student Submission & Evidence
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                Achieved Metric / Number:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                  color: kpi?.actualValue ? 'success.dark' : 'text.secondary',
+                }}
+              >
+                {kpi?.actualValue || 'Not recorded'}
+              </Typography>
+            </Box>
+
+            {kpi?.evidence?.supportingText && (
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600 }}
+                >
+                  Student Notes:
+                </Typography>
+                <Typography variant="body2" color="text.primary">
+                  {kpi.evidence.supportingText}
+                </Typography>
+              </Box>
+            )}
+
+            {(kpi?.evidence?.fileName ||
+              kpi?.evidence?.fileUrl ||
+              kpi?._id) && (
+              <Box
+                sx={{
+                  mt: 1,
+                  pt: 1,
+                  borderTop: '1px dashed #cbd5e1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1.5,
+                }}
+              >
+                <Box>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                  >
+                    Attached Evidence File:
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {kpi?.evidence?.fileName || 'Evidence File'}
+                  </Typography>
+                </Box>
+                <Button
+                  component="a"
+                  href={`/api/kpis/${kpi?._id}/evidence/download`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  startIcon={<DownloadIcon fontSize="small" />}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Download Submission File
+                </Button>
+              </Box>
             )}
           </Box>
-        )}
+        </Box>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2.5 }}>
           <TextField

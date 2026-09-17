@@ -315,6 +315,12 @@ export default function Kpis() {
           <TableBody>
             {kpis.map((kpi, index) => {
               const isExpanded = expandedKpiId === kpi._id
+              const isPastDue =
+                kpi.dueDate && new Date(kpi.dueDate) < new Date()
+              const isGraded = kpi.status === 'GRADED'
+              const isAccepted = kpi.status === 'ACCEPTED'
+              const isLocked = isGraded || isPastDue
+
               return (
                 <Fragment key={kpi._id}>
                   <TableRow
@@ -415,7 +421,34 @@ export default function Kpis() {
                     </TableCell>
 
                     <TableCell align="center">
-                      {kpi.status === 'ACCEPTED' || kpi.status === 'GRADED' ? (
+                      {isGraded ? (
+                        <Tooltip title="KPI has already been graded. Submissions are locked.">
+                          <span>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              disabled
+                              sx={{ textTransform: 'none', borderRadius: 1 }}
+                            >
+                              Graded
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      ) : isPastDue ? (
+                        <Tooltip title="KPI deadline has passed. Submissions are closed.">
+                          <span>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              disabled
+                              color="error"
+                              sx={{ textTransform: 'none', borderRadius: 1 }}
+                            >
+                              Deadline Passed
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      ) : isAccepted ? (
                         <Button
                           variant={kpi.actualValue ? 'outlined' : 'contained'}
                           size="small"
@@ -464,30 +497,35 @@ export default function Kpis() {
 
                     <TableCell align="center">
                       {(kpi.status === 'DRAFT' ||
-                        kpi.status === 'REJECTED') && (
-                        <Tooltip title="Submit for Mentor Approval">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            disabled={busy}
-                            onClick={() =>
-                              run(() => submitKPIForApproval(kpi._id))
-                            }
-                          >
-                            <SendIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
+                        kpi.status === 'REJECTED') &&
+                        !isPastDue && (
+                          <Tooltip title="Submit for Mentor Approval">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              disabled={busy}
+                              onClick={() =>
+                                run(() => submitKPIForApproval(kpi._id))
+                              }
+                            >
+                              <SendIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       <Tooltip
                         title={
-                          kpi.status === 'ACCEPTED'
-                            ? 'Accepted KPI cannot be edited'
-                            : 'Edit KPI'
+                          isGraded
+                            ? 'Graded KPI cannot be edited'
+                            : isPastDue
+                              ? 'Deadline passed; KPI cannot be edited'
+                              : isAccepted
+                                ? 'Accepted KPI cannot be edited'
+                                : 'Edit KPI'
                         }
                       >
                         <span>
                           <IconButton
-                            disabled={kpi.status === 'ACCEPTED'}
+                            disabled={isAccepted || isLocked}
                             size="small"
                             onClick={() => handleEditClick(kpi)}
                           >
@@ -497,14 +535,18 @@ export default function Kpis() {
                       </Tooltip>
                       <Tooltip
                         title={
-                          kpi.status === 'ACCEPTED'
-                            ? 'Accepted KPI cannot be deleted'
-                            : 'Delete KPI'
+                          isGraded
+                            ? 'Graded KPI cannot be deleted'
+                            : isPastDue
+                              ? 'Deadline passed; KPI cannot be deleted'
+                              : isAccepted
+                                ? 'Accepted KPI cannot be deleted'
+                                : 'Delete KPI'
                         }
                       >
                         <span>
                           <IconButton
-                            disabled={kpi.status === 'ACCEPTED' || busy}
+                            disabled={isAccepted || isLocked || busy}
                             size="small"
                             color="error"
                             onClick={() => {

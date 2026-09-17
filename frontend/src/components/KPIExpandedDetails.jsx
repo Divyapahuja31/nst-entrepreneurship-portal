@@ -8,7 +8,9 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  Button,
 } from '@mui/material'
+import DownloadIcon from '@mui/icons-material/Download'
 
 const formatDate = dateStr => {
   if (!dateStr) return '-'
@@ -196,20 +198,37 @@ export default function KPIExpandedDetails({ kpi }) {
                 {kpi.actualValue || 'Not yet recorded by student'}
               </Typography>
             </Box>
-            {kpi.evidence?.fileName && (
+            {(kpi.evidence?.fileName || kpi.evidence?.fileUrl) && (
               <Box
                 sx={{
                   display: 'flex',
                   justifyContent: 'space-between',
+                  alignItems: 'center',
                   mb: 1,
                 }}
               >
                 <Typography variant="caption" color="text.secondary">
                   Attached File:
                 </Typography>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                  {kpi.evidence.fileName}
-                </Typography>
+                {kpi.evidence?.fileUrl || kpi._id ? (
+                  <Button
+                    component="a"
+                    href={`/api/kpis/${kpi._id}/evidence/download`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    size="small"
+                    variant="outlined"
+                    startIcon={<DownloadIcon fontSize="small" />}
+                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                  >
+                    {kpi.evidence?.fileName || 'Download File'}
+                  </Button>
+                ) : (
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                    {kpi.evidence.fileName}
+                  </Typography>
+                )}
               </Box>
             )}
             {kpi.evidence?.supportingText && (

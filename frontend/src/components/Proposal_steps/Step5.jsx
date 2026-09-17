@@ -58,6 +58,11 @@ export default function Step5({ formData }) {
           {formData.businessModel || '-'}
         </Typography>
 
+        <Typography>
+          <strong>Achievements till now:</strong>{' '}
+          {formData.achievementsTillNow || '-'}
+        </Typography>
+
         <Divider />
 
         <Typography>

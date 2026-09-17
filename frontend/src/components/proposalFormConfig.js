@@ -24,6 +24,7 @@ export const initialEmptyData = {
   stage: '',
   currentTraction: '',
   businessModel: '',
+  achievementsTillNow: '',
 
   // Step 3
   assumption1: '',
@@ -56,6 +57,7 @@ export const getPrefilledData = proposal => {
     stage: proposal.stage || '',
     currentTraction: proposal.currentTraction || '',
     businessModel: proposal.businessModel || '',
+    achievementsTillNow: proposal.achievementsTillNow || '',
 
     assumption1: proposal.assumptions?.[0] || '',
     assumption2: proposal.assumptions?.[1] || '',
@@ -77,6 +79,8 @@ export const getPrefilledData = proposal => {
 // Flattens the stepper's per-field shape into the API's proposal payload.
 export const buildProposalPayload = data => ({
   ...data,
+
+  achievementsTillNow: data.achievementsTillNow ? data.achievementsTillNow.trim() : '',
 
   assumptions: [data.assumption1, data.assumption2, data.assumption3].filter(
     Boolean

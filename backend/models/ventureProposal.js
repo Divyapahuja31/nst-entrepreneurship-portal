@@ -84,6 +84,12 @@ const ventureProposalSchema = new mongoose.Schema(
       trim: true,
     },
 
+    achievementsTillNow: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
     // Step 3
 
     assumptions: {

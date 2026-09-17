@@ -92,6 +92,10 @@ export default function ProposalDrawer({
                 value={proposal.currentTraction}
               />
               <Field label="BUSINESS MODEL" value={proposal.businessModel} />
+              <Field
+                label="ACHIEVEMENTS TILL NOW"
+                value={proposal.achievementsTillNow}
+              />
             </Section>
 
             <Section title="Assumptions & risks">

@@ -119,6 +119,20 @@ export default function Step2({ formData, setFormData, errors = {}, setErrors })
           rows={3}
           placeholder="How does money flow? Who pays what, when?"
         />
+
+        <TextField
+          label="Your achievements till now"
+          name="achievementsTillNow"
+          value={formData.achievementsTillNow}
+          onChange={handleChange}
+          error={Boolean(errors.achievementsTillNow)}
+          helperText={errors.achievementsTillNow}
+          fullWidth
+          required
+          multiline
+          rows={3}
+          placeholder="Key milestones, awards, grants, pilot results, or notable progress achieved so far."
+        />
       </Box>
     </Box>
   )

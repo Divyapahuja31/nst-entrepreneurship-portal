@@ -6,6 +6,10 @@ const REQUIRED_STRING_FIELDS = [
   { field: 'targetCustomer', message: 'Target customer is required' },
   { field: 'currentTraction', message: 'Current traction is required' },
   { field: 'businessModel', message: 'Business model is required' },
+  {
+    field: 'achievementsTillNow',
+    message: 'Achievements till now is required',
+  },
   { field: 'sixMonthGoals', message: 'Six-month goals are required' },
   { field: 'techStack', message: 'Tech stack is required' },
   { field: 'capitalStatus', message: 'Capital status is required' },
@@ -67,6 +71,7 @@ export const buildProposalData = (body, userId, campusId) => {
     stage: body.stage,
     currentTraction: body.currentTraction.trim(),
     businessModel: body.businessModel.trim(),
+    achievementsTillNow: body.achievementsTillNow?.trim() || '',
     assumptions: body.assumptions.map(a => a.trim()).filter(Boolean),
     risks: body.risks.map(r => r.trim()).filter(Boolean),
     sixMonthGoals: body.sixMonthGoals.trim(),

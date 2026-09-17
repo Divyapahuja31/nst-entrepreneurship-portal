@@ -61,7 +61,11 @@
     "kpis",
     "subkpis",
     "subkpi",
-    "virtuals"
+    "virtuals",
+    "buildx",
+    "Buildx",
+    "ghcr",
+    "v1deployed"
   ],
   "ignorePaths": [
     "node_modules/**",

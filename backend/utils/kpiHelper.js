@@ -10,23 +10,29 @@ export const parseEvaluationScore = score => {
   return !Number.isNaN(num) && num >= 0 ? num : -1
 }
 
-export const applyKpiEvaluationUpdates = (
-  kpi,
-  { parsedScore, status, feedback, evaluatorId }
-) => {
+export const buildEvaluationFields = ({
+  parsedScore,
+  status,
+  feedback,
+  evaluatorId,
+}) => {
+  const fields = {}
   if (parsedScore !== null) {
-    kpi.score = parsedScore
+    fields.score = parsedScore
   }
   if (status) {
-    kpi.status = status
-    if (status === 'GRADED') {
-      kpi.evaluationDate = new Date()
+    fields.status = status
+    if (['GRADED', 'ACCEPTED', 'REJECTED'].includes(status)) {
+      fields.evaluationDate = new Date()
     }
   }
-  kpi.evaluatedBy = evaluatorId
-  if (feedback !== undefined) {
-    kpi.feedback = String(feedback).trim()
+  if (evaluatorId) {
+    fields.evaluatedBy = evaluatorId
   }
+  if (feedback !== undefined) {
+    fields.feedback = String(feedback).trim()
+  }
+  return fields
 }
 
 const assignIfDefined = (target, key, val) => {

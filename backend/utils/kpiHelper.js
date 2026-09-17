@@ -100,3 +100,16 @@ export const resolveKPIScope = ({ scope, founder }) => {
 
   return { scope: 'FOUNDER', founder }
 }
+
+export const checkKPILockStatus = kpi => {
+  if (!kpi) {
+    return null
+  }
+  if (kpi.status === 'GRADED') {
+    return 'KPI has already been graded. Changes and submissions are locked.'
+  }
+  if (kpi.dueDate && new Date(kpi.dueDate) < new Date()) {
+    return 'KPI deadline has passed. Submissions and edits are closed.'
+  }
+  return null
+}

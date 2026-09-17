@@ -16,6 +16,7 @@ import {
   deleteKPI,
   uploadKPIEvidence,
   deleteKPIEvidence,
+  downloadKPIEvidence,
 } from '../controllers/kpi.js'
 
 const upload = multer({
@@ -30,6 +31,8 @@ router.post('/', createKPI)
 router.get('/all', requireRole('admin'), getAllKPIs)
 router.get('/venture/:ventureId', getVentureKPIs)
 router.get('/founder/:founderId', getFounderKPIs)
+router.get('/:kpiId/evidence/download', downloadKPIEvidence)
+router.get('/:kpiId/download', downloadKPIEvidence)
 router.post('/:kpiId/submit', submitKPIForApproval)
 // Only an admin may accept, reject or grade a KPI.
 router.put('/:kpiId/evaluate', requireRole('admin'), evaluateKPI)

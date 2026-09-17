@@ -1,5 +1,16 @@
 import { useState, useRef } from 'react'
-import { Dialog , DialogContent, DialogActions, Box, Typography, Button, IconButton, TextField, Chip } from '@mui/material'
+import {
+  Dialog,
+  DialogContent,
+  DialogActions,
+  Box,
+  Typography,
+  Button,
+  IconButton,
+  TextField,
+  Chip,
+  Alert,
+} from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -19,6 +30,10 @@ export default function UploadEvidenceDialog({
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
+
+  const isPastDue = Boolean(kpi?.dueDate && new Date(kpi.dueDate) < new Date())
+  const isGraded = kpi?.status === 'GRADED'
+  const isLocked = isPastDue || isGraded
 
   if (open !== prevOpen || kpi !== prevKpi) {
     setPrevOpen(open)
@@ -40,6 +55,7 @@ export default function UploadEvidenceDialog({
   }
 
   const handleFileChange = e => {
+    if (isLocked) return
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
       if (selectedFile.size > 10 * 1024 * 1024) {
@@ -54,6 +70,7 @@ export default function UploadEvidenceDialog({
   }
 
   const handleSave = () => {
+    if (isLocked) return
     if (onSave) {
       onSave({
         kpi,
@@ -67,6 +84,7 @@ export default function UploadEvidenceDialog({
   }
 
   const handleDelete = () => {
+    if (isLocked) return
     if (onDelete) {
       onDelete({ kpi })
     }
@@ -100,37 +118,41 @@ export default function UploadEvidenceDialog({
         <CloseIcon />
       </IconButton>
       <DialogContent sx={{ p: 3, pt: 3 }}>
+        {isLocked && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {isGraded
+              ? 'This KPI has already been graded. Submissions are locked.'
+              : 'The deadline for this KPI has passed. Submissions are closed.'}
+          </Alert>
+        )}
+
         <Box sx={{ mb: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Metric
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mb: 1 }}
-          >
+            Achieved Metric / Number
           </Typography>
           <TextField
             fullWidth
             size="small"
             value={actualValue}
+            disabled={isLocked}
             onChange={e => setActualValue(e.target.value)}
-            placeholder="Title"
+            placeholder="e.g. $10,000 Revenue or 500 Active Users"
           />
         </Box>
 
         <Box sx={{ mb: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Description
+            Supporting Notes / Evidence Description
           </Typography>
           <TextField
             multiline
-            rows={4}
+            rows={3}
             fullWidth
             size="small"
             value={supportingText}
+            disabled={isLocked}
             onChange={e => setSupportingText(e.target.value)}
-            placeholder="Description"
+            placeholder="Explain how this metric was achieved or details about the uploaded evidence..."
           />
         </Box>
 
@@ -143,21 +165,23 @@ export default function UploadEvidenceDialog({
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
+            disabled={isLocked}
             style={{ display: 'none' }}
           />
 
           <Box
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => !isLocked && fileInputRef.current?.click()}
             sx={{
               border: '2px dashed #cbd5e1',
               borderRadius: 2,
               p: 3,
               textAlign: 'center',
-              cursor: 'pointer',
-              backgroundColor: '#f8fafc',
+              cursor: isLocked ? 'not-allowed' : 'pointer',
+              backgroundColor: isLocked ? '#f1f5f9' : '#f8fafc',
+              opacity: isLocked ? 0.7 : 1,
               '&:hover': {
-                borderColor: 'primary.main',
-                backgroundColor: '#f1f5f9',
+                borderColor: isLocked ? '#cbd5e1' : 'primary.main',
+                backgroundColor: isLocked ? '#f1f5f9' : '#f1f5f9',
               },
             }}
           >
@@ -173,7 +197,7 @@ export default function UploadEvidenceDialog({
                   variant="outlined"
                 />
               ) : kpi?.evidence?.fileName ? (
-                `Current file: ${kpi.evidence.fileName} (Click to replace)`
+                `Current file: ${kpi.evidence.fileName}${isLocked ? '' : ' (Click to replace)'}`
               ) : (
                 'Click to choose file or drag & drop (Max 10MB)'
               )}
@@ -196,6 +220,7 @@ export default function UploadEvidenceDialog({
           <Button
             variant="outlined"
             color="error"
+            disabled={isLocked}
             onClick={handleDelete}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
@@ -210,6 +235,7 @@ export default function UploadEvidenceDialog({
           </Button>
           <Button
             variant="contained"
+            disabled={isLocked}
             onClick={handleSave}
             sx={{ fontWeight: 600, textTransform: 'none' }}
           >

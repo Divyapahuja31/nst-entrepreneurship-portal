@@ -3,6 +3,7 @@ import { useLoaderData, useRevalidator } from 'react-router'
 
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
@@ -24,13 +25,15 @@ const columns = [
 
 const SCOPES = ['VENTURE', 'FOUNDER']
 
-const STATUSES = [
-  'DRAFT',
-  'WAITING_FOR_APPROVAL',
-  'ACCEPTED',
-  'REJECTED',
-  'GRADED',
-]
+const STATUS_LABELS = {
+  DRAFT: 'Draft',
+  WAITING_FOR_APPROVAL: 'Waiting for Approval',
+  ACCEPTED: 'Accepted',
+  REJECTED: 'Rejected',
+  GRADED: 'Graded',
+}
+
+const STATUSES = Object.keys(STATUS_LABELS)
 
 const formatDate = value => {
   if (!value) return '-'
@@ -50,6 +53,7 @@ export default function PageKPIs() {
   const [status, setStatus] = React.useState('')
   const [busyId, setBusyId] = React.useState(null)
   const [error, setError] = React.useState('')
+  const [success, setSuccess] = React.useState('')
   const [evaluating, setEvaluating] = React.useState(null)
 
   const visible = kpis.filter(
@@ -61,20 +65,30 @@ export default function PageKPIs() {
     kpi,
     title: kpi.title,
     scope: kpi.scope,
-    // A venture KPI belongs to the whole team; a founder KPI names its founder.
     owner:
       kpi.scope === 'FOUNDER' ? kpi.founder?.username || '-' : 'Whole team',
     venture: kpi.venture?.name || '-',
-    status: kpi.status,
+    rawStatus: kpi.status,
+    status: STATUS_LABELS[kpi.status] || kpi.status,
     dueDate: formatDate(kpi.dueDate),
   }))
 
   const review = async (kpiId, payload) => {
     setBusyId(kpiId)
     setError('')
+    setSuccess('')
 
     try {
       await evaluateKPI({ kpiId, ...payload })
+      setSuccess(
+        payload.status === 'ACCEPTED'
+          ? 'KPI approved successfully'
+          : payload.status === 'REJECTED'
+            ? 'KPI rejected'
+            : payload.status === 'GRADED'
+              ? 'KPI graded successfully'
+              : 'KPI updated successfully'
+      )
       revalidator.revalidate()
     } catch (err) {
       setError(err.message || 'Could not update KPI')
@@ -86,6 +100,82 @@ export default function PageKPIs() {
   const pendingCount = kpis.filter(
     kpi => kpi.status === 'WAITING_FOR_APPROVAL'
   ).length
+  const acceptedCount = kpis.filter(kpi => kpi.status === 'ACCEPTED').length
+  const gradedCount = kpis.filter(kpi => kpi.status === 'GRADED').length
+  const rejectedCount = kpis.filter(kpi => kpi.status === 'REJECTED').length
+
+  const renderRowActions = row => {
+    const kpi = row.kpi
+    const isBusy = busyId === row.id
+
+    return (
+      <Stack
+        direction="row"
+        spacing={1}
+        justifyContent="flex-end"
+        alignItems="center"
+      >
+        <Button size="small" onClick={() => setEvaluating(kpi)}>
+          View
+        </Button>
+        {kpi.status === 'WAITING_FOR_APPROVAL' && (
+          <>
+            <Button
+              size="small"
+              variant="contained"
+              color="success"
+              disabled={isBusy}
+              onClick={() => review(row.id, { status: 'ACCEPTED' })}
+            >
+              Approve
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              disabled={isBusy}
+              onClick={() => setEvaluating(kpi)}
+            >
+              Reject
+            </Button>
+          </>
+        )}
+        {kpi.status === 'ACCEPTED' && (
+          <Button
+            size="small"
+            variant="contained"
+            color="primary"
+            disabled={isBusy}
+            onClick={() => setEvaluating(kpi)}
+          >
+            Grade KPI
+          </Button>
+        )}
+        {kpi.status === 'GRADED' && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="primary"
+            disabled={isBusy}
+            onClick={() => setEvaluating(kpi)}
+          >
+            Update Grade
+          </Button>
+        )}
+        {kpi.status === 'REJECTED' && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            disabled={isBusy}
+            onClick={() => setEvaluating(kpi)}
+          >
+            Review / Accept
+          </Button>
+        )}
+      </Stack>
+    )
+  }
 
   return (
     <>
@@ -97,13 +187,28 @@ export default function PageKPIs() {
         of its founders.
       </Typography>
 
-      <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+      <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap">
         <Chip label={`${kpis.length} total`} />
         <Chip label={`${pendingCount} awaiting approval`} color="warning" />
+        <Chip label={`${acceptedCount} accepted`} color="info" />
+        <Chip label={`${gradedCount} graded`} color="success" />
+        {rejectedCount > 0 && (
+          <Chip label={`${rejectedCount} rejected`} color="error" />
+        )}
       </Stack>
 
+      {success && (
+        <Alert
+          severity="success"
+          sx={{ mt: 2 }}
+          onClose={() => setSuccess('')}
+        >
+          {success}
+        </Alert>
+      )}
+
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
@@ -134,7 +239,7 @@ export default function PageKPIs() {
           <MenuItem value="">All statuses</MenuItem>
           {STATUSES.map(value => (
             <MenuItem key={value} value={value}>
-              {value}
+              {STATUS_LABELS[value] || value}
             </MenuItem>
           ))}
         </TextField>
@@ -146,9 +251,7 @@ export default function PageKPIs() {
             columns={columns}
             rows={rows}
             busyId={busyId}
-            onView={row => setEvaluating(row.kpi)}
-            onApprove={row => review(row.id, { status: 'ACCEPTED' })}
-            onReject={row => review(row.id, { status: 'REJECTED' })}
+            renderActions={renderRowActions}
           />
         ) : (
           <Alert severity="info">No KPIs match these filters.</Alert>

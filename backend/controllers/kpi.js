@@ -6,7 +6,7 @@ import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   resolveKPIScope,
   parseEvaluationScore,
-  applyKpiEvaluationUpdates,
+  buildEvaluationFields,
   buildKPIUpdateFields,
   resolveEvidenceData,
 } from '../utils/kpiHelper.js'
@@ -296,11 +296,6 @@ export const evaluateKPI = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
     }
 
-    const kpi = await KPI.findById(kpiId)
-    if (!kpi) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
-    }
-
     const parsedScore = parseEvaluationScore(score)
     if (parsedScore === -1) {
       return res.status(400).json({
@@ -309,26 +304,34 @@ export const evaluateKPI = async (req, res) => {
       })
     }
 
-    applyKpiEvaluationUpdates(kpi, {
+    const updateFields = buildEvaluationFields({
       parsedScore,
       status,
       feedback,
-      evaluatorId: req.user?.id || null,
+      evaluatorId: req.user?.id,
     })
 
-    await kpi.save()
-
-    const populatedKPI = await KPI.findById(kpi._id)
+    const updatedKPI = await KPI.findByIdAndUpdate(
+      kpiId,
+      { $set: updateFields },
+      { new: true }
+    )
+      .populate('venture', 'name')
+      .populate('founder', 'username email')
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
       .populate('subKPIs')
 
+    if (!updatedKPI) {
+      return res.status(404).json({ success: false, message: 'KPI not found' })
+    }
+
     return res.status(200).json({
       success: true,
       message: status
-        ? `KPI status updated to ${kpi.status}`
+        ? `KPI status updated to ${updatedKPI.status}`
         : 'KPI evaluation updated',
-      data: populatedKPI,
+      data: updatedKPI,
     })
   } catch (error) {
     console.error('Evaluate KPI error:', error)

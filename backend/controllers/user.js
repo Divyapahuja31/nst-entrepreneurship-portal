@@ -53,10 +53,12 @@ export const signUp = async (req, res) => {
     await user.save()
     user.role = role
 
+    const userPortfolio = await getUserPortfolio(user._id)
+
     return res
       .cookie('token', signToken(user), cookieOptions)
       .status(201)
-      .json({ user })
+      .json({ user: userPortfolio || user })
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
@@ -70,6 +72,47 @@ export const signUp = async (req, res) => {
     return res.status(500).json({
       error: 'Server error',
     })
+  }
+}
+
+export const getUserPortfolio = async userId => {
+  const [user, venture] = await Promise.all([
+    User.findById(userId).populate(['role', 'batch', 'campus']),
+    findVentureForUser(userId),
+  ])
+
+  if (!user) {
+    return null
+  }
+
+  if (venture) {
+    await venture.populate([
+      {
+        path: 'founders',
+        populate: { path: 'user', select: 'username email' },
+      },
+      {
+        path: 'campus',
+        select: 'name',
+      },
+      {
+        path: 'industry',
+        select: 'name',
+      },
+    ])
+  }
+
+  const founders = venture
+    ? venture.founders.map(founder => founder.user).filter(Boolean)
+    : []
+
+  const application = venture ? null : await getPendingApplication(userId)
+
+  return {
+    ...user.toJSON(),
+    ventureId: venture?._id || null,
+    venture: venture ? { ...venture.toJSON(), founders } : null,
+    application,
   }
 }
 
@@ -91,7 +134,11 @@ export const signIn = async (req, res) => {
       })
     }
 
-    return res.cookie('token', signToken(user), cookieOptions).json({ user })
+    const userPortfolio = await getUserPortfolio(user._id)
+
+    return res
+      .cookie('token', signToken(user), cookieOptions)
+      .json({ user: userPortfolio || user })
   } catch (err) {
     console.error('SignIn error:', err)
     return res.status(500).json({
@@ -145,30 +192,12 @@ export const portfolio = async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const [user, venture] = await Promise.all([
-    User.findById(req.user.id).populate(['role', 'batch', 'campus']),
-    findVentureForUser(req.user.id),
-  ])
-
-  if (venture) {
-    await venture.populate({
-      path: 'founders',
-      populate: { path: 'user', select: 'username email' },
-    })
+  const data = await getUserPortfolio(req.user.id)
+  if (!data) {
+    return res.status(404).json({ error: 'User not found' })
   }
 
-  const founders = venture
-    ? venture.founders.map(founder => founder.user).filter(Boolean)
-    : []
-
-  const application = venture ? null : await getPendingApplication(req.user.id)
-
-  return res.json({
-    ...(user ? user.toJSON() : req.user),
-    ventureId: venture?._id || null,
-    venture: venture ? { ...venture.toJSON(), founders } : null,
-    application,
-  })
+  return res.json(data)
 }
 
 export const googleAuth = (req, res) => {
@@ -239,25 +268,26 @@ export const getGoogleSignupOptions = async (req, res) => {
   }
 }
 
+const parseGoogleSignupToken = token => {
+  if (!token) {
+    return { error: 'Signup token is required' }
+  }
+  try {
+    return { data: verifyGoogleSignupToken(token) }
+  } catch {
+    return { error: 'Signup token is invalid or expired' }
+  }
+}
+
 export const completeGoogleSignup = async (req, res) => {
   try {
     const { token, username, batch, campus } = req.body
-    if (!token) {
-      return res.status(401).json({
-        error: 'Signup token is required',
-      })
+    const parsed = parseGoogleSignupToken(token)
+    if (parsed.error) {
+      return res.status(401).json({ error: parsed.error })
     }
 
-    let googleData
-    try {
-      googleData = verifyGoogleSignupToken(token)
-    } catch {
-      return res.status(401).json({
-        error: 'Signup token is invalid or expired',
-      })
-    }
-
-    const { googleId, email } = googleData
+    const { googleId, email } = parsed.data
 
     if (!username || !batch || !campus) {
       return res.status(400).json({
@@ -295,10 +325,12 @@ export const completeGoogleSignup = async (req, res) => {
     await user.save()
     user.role = role
 
+    const userPortfolio = await getUserPortfolio(user._id)
+
     return res
       .cookie('token', signToken(user), cookieOptions)
       .status(201)
-      .json({ user })
+      .json({ user: userPortfolio || user })
   } catch (error) {
     console.error('Complete Google signup error:', error)
     if (error.code === 11000) {

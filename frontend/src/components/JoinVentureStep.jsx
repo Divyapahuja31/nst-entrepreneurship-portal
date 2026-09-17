@@ -36,7 +36,7 @@ export default function JoinVentureStep({ onBack, onSubmitted }) {
       })
       .catch(() => {
         if (!active) return
-        setError('Could not load ventures. Try again.')
+        setError('Could not load startups. Try again.')
       })
       .finally(() => {
         if (!active) return
@@ -73,7 +73,7 @@ export default function JoinVentureStep({ onBack, onSubmitted }) {
         <DialogContent>
           <DialogContentText>
             Your request to join {venture?.name} has been sent. You will become
-            part of the venture once an admin approves it.
+            part of the startup once an admin approves it.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -91,11 +91,11 @@ export default function JoinVentureStep({ onBack, onSubmitted }) {
         <IconButton onClick={onBack} disabled={submitting} sx={{ mr: 1 }}>
           <ArrowBackIcon />
         </IconButton>
-        Join a venture
+        Join a startup
       </DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>
-          Pick the venture you want to be part of and send your request. An
+          Pick the startup you want to be part of and send your request. An
           admin reviews every request.
         </DialogContentText>
 
@@ -113,11 +113,11 @@ export default function JoinVentureStep({ onBack, onSubmitted }) {
               select
               required
               fullWidth
-              label="Venture"
+              label="Startup"
               value={ventureId}
               onChange={event => setVentureId(event.target.value)}
               helperText={
-                ventures.length ? '' : 'There are no ventures to join yet.'
+                ventures.length ? '' : 'There are no startups to join yet.'
               }
             >
               {ventures.map(venture => (

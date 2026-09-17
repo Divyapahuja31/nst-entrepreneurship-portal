@@ -79,7 +79,7 @@ export default function CreateVentureStep({ onBack, onSubmitted }) {
         <DialogTitle>Proposal submitted</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Your venture proposal has been submitted. Your venture will be set
+            Your startup proposal has been submitted. Your startup will be set
             up once an admin approves it.
           </DialogContentText>
         </DialogContent>
@@ -98,7 +98,7 @@ export default function CreateVentureStep({ onBack, onSubmitted }) {
         <IconButton onClick={onBack} disabled={submitting} sx={{ mr: 1 }}>
           <ArrowBackIcon />
         </IconButton>
-        Create a venture
+        Create a startup
       </DialogTitle>
       <DialogContent>
         {error && (

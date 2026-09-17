@@ -74,7 +74,7 @@ export default function PageVentureDetail() {
           />
         ) : (
           <Alert severity="info">
-            This venture has no active founders right now.
+            This startup has no active founders right now.
           </Alert>
         )}
       </Box>

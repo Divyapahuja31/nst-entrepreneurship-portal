@@ -170,7 +170,7 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
           <Typography variant="body2" color="text.secondary">
             Founder:{' '}
             <strong>{founder?.username || founder?.email || 'N/A'}</strong>
-            {venture?.name ? ` | Venture: ${venture.name}` : ''}
+            {venture?.name ? ` | Startup: ${venture.name}` : ''}
           </Typography>
         </Box>
       </Box>

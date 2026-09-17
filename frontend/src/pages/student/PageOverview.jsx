@@ -23,14 +23,14 @@ import { useAuthStore } from '../../stores/auth'
 
 const ventureOptions = [
   {
-    label: 'Create a venture',
-    description: 'Got an idea? Start a new venture and submit your proposal.',
+    label: 'Create a startup',
+    description: 'Got an idea? Start a new startup and submit your proposal.',
     image: '/undraw_got-an-idea_1z3i.svg',
     step: 'create',
   },
   {
-    label: 'Join a venture',
-    description: 'Already have a team? Join an existing venture as a founder.',
+    label: 'Join a startup',
+    description: 'Already have a team? Join an existing startup as a founder.',
     image: '/undraw_handshake-deal_nwk6.svg',
     step: 'join',
   },
@@ -105,7 +105,7 @@ function NoVentureDialog({ open, rejectedApplication, onApplied }) {
     <Dialog open={open} maxWidth="md" fullWidth>
       <DialogTitle sx={{ textAlign: 'center', pt: 4 }}>
         <Typography variant="h5" component="span" fontWeight={600}>
-          You're not part of a venture yet
+          You're not part of a startup yet
         </Typography>
       </DialogTitle>
       <DialogContent sx={{ textAlign: 'center', pb: 4 }}>
@@ -117,7 +117,7 @@ function NoVentureDialog({ open, rejectedApplication, onApplied }) {
           </Alert>
         )}
         <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          To get started, create a new venture or join an existing one.
+          To get started, create a new startup or join an existing one.
         </Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
           {ventureOptions.map(option => (
@@ -147,7 +147,7 @@ function PendingApplication({ application }) {
       </Alert>
 
       <Typography variant="body1" sx={{ mt: 2 }}>
-        You'll get access to your venture dashboard once an admin approves it.
+        You'll get access to your startup dashboard once an admin approves it.
       </Typography>
     </>
   )

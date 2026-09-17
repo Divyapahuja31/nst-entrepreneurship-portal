@@ -47,7 +47,7 @@ const proposalColumns = [
 
 const joinRequestColumns = [
   { key: 'founder', label: 'student' },
-  { key: 'venture', label: 'venture' },
+  { key: 'venture', label: 'startup' },
   { key: 'message', label: 'message' },
   { key: 'submitted', label: 'requested' },
 ]
@@ -146,10 +146,10 @@ export default function PageVentures() {
   return (
     <>
       <Typography variant="h4" gutterBottom>
-        Ventures
+        Startups
       </Typography>
       <Typography variant="body1" color="text.secondary">
-        Approved ventures, and everything waiting on your decision.
+        Approved startups, and everything waiting on your decision.
       </Typography>
 
       {error && (
@@ -162,9 +162,9 @@ export default function PageVentures() {
         <Tabs
           value={tab}
           onChange={(event, newValue) => setTab(newValue)}
-          aria-label="venture tabs"
+          aria-label="startup tabs"
         >
-          <Tab label={`Ventures (${ventures.length})`} />
+          <Tab label={`Startups (${ventures.length})`} />
           <Tab label={`Pending proposals (${proposalRows.length})`} />
           <Tab label={`Join requests (${joinRequestRows.length})`} />
         </Tabs>
@@ -180,7 +180,7 @@ export default function PageVentures() {
             targetRoute="/admin/venture"
           />
         ) : (
-          <Alert severity="info">No ventures have been approved yet.</Alert>
+          <Alert severity="info">No startups have been approved yet.</Alert>
         )}
       </TabPanel>
 

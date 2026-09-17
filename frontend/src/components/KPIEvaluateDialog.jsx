@@ -103,7 +103,7 @@ export default function KPIEvaluateDialog({
               color="text.secondary"
               display="block"
             >
-              Student / Venture:{' '}
+              Student / Startup:{' '}
               <strong>
                 {founder?.username || kpi?.founder?.username || 'Student'}
               </strong>{' '}

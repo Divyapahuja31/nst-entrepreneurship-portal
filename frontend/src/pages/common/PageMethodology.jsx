@@ -54,12 +54,12 @@ const CREDIT_COURSES = [
       ['Business Model & Revenue Validation', '25%'],
       ['Traction & Market Progress', '25%'],
       ['Founder Reviews (Monthly)', '15%'],
-      ['Final Venture Report', '15%'],
+      ['Final Startup Report', '15%'],
       ['Final Pitch / Demo Day', '10%'],
       ['Mentor Evaluation', '10%'],
     ],
     evidence:
-      'Revenue evidence · Pilot results · Pricing experiments · Partnership discussions · Growth metrics · Unit economics · Pitch deck · Demo day · Final venture report',
+      'Revenue evidence · Pilot results · Pricing experiments · Partnership discussions · Growth metrics · Unit economics · Pitch deck · Demo day · Final startup report',
     rubric: [
       'Business & Metrics 40%',
       'Customer & Market 25%',
@@ -75,7 +75,7 @@ const MILESTONE_COURSES = [
   ['Month 3', 'MVP & Pilot', 'Practice I', 'info'],
   ['Month 4', 'Business Model & Revenue', 'Practice II', 'success'],
   ['Month 5', 'Growth & Partnerships', 'Practice II', 'success'],
-  ['Month 6', 'Final Venture Defense', 'Practice II', 'success'],
+  ['Month 6', 'Final Startup Defense', 'Practice II', 'success'],
 ]
 
 const PILLARS = [

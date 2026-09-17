@@ -88,7 +88,7 @@ export default function Kpis() {
   const isLoading = navigation.state === 'loading' || busy
   const actionError = actionErrorMsg || loaderData?.error || ''
   const displayError = !ventureId
-    ? 'No venture associated with your account.'
+    ? 'No startup associated with your account.'
     : actionError
 
   // Runs an API operation, surfaces its error, and refreshes the loader data —
@@ -119,7 +119,7 @@ export default function Kpis() {
 
   const handleSaveKPI = async kpiData => {
     if (!ventureId) {
-      alert('Cannot save KPI without a valid venture ID.')
+      alert('Cannot save KPI without a valid startup ID.')
       return
     }
 
@@ -222,7 +222,7 @@ export default function Kpis() {
           margin: '10px',
         }}
       >
-        Evaluation & Performance Student Venture KPIs
+        Evaluation & Performance Student Startup KPIs
       </Typography>
 
       <hr />

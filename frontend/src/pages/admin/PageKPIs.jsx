@@ -18,7 +18,7 @@ const columns = [
   { key: 'title', label: 'kpi' },
   { key: 'scope', label: 'scope' },
   { key: 'owner', label: 'belongs to' },
-  { key: 'venture', label: 'venture' },
+  { key: 'venture', label: 'startup' },
   { key: 'status', label: 'status' },
   { key: 'dueDate', label: 'due' },
 ]
@@ -183,7 +183,7 @@ export default function PageKPIs() {
         KPIs
       </Typography>
       <Typography variant="body1" color="text.secondary">
-        Every KPI across all ventures, whether it belongs to a venture or to one
+        Every KPI across all startups, whether it belongs to a startup or to one
         of its founders.
       </Typography>
 

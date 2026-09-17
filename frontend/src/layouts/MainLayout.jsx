@@ -50,7 +50,7 @@ const adminMenuItems = [
     path: '/admin',
   },
   {
-    menu: 'Ventures',
+    menu: 'Startups',
     icon: AutoAwesomeIcon,
     path: '/admin/venture',
   },

@@ -87,7 +87,7 @@ export const updateSubKPI = async (req, res) => {
     }
 
     const subKPI = await SubKPI.findByIdAndUpdate(id, updateFields, {
-      new: true,
+      returnDocument: 'after',
     })
 
     if (!subKPI) {

@@ -81,7 +81,7 @@ const updateOrCreateSubmission = async (
   const submission = await BiWeeklySubmission.findOneAndUpdate(
     { custom_id },
     { $set: updateData },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   )
 
   await User.updateOne(

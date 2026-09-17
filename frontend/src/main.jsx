@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import { RouterProvider } from 'react-router/dom'
+import { RouterProvider } from 'react-router'
 
 import '@fontsource/roboto/300.css'
 import '@fontsource/roboto/400.css'

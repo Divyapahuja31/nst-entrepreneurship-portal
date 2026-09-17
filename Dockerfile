@@ -2,16 +2,17 @@
 FROM node:22-bookworm-slim AS frontend-builder
 WORKDIR /app
 
-# Copy root manifests and frontend package files
+# Copy root manifests and package files
 COPY package.json ./
 COPY frontend/package.json ./frontend/
+COPY backend/package.json ./backend/
 
-# Install frontend dependencies (ignoring host package-lock to download Linux native binaries)
-RUN cd frontend && npm install --no-package-lock --ignore-scripts
+# Install workspace dependencies at root to hoist single React instance and download Linux native bindings
+RUN npm install --no-package-lock --ignore-scripts
 
 # Copy frontend source and build
 COPY frontend ./frontend
-RUN cd frontend && npm run build
+RUN npm run build -w frontend
 
 # Stage 2: Production Runtime
 FROM node:22-bookworm-slim AS runner

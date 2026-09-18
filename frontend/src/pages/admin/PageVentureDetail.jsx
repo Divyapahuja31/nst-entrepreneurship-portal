@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography'
 
 import CustomizedTable from '../../components/Table'
 import BiWeekly from './PageReportBiWeekly'
+import KPIReview from '../../components/KPIReview'
 
 const founderColumns = ['username', 'email', 'joinedAt']
 const pastFounderColumns = ['username', 'email', 'joinedAt', 'leftAt']
@@ -47,6 +48,7 @@ export default function PageVentureDetail() {
     founders = [],
     pastFounders = [],
     biweekly,
+    kpis = [],
   } = useLoaderData()
 
   const handleTabChange = (event, newValue) => {
@@ -154,7 +156,16 @@ export default function PageVentureDetail() {
             {/* Details row */}
             <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
               <Grid container spacing={2}>
-                <DetailItem label="WEBSITE" value={venture.website} />
+                <DetailItem
+                  label="WEBSITE"
+                  value={
+                    venture.website ? (
+                      <Link href={venture.website} target="_blank">
+                        {venture.website}
+                      </Link>
+                    ) : null
+                  }
+                />
                 <DetailItem label="TEAM SIZE" value={founders.length} />
                 <DetailItem
                   label="CREATED"
@@ -228,13 +239,7 @@ export default function PageVentureDetail() {
 
             {tabIndex === 1 && (
               <Box>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  Key Performance Indicators
-                </Typography>
-                <Typography color="text.secondary">
-                  Detailed KPI analytics, metrics, and progress overview for
-                  this venture go here.
-                </Typography>
+                <KPIReview kpis={kpis} venture={venture} founders={founders} />
               </Box>
             )}
 

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
+import Founder from '../models/founder.js'
 import { validateCreateKPI } from '../utils/kpiValidator.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import {
@@ -129,13 +130,20 @@ export const getVentureKPIs = async (req, res) => {
       })
     }
 
+    const ventureFounders = await Founder.find({ venture: ventureId }).select(
+      'user'
+    )
+    const founderUserIds = ventureFounders.map(f => f.user).filter(Boolean)
+
     const kpis = await KPI.find({
-      venture: ventureId,
+      $or: [{ venture: ventureId }, { founder: { $in: founderUserIds } }],
     })
+      .populate('venture', 'name')
+      .populate('founder', 'username email')
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
       .populate('subKPIs')
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
 
     return res.status(200).json({
       success: true,

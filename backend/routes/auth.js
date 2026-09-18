@@ -9,6 +9,8 @@ import {
   completeGoogleSignup,
   getGoogleSignupOptions,
   portfolio,
+  forgotPassword,
+  resetPassword,
 } from '../controllers/user.js'
 
 const router = Router()
@@ -21,6 +23,8 @@ router.get('/google/signup-options', getGoogleSignupOptions)
 router.post('/signup', signUp)
 router.post('/signin', signIn)
 router.post('/signout', signOut)
+router.post('/forgot-password', forgotPassword)
+router.post('/reset-password', resetPassword)
 
 router.get('/portfolio', portfolio)
 

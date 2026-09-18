@@ -37,5 +37,23 @@ export const signOut = async () => {
   }
 }
 
+export const forgotPassword = async payload => {
+  try {
+    const { data } = await api.post('/auth/forgot-password', payload)
+    return { message: data.message }
+  } catch (err) {
+    return toError(err, 'Failed to send password reset email')
+  }
+}
+
+export const resetPassword = async payload => {
+  try {
+    const { data } = await api.post('/auth/reset-password', payload)
+    return { message: data.message }
+  } catch (err) {
+    return toError(err, 'Failed to reset password')
+  }
+}
+
 export const homePathFor = user =>
   user?.role?.name === 'admin' ? '/admin' : '/'

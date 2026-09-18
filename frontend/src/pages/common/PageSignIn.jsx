@@ -86,7 +86,13 @@ function SignIn() {
 
           <Grid container sx={{ mt: 1, justifyContent: 'space-between' }}>
             <Grid size="auto">
-              <Button variant="text" type="button" size="large" sx={{ pl: 0 }}>
+              <Button
+                component={Link}
+                to="/forgot-password"
+                variant="text"
+                size="large"
+                sx={{ pl: 0 }}
+              >
                 Forgot Password?
               </Button>
             </Grid>

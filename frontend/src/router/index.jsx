@@ -22,6 +22,8 @@ import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
 import PageSignIn from '../pages/common/PageSignIn.jsx'
 import PageSignUp from '../pages/common/PageSignUp.jsx'
 import PageSignUpComplete from '../pages/common/PageSignUpComplete.jsx'
+import PageForgotPassword from '../pages/common/PageForgotPassword.jsx'
+import PageResetPassword from '../pages/common/PageResetPassword.jsx'
 import PageMethodology from '../pages/common/PageMethodology.jsx'
 
 import PageAllPages from '../pages/common/PageAllPages.jsx'
@@ -60,6 +62,14 @@ export const router = createBrowserRouter([
       {
         path: '/complete-signup',
         Component: PageSignUpComplete,
+      },
+      {
+        path: '/forgot-password',
+        Component: PageForgotPassword,
+      },
+      {
+        path: '/reset-password',
+        Component: PageResetPassword,
       },
     ],
   },

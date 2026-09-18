@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
@@ -6,6 +7,7 @@ import { findVentureForUser } from '../utils/founderHelper.js'
 import VentureProposal from '../models/ventureProposal.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { validateAll } from '../utils/validator.js'
+import { sendResetPasswordEmail } from '../utils/emailService.js'
 import {
   cookieOptions,
   signToken,
@@ -342,5 +344,88 @@ export const completeGoogleSignup = async (req, res) => {
     return res.status(500).json({
       error: 'Server error',
     })
+  }
+}
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' })
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+    if (!user) {
+      return res.status(200).json({
+        message:
+          'If an account with that email exists, a password reset link has been sent.',
+      })
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex')
+    user.resetPasswordToken = resetToken
+    user.resetPasswordExpires = new Date(Date.now() + 3600000)
+    await user.save()
+
+    const frontendUrl =
+      process.env.FRONTEND_URL?.trim() || 'http://localhost:5173'
+    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`
+
+    await sendResetPasswordEmail({
+      to: user.email,
+      username: user.username,
+      resetUrl,
+    })
+
+    return res.status(200).json({
+      message:
+        'If an account with that email exists, a password reset link has been sent.',
+    })
+  } catch (error) {
+    console.error('Forgot password error:', error)
+    return res.status(500).json({
+      error: error.message || 'Failed to process forgot password request',
+    })
+  }
+}
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body
+
+    if (!token || !password) {
+      return res
+        .status(400)
+        .json({ error: 'Token and new password are required' })
+    }
+
+    if (password.length < 8) {
+      return res
+        .status(400)
+        .json({ error: 'Password must be at least 8 characters long' })
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: new Date() },
+    })
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid or expired password reset token' })
+    }
+
+    user.password = password
+    user.resetPasswordToken = null
+    user.resetPasswordExpires = null
+    await user.save()
+
+    return res
+      .status(200)
+      .json({ message: 'Password reset successfully. You can now log in.' })
+  } catch (error) {
+    console.error('Reset password error:', error)
+    return res.status(500).json({ error: 'Failed to reset password' })
   }
 }

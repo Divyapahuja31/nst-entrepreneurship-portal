@@ -1,7 +1,7 @@
 import { useState, Fragment } from 'react'
 import { useLoaderData, useNavigation, useRevalidator } from 'react-router'
 
-import { evaluateKPI } from '../api/kpi'
+import { evaluateKPI, createKPIWithSubKpis } from '../api/kpi'
 import {
   Box,
   Typography,
@@ -32,9 +32,11 @@ import PendingActionsIcon from '@mui/icons-material/PendingActions'
 import ScoreIcon from '@mui/icons-material/Score'
 import EventNoteIcon from '@mui/icons-material/EventNote'
 import ThumbUpAltIcon from '@mui/icons-material/ThumbUpAlt'
+import AddIcon from '@mui/icons-material/Add'
 
 import KPIExpandedDetails from './KPIExpandedDetails'
 import KPIEvaluateDialog from './KPIEvaluateDialog'
+import AddKpi from './AddKpi'
 
 const STATUS_COLORS = {
   DRAFT: 'default',
@@ -73,6 +75,26 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
   const [evalDialogOpen, setEvalDialogOpen] = useState(false)
   const [selectedKpi, setSelectedKpi] = useState(null)
   const [defaultEvalStatus, setDefaultEvalStatus] = useState(null)
+  const [addKpiOpen, setAddKpiOpen] = useState(false)
+
+  const handleCreateKpi = async payload => {
+    try {
+      const ventureId = venture?.id || venture?._id
+      const res = await createKPIWithSubKpis({
+        ...payload,
+        venture: ventureId,
+        scope: founder ? 'FOUNDER' : 'VENTURE',
+        founder: founder?._id || founder?.id || null,
+      })
+      if (res?.error) {
+        throw new Error(res.error)
+      }
+      setSuccessMsg('KPI created successfully.')
+      revalidator.revalidate()
+    } catch (err) {
+      setErrorMsg(err.message || 'Could not create KPI')
+    }
+  }
 
   const handleOpenEvaluate = (kpi, defaultStatus = null) => {
     setSelectedKpi(kpi)
@@ -168,11 +190,29 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
             KPI Review & Grading Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Founder:{' '}
-            <strong>{founder?.username || founder?.email || 'N/A'}</strong>
-            {venture?.name ? ` | Startup: ${venture.name}` : ''}
+            {founder ? (
+              <>
+                Founder: <strong>{founder?.username || founder?.email || 'N/A'}</strong>
+                {venture?.name ? ` | Startup: ${venture.name}` : ''}
+              </>
+            ) : venture?.name ? (
+              <>
+                Startup: <strong>{venture.name}</strong>
+              </>
+            ) : null}
           </Typography>
         </Box>
+        {venture && (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => setAddKpiOpen(true)}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Add KPI
+          </Button>
+        )}
       </Box>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -225,9 +265,22 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
           variant="outlined"
           sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}
         >
-          <Typography variant="body1" color="text.secondary">
-            No KPIs submitted or registered yet for this student.
+          <Typography variant="body1" color="text.secondary" sx={{ mb: venture ? 2 : 0 }}>
+            {founder
+              ? 'No KPIs submitted or registered yet for this student.'
+              : 'No KPIs submitted or registered yet for this venture.'}
           </Typography>
+          {venture && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => setAddKpiOpen(true)}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Add KPI
+            </Button>
+          )}
         </Paper>
       ) : (
         <TableContainer
@@ -240,6 +293,11 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
               <TableRow>
                 <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>KPI Title</TableCell>
+                {!founder && (
+                  <TableCell sx={{ fontWeight: 700 }} align="center">
+                    Scope / Owner
+                  </TableCell>
+                )}
                 <TableCell sx={{ fontWeight: 700 }} align="center">
                   Due Date
                 </TableCell>
@@ -310,6 +368,20 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
                           {kpi.title}
                         </Box>
                       </TableCell>
+                      {!founder && (
+                        <TableCell align="center">
+                          <Chip
+                            label={
+                              kpi.scope === 'FOUNDER'
+                                ? kpi.founder?.username || 'Founder'
+                                : 'Whole Team'
+                            }
+                            size="small"
+                            variant="outlined"
+                            color={kpi.scope === 'FOUNDER' ? 'primary' : 'default'}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell align="center">
                         <Typography variant="body2">
                           {formatDate(kpi.dueDate)}
@@ -500,7 +572,7 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
                     <TableRow>
                       <TableCell
                         style={{ paddingBottom: 0, paddingTop: 0 }}
-                        colSpan={8}
+                        colSpan={founder ? 8 : 9}
                       >
                         <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                           <KPIExpandedDetails kpi={kpi} />
@@ -520,10 +592,16 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
         onClose={() => setEvalDialogOpen(false)}
         kpi={selectedKpi}
         initialStatus={defaultEvalStatus}
-        founder={founder}
-        venture={venture}
+        founder={founder || selectedKpi?.founder}
+        venture={venture || selectedKpi?.venture}
         onSave={handleSaveEvaluation}
         saving={savingEval}
+      />
+
+      <AddKpi
+        open={addKpiOpen}
+        onClose={() => setAddKpiOpen(false)}
+        onSave={handleCreateKpi}
       />
     </Box>
   )

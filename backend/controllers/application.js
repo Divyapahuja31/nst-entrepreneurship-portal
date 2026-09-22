@@ -1,3 +1,4 @@
+import Industry from '../models/industry.js'
 import mongoose from 'mongoose'
 import Venture from '../models/venture.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
@@ -27,6 +28,45 @@ export const getPendingApplications = async (req, res) => {
       error: 'Could not fetch pending applications',
     })
   }
+}
+
+const resolveIndustryId = async (existingIndustry, industryName) => {
+  const existingIndustryId = existingIndustry?._id || existingIndustry
+  if (existingIndustryId) {
+    return existingIndustryId
+  }
+
+  const trimmedName = industryName?.trim()
+  if (!trimmedName) {
+    return null
+  }
+
+  const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let industry = await Industry.findOne({
+    name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
+  })
+
+  if (!industry) {
+    industry = await Industry.create({ name: trimmedName })
+  }
+
+  return industry._id
+}
+
+const createVentureFromProposal = async (proposal, industryId) => {
+  const venture = await Venture.create({
+    name: proposal.startupName,
+    description: proposal.description,
+    campus: proposal.campus,
+    industry: industryId,
+    stage: proposal.stage,
+    website: proposal.website,
+  })
+
+  // first founder is the user who submitted the proposal
+  await addFounderToVenture(proposal.submittedBy, venture._id)
+
+  return venture._id
 }
 
 export const reviewProposal = async (req, res) => {
@@ -89,7 +129,6 @@ export const reviewProposal = async (req, res) => {
       await addFounderToVenture(proposal.submittedBy, venture._id)
 
       proposal.venture = venture._id
-      await proposal.save()
     }
 
     await proposal.save()

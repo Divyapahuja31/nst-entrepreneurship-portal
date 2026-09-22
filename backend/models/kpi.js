@@ -131,6 +131,7 @@ kpiSchema.pre('validate', function () {
 
 kpiSchema.index({ venture: 1, scope: 1 })
 kpiSchema.index({ founder: 1 })
+kpiSchema.index({ status: 1, evaluationDate: 1, score: 1 })
 
 export const modelName = 'KPI'
 

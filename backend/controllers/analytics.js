@@ -30,7 +30,7 @@ async function getMonthlyAverageKPIScores({
       status: 'GRADED',
       score: { $gte: 0 },
       evaluationDate: { $gte: startOfYear, $lt: endOfYear },
-    }),
+    }).select('score evaluationDate venture'),
   ])
 
   const ventureFoundersCount = new Map(
@@ -39,7 +39,7 @@ async function getMonthlyAverageKPIScores({
 
   const kpisByMonth = Array.from({ length: 12 }, () => [])
   for (const kpi of kpis) {
-    const date = new Date(kpi.evaluationDate || kpi.createdAt)
+    const date = new Date(kpi.evaluationDate)
     if (date >= startOfYear && date < endOfYear) {
       kpisByMonth[date.getUTCMonth()].push(kpi)
     }

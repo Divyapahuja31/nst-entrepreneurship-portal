@@ -109,9 +109,9 @@ const getOverview = async (_, res) => {
     )
     return res.json({ result, kpi, overview })
   } catch (err) {
-    console.error('Get overview error:', err)
+    console.error('Get overview error:', err.message || err)
     return res.status(500).json({
-      error: 'Failed To load overdata',
+      error: 'Failed to load overview data',
     })
   }
 }

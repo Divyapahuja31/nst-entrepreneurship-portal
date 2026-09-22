@@ -48,14 +48,15 @@ export const reviewProposal = async (req, res) => {
       })
     }
 
-    proposal.status = status
-    proposal.reviews.push({
-      reviewer: req.user.id,
-      status,
-      remarks,
-    })
-
     if (status === 'APPROVED') {
+      const existingVenture = await findVentureForUser(proposal.submittedBy)
+
+      if (existingVenture) {
+        return res.status(409).json({
+          error: 'This student is already part of an active venture',
+        })
+      }
+
       const venture = await Venture.create({
         name: proposal.startupName,
         description: proposal.description,
@@ -70,6 +71,13 @@ export const reviewProposal = async (req, res) => {
 
       proposal.venture = venture._id
     }
+
+    proposal.status = status
+    proposal.reviews.push({
+      reviewer: req.user.id,
+      status,
+      remarks,
+    })
 
     await proposal.save()
 

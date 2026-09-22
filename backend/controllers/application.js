@@ -1,4 +1,5 @@
 import Industry from '../models/industry.js'
+import mongoose from 'mongoose'
 import Venture from '../models/venture.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import VentureProposal from '../models/ventureProposal.js'
@@ -73,44 +74,61 @@ export const reviewProposal = async (req, res) => {
     const { proposalId } = req.params
     const { status, remarks } = req.body
 
+    if (!mongoose.Types.ObjectId.isValid(proposalId)) {
+      return res.status(400).json({ error: 'Invalid proposal ID' })
+    }
+
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid review status' })
     }
 
-    const proposal = await VentureProposal.findById(proposalId)
-    if (!proposal) {
-      return res.status(404).json({ error: 'Proposal not found' })
-    }
+    const proposal = await VentureProposal.findOneAndUpdate(
+      { _id: proposalId, status: 'PENDING' },
+      {
+        $set: { status },
+        $push: {
+          reviews: {
+            reviewer: req.user.id,
+            status,
+            remarks,
+          },
+        },
+      },
+      { new: true }
+    )
 
-    if (proposal.status !== 'PENDING') {
+    if (!proposal) {
+      const existing = await VentureProposal.findById(proposalId)
+      if (!existing) {
+        return res.status(404).json({ error: 'Proposal not found' })
+      }
       return res.status(409).json({
         error: 'This proposal has already been reviewed',
       })
     }
 
-    let industryId = null
-    let ventureId = null
-
     if (status === 'APPROVED') {
-      industryId = await resolveIndustryId(
-        proposal.industry,
-        proposal.industryName
-      )
-      ventureId = await createVentureFromProposal(proposal, industryId)
-    }
+      const existingVenture = await findVentureForUser(proposal.submittedBy)
 
-    proposal.status = status
-    proposal.reviews.push({
-      reviewer: req.user.id,
-      status,
-      remarks,
-    })
+      if (existingVenture) {
+        return res.status(409).json({
+          error: 'This student is already part of an active venture',
+        })
+      }
 
-    if (industryId) {
-      proposal.industry = industryId
-    }
-    if (ventureId) {
-      proposal.venture = ventureId
+      const venture = await Venture.create({
+        name: proposal.startupName,
+        description: proposal.description,
+        campus: proposal.campus,
+        industry: proposal.industry,
+        stage: proposal.stage,
+        website: proposal.website,
+      })
+
+      // first founder is the user who submitted the proposal
+      await addFounderToVenture(proposal.submittedBy, venture._id)
+
+      proposal.venture = venture._id
     }
 
     await proposal.save()
@@ -129,6 +147,10 @@ export const reviewJoinRequest = async (req, res) => {
   try {
     const { requestId } = req.params
     const { status } = req.body
+
+    if (!mongoose.Types.ObjectId.isValid(requestId)) {
+      return res.status(400).json({ error: 'Invalid join request ID' })
+    }
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid review status' })

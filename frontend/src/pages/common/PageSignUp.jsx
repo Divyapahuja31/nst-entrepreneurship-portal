@@ -8,6 +8,8 @@ import {
   FormControl,
   FormHelperText,
   Grid,
+  IconButton,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -16,6 +18,8 @@ import {
 } from '@mui/material'
 
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import Visibility from '@mui/icons-material/Visibility'
+import VisibilityOff from '@mui/icons-material/VisibilityOff'
 
 import AuthScreen from '../../components/AuthScreen'
 
@@ -30,6 +34,7 @@ function SignUp() {
 
   const [action, setAction] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const [options, setOptions] = useState({
     campuses: [],
@@ -134,9 +139,24 @@ function SignUp() {
             error={Boolean(action && action.error?.password)}
             label="Password"
             name="password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             helperText={action && action.error?.password}
             sx={{ mb: 2 }}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle password visibility"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
           />
 
           <FormControl fullWidth sx={{ mb: 2 }} disabled={loadingOptions}>

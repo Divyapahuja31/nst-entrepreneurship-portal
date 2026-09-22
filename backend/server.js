@@ -12,9 +12,11 @@ import attachUser from './middleware/attachUser.js'
 dotenv.config()
 
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000,
+  })
   .then(() => console.info('Connected to MongoDB'))
-  .catch(err => console.error('Error connecting to MongoDB:', err))
+  .catch(err => console.error('Error connecting to MongoDB:', err.message))
 
 const app = express()
 const PORT = process.env.PORT || 4000

@@ -23,7 +23,6 @@ import PageSignIn from '../pages/common/PageSignIn.jsx'
 import PageSignUp from '../pages/common/PageSignUp.jsx'
 import PageSignUpComplete from '../pages/common/PageSignUpComplete.jsx'
 import PageForgotPassword from '../pages/common/PageForgotPassword.jsx'
-import PageResetPassword from '../pages/common/PageResetPassword.jsx'
 import PageMethodology from '../pages/common/PageMethodology.jsx'
 
 import PageAllPages from '../pages/common/PageAllPages.jsx'
@@ -69,7 +68,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/reset-password',
-        Component: PageResetPassword,
+        Component: PageForgotPassword,
       },
     ],
   },

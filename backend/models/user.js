@@ -46,13 +46,17 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
-    resetPasswordToken: {
+    resetPasswordOtp: {
       type: String,
       default: null,
     },
-    resetPasswordExpires: {
+    resetPasswordOtpExpires: {
       type: Date,
       default: null,
+    },
+    resetPasswordOtpAttempts: {
+      type: Number,
+      default: 0,
     },
   },
   {

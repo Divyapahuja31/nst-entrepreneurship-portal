@@ -46,6 +46,15 @@ export const forgotPassword = async payload => {
   }
 }
 
+export const verifyOtp = async payload => {
+  try {
+    const { data } = await api.post('/auth/verify-otp', payload)
+    return { message: data.message }
+  } catch (err) {
+    return toError(err, 'Invalid verification code')
+  }
+}
+
 export const resetPassword = async payload => {
   try {
     const { data } = await api.post('/auth/reset-password', payload)

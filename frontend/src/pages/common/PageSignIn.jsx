@@ -2,9 +2,10 @@ import { useState } from 'react'
 
 import { Link, Navigate, useNavigate } from 'react-router'
 
-import { Button, Divider, Grid, TextField, Typography } from '@mui/material'
-
+import { Button, Divider, Grid, IconButton, InputAdornment, TextField, Typography } from '@mui/material'
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import Visibility from '@mui/icons-material/Visibility'
+import VisibilityOff from '@mui/icons-material/VisibilityOff'
 
 import AuthScreen from '../../components/AuthScreen'
 
@@ -19,6 +20,7 @@ function SignIn() {
 
   const [action, setAction] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async event => {
     event.preventDefault()
@@ -78,10 +80,25 @@ function SignIn() {
           <TextField
             error={Boolean(action && action.error)}
             label="Password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             name="password"
             fullWidth
             sx={{ mb: 2 }}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle password visibility"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
           />
 
           <Grid container sx={{ mt: 1, justifyContent: 'space-between' }}>

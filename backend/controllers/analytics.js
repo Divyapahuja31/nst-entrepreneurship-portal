@@ -27,11 +27,9 @@ async function getMonthlyAverageKPIScores({
   const [ventures, kpis] = await Promise.all([
     Venture.find().select('_id').populate('teamSize'),
     KpiModel.find({
-      score: { $gt: 0 },
-      $or: [
-        { evaluationDate: { $gte: startOfYear, $lt: endOfYear } },
-        { createdAt: { $gte: startOfYear, $lt: endOfYear } },
-      ],
+      status: 'GRADED',
+      score: { $gte: 0 },
+      evaluationDate: { $gte: startOfYear, $lt: endOfYear },
     }),
   ])
 

@@ -12,9 +12,16 @@ import {
 
 export const getBiWeeklyData = async (req, res) => {
   try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const isAdmin = req.user.role === 'admin'
+    const query = isAdmin ? req.query : {}
+
     const { venture, founder, coFounders } = await resolveVentureAndContext(
       req.user,
-      req.query
+      query
     )
 
     let submissions = []
@@ -80,6 +87,14 @@ export const submitBiWeeklyCycle = async (req, res) => {
       })
     }
 
+    const custom_id = `venture_${venture._id}_cycle_${cycleNum}`
+    const existing = await BiWeeklySubmission.findOne({ custom_id })
+    if (existing?.submitted_at) {
+      return res.status(403).json({
+        error: 'This cycle has already been submitted and is locked.',
+      })
+    }
+
     const submission = await updateOrCreateVentureSubmission({
       ventureId: venture._id,
       userId: req.user.id,
@@ -126,7 +141,6 @@ const getOrCreateSubmissionForAdmin = async (req, res) => {
   if (venture) {
     submission = await updateOrCreateVentureSubmission({
       ventureId: venture._id,
-      userId: req.user.id,
       cycle_number: cycleNum,
     })
   } else {

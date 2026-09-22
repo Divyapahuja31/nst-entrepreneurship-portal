@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import Venture from '../models/venture.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import VentureProposal from '../models/ventureProposal.js'
@@ -32,6 +33,10 @@ export const reviewProposal = async (req, res) => {
   try {
     const { proposalId } = req.params
     const { status, remarks } = req.body
+
+    if (!mongoose.Types.ObjectId.isValid(proposalId)) {
+      return res.status(400).json({ error: 'Invalid proposal ID' })
+    }
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid review status' })
@@ -87,6 +92,10 @@ export const reviewJoinRequest = async (req, res) => {
   try {
     const { requestId } = req.params
     const { status } = req.body
+
+    if (!mongoose.Types.ObjectId.isValid(requestId)) {
+      return res.status(400).json({ error: 'Invalid join request ID' })
+    }
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid review status' })

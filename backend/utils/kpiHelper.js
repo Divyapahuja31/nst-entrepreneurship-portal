@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 
 import { uploadToS3 } from '../config/s3.js'
+import { findVentureForUser } from './founderHelper.js'
 
 export const parseEvaluationScore = score => {
   if (score === undefined || score === null || score === '') {
@@ -112,4 +113,96 @@ export const checkKPILockStatus = kpi => {
     return 'KPI deadline has passed. Submissions and edits are closed.'
   }
   return null
+}
+
+export const kpisVisibleTo = (ventureId, founderId) => ({
+  venture: ventureId,
+  $or: [{ scope: 'VENTURE' }, { founder: founderId }],
+})
+
+export const canUserManageVentureKPI = async (user, ventureId) => {
+  if (user?.role === 'admin') {
+    return true
+  }
+  const userVenture = await findVentureForUser(user.id)
+  return Boolean(
+    userVenture && userVenture._id.toString() === ventureId.toString()
+  )
+}
+
+const isFounderOrCreator = (kpi, userId, allowCreator) => {
+  if (kpi.scope === 'FOUNDER' && kpi.founder?.toString() === userId) {
+    return true
+  }
+  return Boolean(allowCreator && kpi.createdBy?.toString() === userId)
+}
+
+export const canUserAccessKPI = async (user, kpi, allowCreator = false) => {
+  if (user?.role === 'admin') {
+    return true
+  }
+  const userVenture = await findVentureForUser(user?.id)
+  if (userVenture && userVenture._id.toString() === kpi.venture.toString()) {
+    return true
+  }
+  return isFounderOrCreator(kpi, user?.id, allowCreator)
+}
+
+export const buildNewKPIDocument = ({
+  title,
+  description,
+  dueDate,
+  venture,
+  resolvedScope,
+  status,
+  userId,
+}) => {
+  const isSubmitted = status === 'SUBMIT' || status === 'WAITING_FOR_APPROVAL'
+  return {
+    title: title.trim(),
+    description: description.trim(),
+    dueDate: dueDate || null,
+    venture,
+    scope: resolvedScope.scope,
+    founder: resolvedScope.founder,
+    createdBy: userId,
+    subKPIs: [],
+    status: isSubmitted ? 'WAITING_FOR_APPROVAL' : 'DRAFT',
+    submissionDate: isSubmitted ? new Date() : null,
+  }
+}
+
+export const applyKPIProgress = (kpi, { actualValue, targetValue }) => {
+  if (actualValue !== undefined) {
+    kpi.actualValue = String(actualValue).trim()
+  }
+  if (targetValue !== undefined) {
+    kpi.targetValue = String(targetValue).trim()
+  }
+}
+
+export const buildEvidencePayload = ({
+  supportingText,
+  fileName,
+  fileUrl,
+}) => ({
+  supportingText: supportingText ? String(supportingText).trim() : '',
+  fileName: fileName ? String(fileName).trim() : '',
+  fileUrl: fileUrl ? String(fileUrl).trim() : '',
+  submittedAt: new Date(),
+})
+
+export const streamS3ToResponse = async (s3Data, res) => {
+  if (s3Data.ContentType) {
+    res.setHeader('Content-Type', s3Data.ContentType)
+  }
+  if (s3Data.ContentLength) {
+    res.setHeader('Content-Length', s3Data.ContentLength)
+  }
+
+  if (typeof s3Data.Body?.pipe === 'function') {
+    return s3Data.Body.pipe(res)
+  }
+  const buffer = Buffer.from(await s3Data.Body.transformToByteArray())
+  return res.send(buffer)
 }

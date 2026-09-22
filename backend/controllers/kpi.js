@@ -11,13 +11,15 @@ import {
   buildKPIUpdateFields,
   resolveEvidenceData,
   checkKPILockStatus,
+  kpisVisibleTo,
+  canUserManageVentureKPI,
+  canUserAccessKPI,
+  buildNewKPIDocument,
+  applyKPIProgress,
+  buildEvidencePayload,
+  streamS3ToResponse,
 } from '../utils/kpiHelper.js'
 import { downloadFromS3 } from '../config/s3.js'
-
-const kpisVisibleTo = (ventureId, founderId) => ({
-  venture: ventureId,
-  $or: [{ scope: 'VENTURE' }, { founder: founderId }],
-})
 
 export const getAllKPIs = async (req, res) => {
   try {
@@ -80,6 +82,13 @@ export const createKPI = async (req, res) => {
       })
     }
 
+    if (!(await canUserManageVentureKPI(req.user, venture))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to create KPIs for this venture',
+      })
+    }
+
     const resolvedScope = resolveKPIScope({ scope, founder })
 
     if (resolvedScope.error) {
@@ -89,19 +98,17 @@ export const createKPI = async (req, res) => {
       })
     }
 
-    const isSubmitted = status === 'SUBMIT' || status === 'WAITING_FOR_APPROVAL'
-    const kpi = await KPI.create({
-      title: title.trim(),
-      description: description.trim(),
-      dueDate: dueDate || null,
-      venture,
-      scope: resolvedScope.scope,
-      founder: resolvedScope.founder,
-      createdBy: req.user.id,
-      subKPIs: [],
-      status: isSubmitted ? 'WAITING_FOR_APPROVAL' : 'DRAFT',
-      submissionDate: isSubmitted ? new Date() : null,
-    })
+    const kpi = await KPI.create(
+      buildNewKPIDocument({
+        title,
+        description,
+        dueDate,
+        venture,
+        resolvedScope,
+        status,
+        userId: req.user.id,
+      })
+    )
 
     return res.status(201).json({
       success: true,
@@ -267,6 +274,13 @@ export const submitKPIForApproval = async (req, res) => {
       })
     }
 
+    if (!(await canUserAccessKPI(req.user, kpi, true))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to submit this KPI for approval',
+      })
+    }
+
     if (kpi.status !== 'DRAFT' && kpi.status !== 'REJECTED') {
       return res.status(400).json({
         success: false,
@@ -365,24 +379,20 @@ export const submitKPIEvidence = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
+    if (!(await canUserAccessKPI(req.user, kpi))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to submit evidence for this KPI',
+      })
+    }
+
     const lockError = checkKPILockStatus(kpi)
     if (lockError) {
       return res.status(400).json({ success: false, message: lockError })
     }
 
-    if (actualValue !== undefined) {
-      kpi.actualValue = String(actualValue).trim()
-    }
-    if (targetValue !== undefined) {
-      kpi.targetValue = String(targetValue).trim()
-    }
-
-    kpi.evidence = {
-      supportingText: supportingText ? String(supportingText).trim() : '',
-      fileName: fileName ? String(fileName).trim() : '',
-      fileUrl: fileUrl ? String(fileUrl).trim() : '',
-      submittedAt: new Date(),
-    }
+    applyKPIProgress(kpi, { actualValue, targetValue })
+    kpi.evidence = buildEvidencePayload({ supportingText, fileName, fileUrl })
     kpi.submissionDate = new Date()
 
     await kpi.save()
@@ -420,6 +430,13 @@ export const updateKPI = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
+    if (!(await canUserAccessKPI(req.user, kpi))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to edit this KPI',
+      })
+    }
+
     if (kpi.status === 'ACCEPTED') {
       return res
         .status(400)
@@ -454,10 +471,19 @@ export const deleteKPI = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
     }
 
-    const kpi = await KPI.findByIdAndDelete(kpiId)
+    const kpi = await KPI.findById(kpiId)
     if (!kpi) {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
+
+    if (!(await canUserManageVentureKPI(req.user, kpi.venture))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to delete this KPI',
+      })
+    }
+
+    await kpi.deleteOne()
 
     await SubKPI.deleteMany({ parentKPI: kpiId })
 
@@ -557,21 +583,6 @@ export const deleteKPIEvidence = async (req, res) => {
       error: error.message,
     })
   }
-}
-
-const streamS3ToResponse = async (s3Data, res) => {
-  if (s3Data.ContentType) {
-    res.setHeader('Content-Type', s3Data.ContentType)
-  }
-  if (s3Data.ContentLength) {
-    res.setHeader('Content-Length', s3Data.ContentLength)
-  }
-
-  if (typeof s3Data.Body?.pipe === 'function') {
-    return s3Data.Body.pipe(res)
-  }
-  const buffer = Buffer.from(await s3Data.Body.transformToByteArray())
-  return res.send(buffer)
 }
 
 export const downloadKPIEvidence = async (req, res) => {

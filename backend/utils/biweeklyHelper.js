@@ -38,16 +38,10 @@ export const findCoFounders = async ventureId => {
 }
 
 export const getTargetFounderId = (user, query = {}, body = {}) => {
-  if (query.founderId) {
-    return query.founderId
+  if (user?.role === 'admin') {
+    return query.founderId || body.founderId || null
   }
-  if (body.founderId) {
-    return body.founderId
-  }
-  if (user?.role !== 'admin') {
-    return user?.id || null
-  }
-  return null
+  return user?.id || null
 }
 
 export const findFounder = async founderId => {
@@ -58,7 +52,8 @@ export const findFounder = async founderId => {
 }
 
 export const resolveVentureAndContext = async (user, query = {}, body = {}) => {
-  const ventureId = query.ventureId || body.ventureId
+  const isAdmin = user?.role === 'admin'
+  const ventureId = isAdmin ? query.ventureId || body.ventureId : null
   const requestedFounderId = getTargetFounderId(user, query, body)
   const foundUser = await findFounder(requestedFounderId)
   const venture = await findVenture(ventureId, foundUser, user)
@@ -112,20 +107,27 @@ export const updateOrCreateVentureSubmission = async ({
     cycle_number,
     venture: ventureId,
     scope: 'VENTURE',
-    submitted_by: userId,
   }
 
   if (isSubmit) {
     updateData.submitted_at = new Date()
+    if (userId) {
+      updateData.submitted_by = userId
+    }
+  }
+
+  const updateQuery = { $set: updateData }
+  if (userId && !isSubmit) {
+    updateQuery.$setOnInsert = { submitted_by: userId }
   }
 
   const submission = await BiWeeklySubmission.findOneAndUpdate(
     { custom_id },
-    { $set: updateData },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    updateQuery,
+    { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
   )
 
-  if (userId) {
+  if (userId && isSubmit) {
     await User.updateOne(
       { _id: userId },
       { $addToSet: { biWeeklySubmission: submission._id } }

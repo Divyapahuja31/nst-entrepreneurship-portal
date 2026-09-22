@@ -54,19 +54,29 @@ const resolveIndustryId = async (existingIndustry, industryName) => {
 }
 
 const createVentureFromProposal = async (proposal, industryId) => {
-  const venture = await Venture.create({
-    name: proposal.startupName,
-    description: proposal.description,
-    campus: proposal.campus,
-    industry: industryId,
-    stage: proposal.stage,
-    website: proposal.website,
-  })
+  let venture
+  try {
+    venture = await Venture.create({
+      name: proposal.startupName,
+      description: proposal.description,
+      campus: proposal.campus,
+      industry: industryId,
+      stage: proposal.stage,
+      website: proposal.website,
+    })
 
-  // first founder is the user who submitted the proposal
-  await addFounderToVenture(proposal.submittedBy, venture._id)
+    // first founder is the user who submitted the proposal
+    await addFounderToVenture(proposal.submittedBy, venture._id)
 
-  return venture._id
+    return venture._id
+  } catch (error) {
+    if (venture?._id) {
+      await Venture.findByIdAndDelete(venture._id).catch(err =>
+        console.error('Error rolling back orphaned venture:', err)
+      )
+    }
+    throw error
+  }
 }
 
 export const reviewProposal = async (req, res) => {
@@ -82,26 +92,12 @@ export const reviewProposal = async (req, res) => {
       return res.status(400).json({ error: 'Invalid review status' })
     }
 
-    const proposal = await VentureProposal.findOneAndUpdate(
-      { _id: proposalId, status: 'PENDING' },
-      {
-        $set: { status },
-        $push: {
-          reviews: {
-            reviewer: req.user.id,
-            status,
-            remarks,
-          },
-        },
-      },
-      { new: true }
-    )
-
+    const proposal = await VentureProposal.findById(proposalId)
     if (!proposal) {
-      const existing = await VentureProposal.findById(proposalId)
-      if (!existing) {
-        return res.status(404).json({ error: 'Proposal not found' })
-      }
+      return res.status(404).json({ error: 'Proposal not found' })
+    }
+
+    if (proposal.status !== 'PENDING') {
       return res.status(409).json({
         error: 'This proposal has already been reviewed',
       })
@@ -116,20 +112,28 @@ export const reviewProposal = async (req, res) => {
         })
       }
 
-      const venture = await Venture.create({
-        name: proposal.startupName,
-        description: proposal.description,
-        campus: proposal.campus,
-        industry: proposal.industry,
-        stage: proposal.stage,
-        website: proposal.website,
-      })
+      const industryId = await resolveIndustryId(
+        proposal.industry,
+        proposal.industryName
+      )
 
-      // first founder is the user who submitted the proposal
-      await addFounderToVenture(proposal.submittedBy, venture._id)
+      if (!industryId) {
+        return res.status(400).json({
+          error: 'Industry is required to approve proposal',
+        })
+      }
 
-      proposal.venture = venture._id
+      proposal.industry = industryId
+      const ventureId = await createVentureFromProposal(proposal, industryId)
+      proposal.venture = ventureId
     }
+
+    proposal.status = status
+    proposal.reviews.push({
+      reviewer: req.user.id,
+      status,
+      remarks,
+    })
 
     await proposal.save()
 

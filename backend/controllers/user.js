@@ -7,7 +7,7 @@ import { findVentureForUser } from '../utils/founderHelper.js'
 import VentureProposal from '../models/ventureProposal.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { validateAll } from '../utils/validator.js'
-import { sendResetPasswordEmail } from '../utils/emailService.js'
+import { sendResetPasswordOtpEmail } from '../utils/emailService.js'
 import {
   cookieOptions,
   signToken,
@@ -358,45 +358,108 @@ export const forgotPassword = async (req, res) => {
     if (!user) {
       return res.status(200).json({
         message:
-          'If an account with that email exists, a password reset link has been sent.',
+          'If an account with that email exists, a 6-digit verification code has been sent.',
       })
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex')
-    user.resetPasswordToken = resetToken
-    user.resetPasswordExpires = new Date(Date.now() + 3600000)
+    const otp = crypto.randomInt(100000, 1000000).toString()
+
+    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex')
+    user.resetPasswordOtp = hashedOtp
+    user.resetPasswordOtpExpires = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+    user.resetPasswordOtpAttempts = 0
     await user.save()
 
-    const frontendUrl =
-      process.env.FRONTEND_URL?.trim() || 'http://localhost:5173'
-    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`
-
-    await sendResetPasswordEmail({
+    await sendResetPasswordOtpEmail({
       to: user.email,
       username: user.username,
-      resetUrl,
+      otp,
     })
 
     return res.status(200).json({
       message:
-        'If an account with that email exists, a password reset link has been sent.',
+        'If an account with that email exists, a 6-digit verification code has been sent.',
     })
   } catch (error) {
     console.error('Forgot password error:', error)
+    const isDbTimeout =
+      error.message?.includes('buffering timed out') ||
+      error.message?.includes('selection timed out')
     return res.status(500).json({
-      error: error.message || 'Failed to process forgot password request',
+      error: isDbTimeout
+        ? 'Database connection timed out. Please try again in a moment.'
+        : error.message || 'Failed to process forgot password request',
     })
+  }
+}
+
+const validateResetOtp = (user, otp) => {
+  if (!user?.resetPasswordOtp || !user?.resetPasswordOtpExpires) {
+    return 'Invalid or expired verification request'
+  }
+  if (user.resetPasswordOtpAttempts >= 5) {
+    return 'Too many failed verification attempts. Please request a new verification code.'
+  }
+  if (user.resetPasswordOtpExpires < new Date()) {
+    return 'Verification code has expired. Please request a new code.'
+  }
+  const hashedOtp = crypto.createHash('sha256').update(otp.trim()).digest('hex')
+  if (hashedOtp !== user.resetPasswordOtp) {
+    return 'Invalid verification code. Please check your email and try again.'
+  }
+  return null
+}
+
+const updateOtpAttempts = async (user, validationError) => {
+  if (!user) {
+    return
+  }
+  if (user.resetPasswordOtpAttempts >= 5) {
+    user.resetPasswordOtp = null
+    user.resetPasswordOtpExpires = null
+    user.resetPasswordOtpAttempts = 0
+    await user.save()
+  } else if (validationError.includes('Invalid verification code')) {
+    user.resetPasswordOtpAttempts += 1
+    await user.save()
+  }
+}
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body
+
+    if (!email || !otp) {
+      return res
+        .status(400)
+        .json({ error: 'Email and verification code are required' })
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+    const validationError = validateResetOtp(user, otp)
+
+    if (validationError) {
+      await updateOtpAttempts(user, validationError)
+      return res.status(400).json({ error: validationError })
+    }
+
+    return res
+      .status(200)
+      .json({ message: 'Verification code verified successfully' })
+  } catch (error) {
+    console.error('Verify OTP error:', error)
+    return res.status(500).json({ error: 'Failed to verify code' })
   }
 }
 
 export const resetPassword = async (req, res) => {
   try {
-    const { token, password } = req.body
+    const { email, otp, password } = req.body
 
-    if (!token || !password) {
-      return res
-        .status(400)
-        .json({ error: 'Token and new password are required' })
+    if (!email || !otp || !password) {
+      return res.status(400).json({
+        error: 'Email, verification code, and new password are required',
+      })
     }
 
     if (password.length < 8) {
@@ -405,25 +468,23 @@ export const resetPassword = async (req, res) => {
         .json({ error: 'Password must be at least 8 characters long' })
     }
 
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: new Date() },
-    })
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+    const validationError = validateResetOtp(user, otp)
 
-    if (!user) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid or expired password reset token' })
+    if (validationError) {
+      await updateOtpAttempts(user, validationError)
+      return res.status(400).json({ error: validationError })
     }
 
     user.password = password
-    user.resetPasswordToken = null
-    user.resetPasswordExpires = null
+    user.resetPasswordOtp = null
+    user.resetPasswordOtpExpires = null
+    user.resetPasswordOtpAttempts = 0
     await user.save()
 
     return res
       .status(200)
-      .json({ message: 'Password reset successfully. You can now log in.' })
+      .json({ message: 'Password reset successfully! You can now log in.' })
   } catch (error) {
     console.error('Reset password error:', error)
     return res.status(500).json({ error: 'Failed to reset password' })

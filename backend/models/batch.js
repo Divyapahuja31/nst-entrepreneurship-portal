@@ -25,6 +25,19 @@ const batchSchema = new mongoose.Schema(
   }
 )
 
+batchSchema.pre('validate', function () {
+  if (
+    typeof this.startYear === 'number' &&
+    typeof this.endYear === 'number' &&
+    this.endYear < this.startYear
+  ) {
+    this.invalidate(
+      'endYear',
+      'endYear must be greater than or equal to startYear'
+    )
+  }
+})
+
 export const modelName = 'Batch'
 
 const Batch = mongoose.model(modelName, batchSchema)

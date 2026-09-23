@@ -2,7 +2,7 @@ import { Router } from 'express'
 
 import {
   createFounder,
-  getFounderOptions,
+  getFounderFormOptions,
   getFounders,
   deleteFounders,
 } from '../controllers/founder.js'
@@ -19,7 +19,7 @@ const router = Router()
 
 router.get('/founders', getFounders)
 router.post('/founders', createFounder)
-router.get('/founder-options', getFounderOptions)
+router.get('/founder-options', getFounderFormOptions)
 router.get('/overview', getOverview)
 router.delete('/founders/delete', deleteFounders)
 

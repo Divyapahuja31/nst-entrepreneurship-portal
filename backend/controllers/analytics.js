@@ -1,7 +1,7 @@
 import KpiModel from '../models/kpi.js'
 import Venture from '../models/venture.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
-import { calculateFounderStudents } from '../utils/founderPortfolio.js'
+import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
 
 const MONTH_NAMES = [
   'january',
@@ -82,7 +82,7 @@ async function getMonthlyAverageKPIScores({
 const getOverview = async (_, res) => {
   try {
     const [{ ventures, students }, kpi] = await Promise.all([
-      calculateFounderStudents(),
+      getFounderPortfolioData(),
       getMonthlyAverageKPIScores(),
     ])
 

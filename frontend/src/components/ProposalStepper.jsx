@@ -102,6 +102,20 @@ const validateForm = data => {
   return errs
 }
 
+const validateStep = (stepIndex, data) => {
+  const errs = validateForm(data)
+  const currentStepFields = STEP_FIELDS[stepIndex] || []
+  const stepErrors = {}
+
+  for (const field of currentStepFields) {
+    if (errs[field]) {
+      stepErrors[field] = errs[field]
+    }
+  }
+
+  return stepErrors
+}
+
 const getFirstInvalidStep = errs => {
   for (let i = 0; i < STEP_FIELDS.length; i++) {
     if (STEP_FIELDS[i].some(field => errs[field])) {
@@ -126,9 +140,37 @@ export default function ProposalStepper({
   const isLastStep = activeStep === steps.length - 1
 
   const handleNext = () => {
-    if (!isLastStep) {
-      setActiveStep(prev => prev + 1)
+    if (isLastStep) {
+      return
     }
+
+    const stepErrors = validateStep(activeStep, formData)
+    const currentFields = STEP_FIELDS[activeStep] || []
+
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(prev => {
+        const nextErrors = { ...prev }
+        for (const field of currentFields) {
+          if (stepErrors[field]) {
+            nextErrors[field] = stepErrors[field]
+          } else {
+            delete nextErrors[field]
+          }
+        }
+        return nextErrors
+      })
+      return
+    }
+
+    setErrors(prev => {
+      const nextErrors = { ...prev }
+      for (const field of currentFields) {
+        delete nextErrors[field]
+      }
+      return nextErrors
+    })
+
+    setActiveStep(prev => prev + 1)
   }
 
   const handlePrevious = () => {

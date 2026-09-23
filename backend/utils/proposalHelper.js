@@ -7,10 +7,6 @@ const REQUIRED_STRING_FIELDS = [
   { field: 'targetCustomer', message: 'Target customer is required' },
   { field: 'currentTraction', message: 'Current traction is required' },
   { field: 'businessModel', message: 'Business model is required' },
-  {
-    field: 'achievementsTillNow',
-    message: 'Achievements till now is required',
-  },
   { field: 'sixMonthGoals', message: 'Six-month goals are required' },
   { field: 'techStack', message: 'Tech stack is required' },
   { field: 'capitalStatus', message: 'Capital status is required' },

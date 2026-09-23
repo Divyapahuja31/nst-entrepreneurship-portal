@@ -59,11 +59,6 @@ const ventureProposalSchema = new mongoose.Schema(
       ref: 'Industry',
     },
 
-    industryName: {
-      type: String,
-      trim: true,
-    },
-
     // Step 2
 
     stage: {

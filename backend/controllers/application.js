@@ -1,15 +1,23 @@
-import Industry from '../models/industry.js'
-import mongoose from 'mongoose'
-import Venture from '../models/venture.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import VentureProposal from '../models/ventureProposal.js'
 import {
-  addFounderToVenture,
-  findVentureForUser,
-} from '../utils/founderHelper.js'
+  validateReviewRequest,
+  ensureProposalCanBeReviewed,
+  handleProposalApproval,
+  buildProposalUpdate,
+  rollbackProposalApproval,
+  ensureJoinRequestCanBeReviewed,
+  handleJoinRequestApproval,
+  buildJoinRequestUpdate,
+  rollbackJoinRequestApproval,
+} from '../utils/applicationHelper.js'
 
 export const getPendingApplications = async (req, res) => {
   try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
     const [proposals, joinRequests] = await Promise.all([
       VentureProposal.find({ status: 'PENDING' })
         .populate('submittedBy', 'username email')
@@ -30,115 +38,73 @@ export const getPendingApplications = async (req, res) => {
   }
 }
 
-const resolveIndustryId = async (existingIndustry, industryName) => {
-  const existingIndustryId = existingIndustry?._id || existingIndustry
-  if (existingIndustryId) {
-    return existingIndustryId
-  }
-
-  const trimmedName = industryName?.trim()
-  if (!trimmedName) {
-    return null
-  }
-
-  const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  let industry = await Industry.findOne({
-    name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
-  })
-
-  if (!industry) {
-    industry = await Industry.create({ name: trimmedName })
-  }
-
-  return industry._id
-}
-
-const createVentureFromProposal = async (proposal, industryId) => {
-  let venture
-  try {
-    venture = await Venture.create({
-      name: proposal.startupName,
-      description: proposal.description,
-      campus: proposal.campus,
-      industry: industryId,
-      stage: proposal.stage,
-      website: proposal.website,
-    })
-
-    // first founder is the user who submitted the proposal
-    await addFounderToVenture(proposal.submittedBy, venture._id)
-
-    return venture._id
-  } catch (error) {
-    if (venture?._id) {
-      await Venture.findByIdAndDelete(venture._id).catch(err =>
-        console.error('Error rolling back orphaned venture:', err)
-      )
-    }
-    throw error
-  }
-}
-
 export const reviewProposal = async (req, res) => {
+  let ventureId = null
+  let proposal = null
+
   try {
     const { proposalId } = req.params
     const { status, remarks } = req.body
 
-    if (!mongoose.Types.ObjectId.isValid(proposalId)) {
-      return res.status(400).json({ error: 'Invalid proposal ID' })
+    const validationError = validateReviewRequest(
+      req,
+      proposalId,
+      status,
+      'proposal'
+    )
+    if (validationError) {
+      return res
+        .status(validationError.status)
+        .json({ error: validationError.error })
     }
 
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid review status' })
+    proposal = await VentureProposal.findById(proposalId)
+    const stateError = ensureProposalCanBeReviewed(proposal)
+    if (stateError) {
+      return res.status(stateError.status).json({ error: stateError.error })
     }
 
-    const proposal = await VentureProposal.findById(proposalId)
-    if (!proposal) {
-      return res.status(404).json({ error: 'Proposal not found' })
+    let industryId = null
+
+    if (status === 'APPROVED') {
+      const approvalResult = await handleProposalApproval(proposal)
+      if (approvalResult.error) {
+        return res
+          .status(approvalResult.status)
+          .json({ error: approvalResult.error })
+      }
+      ventureId = approvalResult.ventureId
+      industryId = approvalResult.industryId
     }
 
-    if (proposal.status !== 'PENDING') {
+    const updateQuery = buildProposalUpdate({
+      status,
+      reviewerId: req.user.id,
+      remarks,
+      ventureId,
+      industryId,
+      hasIndustry: Boolean(proposal.industry),
+    })
+
+    const updatedProposal = await VentureProposal.findOneAndUpdate(
+      { _id: proposalId, status: 'PENDING' },
+      updateQuery,
+      { new: true }
+    )
+
+    if (!updatedProposal) {
+      await rollbackProposalApproval(ventureId, proposal.submittedBy)
       return res.status(409).json({
         error: 'This proposal has already been reviewed',
       })
     }
 
-    if (status === 'APPROVED') {
-      const existingVenture = await findVentureForUser(proposal.submittedBy)
-
-      if (existingVenture) {
-        return res.status(409).json({
-          error: 'This student is already part of an active venture',
-        })
-      }
-
-      const industryId = await resolveIndustryId(
-        proposal.industry,
-        proposal.industryName
-      )
-
-      if (!industryId) {
-        return res.status(400).json({
-          error: 'Industry is required to approve proposal',
-        })
-      }
-
-      proposal.industry = industryId
-      const ventureId = await createVentureFromProposal(proposal, industryId)
-      proposal.venture = ventureId
-    }
-
-    proposal.status = status
-    proposal.reviews.push({
-      reviewer: req.user.id,
-      status,
-      remarks,
-    })
-
-    await proposal.save()
-
-    return res.status(200).json({ proposal })
+    return res.status(200).json({ proposal: updatedProposal })
   } catch (error) {
+    await rollbackProposalApproval(
+      ventureId,
+      proposal ? proposal.submittedBy : null
+    )
     console.error('Error reviewing proposal:', error)
 
     return res.status(500).json({
@@ -148,55 +114,57 @@ export const reviewProposal = async (req, res) => {
 }
 
 export const reviewJoinRequest = async (req, res) => {
+  let approvedFounderAdded = false
+  let joinRequest = null
+
   try {
     const { requestId } = req.params
     const { status } = req.body
 
-    if (!mongoose.Types.ObjectId.isValid(requestId)) {
-      return res.status(400).json({ error: 'Invalid join request ID' })
+    const validationError = validateReviewRequest(
+      req,
+      requestId,
+      status,
+      'join request'
+    )
+    if (validationError) {
+      return res
+        .status(validationError.status)
+        .json({ error: validationError.error })
     }
 
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid review status' })
+    joinRequest = await VentureJoinRequest.findById(requestId)
+    const stateError = ensureJoinRequestCanBeReviewed(joinRequest)
+    if (stateError) {
+      return res.status(stateError.status).json({ error: stateError.error })
     }
 
-    const joinRequest = await VentureJoinRequest.findById(requestId)
-    if (!joinRequest) {
-      return res.status(404).json({ error: 'Join request not found' })
+    if (status === 'APPROVED') {
+      const approvalError = await handleJoinRequestApproval(joinRequest)
+      if (approvalError) {
+        return res
+          .status(approvalError.status)
+          .json({ error: approvalError.error })
+      }
+      approvedFounderAdded = true
     }
 
-    if (joinRequest.status !== 'PENDING') {
+    const updatedJoinRequest = await VentureJoinRequest.findOneAndUpdate(
+      { _id: requestId, status: 'PENDING' },
+      buildJoinRequestUpdate({ status, reviewerId: req.user.id }),
+      { new: true }
+    )
+
+    if (!updatedJoinRequest) {
+      await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
       return res.status(409).json({
         error: 'This join request has already been reviewed',
       })
     }
 
-    if (status === 'APPROVED') {
-      const existingVenture = await findVentureForUser(joinRequest.requestedBy)
-
-      if (existingVenture) {
-        return res.status(409).json({
-          error: 'This student is already part of a venture',
-        })
-      }
-
-      const venture = await Venture.findById(joinRequest.venture)
-
-      if (!venture) {
-        return res.status(404).json({ error: 'Venture not found' })
-      }
-
-      await addFounderToVenture(joinRequest.requestedBy, venture._id)
-    }
-
-    joinRequest.status = status
-    joinRequest.reviewedBy = req.user.id
-    joinRequest.reviewedAt = new Date()
-
-    await joinRequest.save()
-
-    return res.status(200).json({ joinRequest })
+    return res.status(200).json({ joinRequest: updatedJoinRequest })
   } catch (error) {
+    await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
     console.error('Error reviewing join request:', error)
 
     return res.status(500).json({

@@ -356,9 +356,8 @@ export const forgotPassword = async (req, res) => {
 
     const user = await User.findOne({ email: email.toLowerCase().trim() })
     if (!user) {
-      return res.status(200).json({
-        message:
-          'If an account with that email exists, a 6-digit verification code has been sent.',
+      return res.status(404).json({
+        error: 'No account found with this email address.',
       })
     }
 
@@ -377,8 +376,7 @@ export const forgotPassword = async (req, res) => {
     })
 
     return res.status(200).json({
-      message:
-        'If an account with that email exists, a 6-digit verification code has been sent.',
+      message: 'A 6-digit verification code has been sent to your email.',
     })
   } catch (error) {
     console.error('Forgot password error:', error)

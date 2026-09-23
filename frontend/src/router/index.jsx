@@ -25,7 +25,6 @@ import PageSignUpComplete from '../pages/common/PageSignUpComplete.jsx'
 import PageForgotPassword from '../pages/common/PageForgotPassword.jsx'
 import PageMethodology from '../pages/common/PageMethodology.jsx'
 
-import PageAllPages from '../pages/common/PageAllPages.jsx'
 import PageError, { PageNotFound } from '../pages/common/PageError.jsx'
 import RequireAuth from '../components/RequireAuth.jsx'
 import RequireRole from '../components/RequireRole.jsx'
@@ -103,10 +102,6 @@ export const router = createBrowserRouter([
             path: '/profile/:userid',
             Component: PageReportBiWeekly,
             loader: biWeeklyLoader,
-          },
-          {
-            path: '/test/all-pages',
-            Component: PageAllPages,
           },
         ],
       },

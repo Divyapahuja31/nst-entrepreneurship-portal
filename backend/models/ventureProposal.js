@@ -170,6 +170,24 @@ const ventureProposalSchema = new mongoose.Schema(
   }
 )
 
+ventureProposalSchema.index(
+  { submittedBy: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'PENDING' },
+    name: 'unique_pending_proposal_per_user',
+  }
+)
+
+ventureProposalSchema.index(
+  { submittedBy: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'APPROVED' },
+    name: 'unique_approved_proposal_per_user',
+  }
+)
+
 export const modelName = 'VentureProposal'
 
 const VentureProposal = mongoose.model(modelName, ventureProposalSchema)

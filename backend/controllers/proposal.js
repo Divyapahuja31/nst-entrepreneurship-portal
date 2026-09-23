@@ -3,7 +3,10 @@ import User from '../models/user.js'
 import {
   validateProposalInput,
   buildProposalData,
+  checkExistingProposal,
+  saveOrResubmitProposal,
 } from '../utils/proposalHelper.js'
+import { findVentureForUser } from '../utils/founderHelper.js'
 
 export const getMyProposal = async (req, res) => {
   try {
@@ -49,18 +52,23 @@ export const createProposal = async (req, res) => {
       })
     }
 
+    const currentVenture = await findVentureForUser(req.user.id)
+    if (currentVenture) {
+      return res.status(409).json({
+        error: 'You are already part of an active venture.',
+      })
+    }
+
     const existingProposal = await VentureProposal.findOne({
       submittedBy: req.user.id,
       status: { $in: ['PENDING', 'APPROVED'] },
     })
 
-    if (existingProposal) {
-      return res.status(409).json({
-        error:
-          existingProposal.status === 'PENDING'
-            ? 'You already have a proposal under review.'
-            : 'You already have an approved venture proposal.',
-      })
+    const existingError = checkExistingProposal(existingProposal)
+    if (existingError) {
+      return res
+        .status(existingError.status)
+        .json({ error: existingError.error })
     }
 
     const validationError = validateProposalInput(req.body)
@@ -69,28 +77,19 @@ export const createProposal = async (req, res) => {
     }
 
     const proposalData = buildProposalData(req.body, req.user.id, user.campus)
-
-    const existingRejected = await VentureProposal.findOne({
-      submittedBy: req.user.id,
-      status: 'REJECTED',
-    })
-
-    let proposal
-    if (existingRejected) {
-      Object.assign(existingRejected, proposalData, {
-        status: 'PENDING',
-        reviews: existingRejected.reviews,
-      })
-      proposal = await existingRejected.save()
-    } else {
-      proposal = await VentureProposal.create(proposalData)
-    }
+    const proposal = await saveOrResubmitProposal(proposalData, req.user.id)
 
     return res.status(201).json({
       success: true,
       proposal,
     })
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        error: 'You already have an active proposal or venture.',
+      })
+    }
+
     console.error('Error creating proposal:', error)
 
     return res.status(500).json({

@@ -1,4 +1,5 @@
 import startupStage from '../models/enums/startupStage.js'
+import VentureProposal from '../models/ventureProposal.js'
 
 const REQUIRED_STRING_FIELDS = [
   { field: 'startupName', message: 'Startup name is required' },
@@ -87,4 +88,34 @@ export const buildProposalData = (body, userId, campusId) => {
       ? undefined
       : body.industryName?.trim() || undefined,
   }
+}
+
+export const checkExistingProposal = existingProposal => {
+  if (!existingProposal) {
+    return null
+  }
+  return {
+    status: 409,
+    error:
+      existingProposal.status === 'PENDING'
+        ? 'You already have a proposal under review.'
+        : 'You already have an approved venture proposal.',
+  }
+}
+
+export const saveOrResubmitProposal = async (proposalData, userId) => {
+  const existingRejected = await VentureProposal.findOne({
+    submittedBy: userId,
+    status: 'REJECTED',
+  })
+
+  if (existingRejected) {
+    Object.assign(existingRejected, proposalData, {
+      status: 'PENDING',
+      reviews: existingRejected.reviews,
+    })
+    return existingRejected.save()
+  }
+
+  return VentureProposal.create(proposalData)
 }

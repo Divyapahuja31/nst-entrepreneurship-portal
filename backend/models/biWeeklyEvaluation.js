@@ -23,10 +23,9 @@ const biWeeklyEvaluationSchema = new mongoose.Schema(
     customer_score: { type: Number, default: 0, min: 0 },
     business_score: { type: Number, default: 0, min: 0 },
     behavior_score: { type: Number, default: 0, min: 0 },
-    created_at: { type: Date, default: Date.now },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }

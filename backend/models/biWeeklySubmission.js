@@ -141,7 +141,7 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
     },
     biWeeklyObservationSchema: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'BiWeeklyObservationSchema',
+      ref: 'BiWeeklyObservation',
     },
     evidence_links: [evidenceLinkSchema],
   },

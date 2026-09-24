@@ -13,9 +13,32 @@ export const signIn = async payload => {
 export const signUp = async payload => {
   try {
     const { data } = await api.post('/auth/signup', payload)
-    return { user: data.user }
+    return {
+      user: data.user,
+      requireOtp: data.requireOtp,
+      email: data.email,
+      message: data.message,
+    }
   } catch (err) {
     return toError(err, 'Something went wrong')
+  }
+}
+
+export const verifySignupOtp = async payload => {
+  try {
+    const { data } = await api.post('/auth/verify-signup-otp', payload)
+    return { user: data.user, message: data.message }
+  } catch (err) {
+    return toError(err, 'Invalid verification code')
+  }
+}
+
+export const resendSignupOtp = async payload => {
+  try {
+    const { data } = await api.post('/auth/resend-signup-otp', payload)
+    return { message: data.message }
+  } catch (err) {
+    return toError(err, 'Failed to resend verification code')
   }
 }
 

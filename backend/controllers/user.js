@@ -7,7 +7,10 @@ import { findVentureForUser } from '../utils/founderHelper.js'
 import VentureProposal from '../models/ventureProposal.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { validateAll } from '../utils/validator.js'
-import { sendResetPasswordOtpEmail } from '../utils/emailService.js'
+import {
+  sendResetPasswordOtpEmail,
+  sendSignupOtpEmail,
+} from '../utils/emailService.js'
 import {
   cookieOptions,
   signToken,
@@ -19,6 +22,21 @@ import {
   getGoogleAuthUrl,
   verifyGoogleAuthCode,
 } from '../utils/authHelper.js'
+
+const issueAndSendOtp = async (user, type = 'SIGNUP') => {
+  const otp = crypto.randomInt(100000, 1000000).toString()
+  const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex')
+  const expires = new Date(Date.now() + 5 * 60 * 1000)
+  const isSignup = type === 'SIGNUP'
+
+  user[isSignup ? 'signupOtp' : 'resetPasswordOtp'] = hashedOtp
+  user[isSignup ? 'signupOtpExpires' : 'resetPasswordOtpExpires'] = expires
+  user[isSignup ? 'signupOtpAttempts' : 'resetPasswordOtpAttempts'] = 0
+  await user.save()
+
+  const sendFn = isSignup ? sendSignupOtpEmail : sendResetPasswordOtpEmail
+  await sendFn({ to: user.email, username: user.username, otp })
+}
 
 export const signUp = async (req, res) => {
   try {
@@ -43,24 +61,42 @@ export const signUp = async (req, res) => {
       return res.status(400).json({ error })
     }
 
-    const user = new User({
-      username,
-      email: email.toLowerCase(),
-      password,
-      role: role._id,
-      batch,
-      campus,
+    const normalizedEmail = email.toLowerCase().trim()
+    let user = await User.findOne({ email: normalizedEmail })
+
+    if (user && user.isEmailVerified) {
+      return res.status(409).json({
+        error: {
+          email: 'Email already in use',
+        },
+      })
+    }
+
+    if (user && !user.isEmailVerified) {
+      user.username = username
+      user.password = password
+      user.role = role._id
+      user.batch = batch
+      user.campus = campus
+    } else {
+      user = new User({
+        username,
+        email: normalizedEmail,
+        password,
+        role: role._id,
+        batch,
+        campus,
+        isEmailVerified: false,
+      })
+    }
+
+    await issueAndSendOtp(user, 'SIGNUP')
+
+    return res.status(200).json({
+      requireOtp: true,
+      email: user.email,
+      message: 'A 6-digit verification code has been sent to your email.',
     })
-
-    await user.save()
-    user.role = role
-
-    const userPortfolio = await getUserPortfolio(user._id)
-
-    return res
-      .cookie('token', signToken(user), cookieOptions)
-      .status(201)
-      .json({ user: userPortfolio || user })
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
@@ -122,7 +158,9 @@ export const signIn = async (req, res) => {
   try {
     const { email, password } = req.body
 
-    const user = await User.findOne({ email }).populate('role')
+    const user = await User.findOne({
+      email: email?.toLowerCase()?.trim(),
+    }).populate('role')
     if (!user) {
       return res.status(401).json({
         error: 'Invalid email or password',
@@ -133,6 +171,17 @@ export const signIn = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         error: 'Invalid email or password',
+      })
+    }
+
+    if (!user.isEmailVerified && !user.googleId) {
+      await issueAndSendOtp(user, 'SIGNUP')
+
+      return res.status(403).json({
+        error:
+          'Your email address is not verified yet. A 6-digit verification code has been sent to your email.',
+        requireOtp: true,
+        email: user.email,
       })
     }
 
@@ -228,8 +277,9 @@ export const googleAuthCallback = async (req, res) => {
     }).populate('role')
 
     if (user) {
-      if (!user.googleId) {
+      if (!user.googleId || !user.isEmailVerified) {
         user.googleId = googleId
+        user.isEmailVerified = true
         await user.save()
       }
 
@@ -322,6 +372,7 @@ export const completeGoogleSignup = async (req, res) => {
       batch,
       campus,
       role: role._id,
+      isEmailVerified: true,
     })
 
     await user.save()
@@ -361,19 +412,7 @@ export const forgotPassword = async (req, res) => {
       })
     }
 
-    const otp = crypto.randomInt(100000, 1000000).toString()
-
-    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex')
-    user.resetPasswordOtp = hashedOtp
-    user.resetPasswordOtpExpires = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-    user.resetPasswordOtpAttempts = 0
-    await user.save()
-
-    await sendResetPasswordOtpEmail({
-      to: user.email,
-      username: user.username,
-      otp,
-    })
+    await issueAndSendOtp(user, 'RESET_PASSWORD')
 
     return res.status(200).json({
       message: 'A 6-digit verification code has been sent to your email.',
@@ -391,34 +430,42 @@ export const forgotPassword = async (req, res) => {
   }
 }
 
-const validateResetOtp = (user, otp) => {
-  if (!user?.resetPasswordOtp || !user?.resetPasswordOtpExpires) {
+const validateOtp = (user, otp, prefix) => {
+  const otpField = `${prefix}Otp`
+  const expiresField = `${prefix}OtpExpires`
+  const attemptsField = `${prefix}OtpAttempts`
+
+  if (!user?.[otpField] || !user?.[expiresField]) {
     return 'Invalid or expired verification request'
   }
-  if (user.resetPasswordOtpAttempts >= 5) {
+  if (user[attemptsField] >= 5) {
     return 'Too many failed verification attempts. Please request a new verification code.'
   }
-  if (user.resetPasswordOtpExpires < new Date()) {
+  if (user[expiresField] < new Date()) {
     return 'Verification code has expired. Please request a new code.'
   }
   const hashedOtp = crypto.createHash('sha256').update(otp.trim()).digest('hex')
-  if (hashedOtp !== user.resetPasswordOtp) {
+  if (hashedOtp !== user[otpField]) {
     return 'Invalid verification code. Please check your email and try again.'
   }
   return null
 }
 
-const updateOtpAttempts = async (user, validationError) => {
+const updateOtpAttempts = async (user, validationError, prefix) => {
   if (!user) {
     return
   }
-  if (user.resetPasswordOtpAttempts >= 5) {
-    user.resetPasswordOtp = null
-    user.resetPasswordOtpExpires = null
-    user.resetPasswordOtpAttempts = 0
+  const otpField = `${prefix}Otp`
+  const expiresField = `${prefix}OtpExpires`
+  const attemptsField = `${prefix}OtpAttempts`
+
+  if (user[attemptsField] >= 5) {
+    user[otpField] = null
+    user[expiresField] = null
+    user[attemptsField] = 0
     await user.save()
   } else if (validationError.includes('Invalid verification code')) {
-    user.resetPasswordOtpAttempts += 1
+    user[attemptsField] += 1
     await user.save()
   }
 }
@@ -434,10 +481,10 @@ export const verifyOtp = async (req, res) => {
     }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() })
-    const validationError = validateResetOtp(user, otp)
+    const validationError = validateOtp(user, otp, 'resetPassword')
 
     if (validationError) {
-      await updateOtpAttempts(user, validationError)
+      await updateOtpAttempts(user, validationError, 'resetPassword')
       return res.status(400).json({ error: validationError })
     }
 
@@ -467,10 +514,10 @@ export const resetPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() })
-    const validationError = validateResetOtp(user, otp)
+    const validationError = validateOtp(user, otp, 'resetPassword')
 
     if (validationError) {
-      await updateOtpAttempts(user, validationError)
+      await updateOtpAttempts(user, validationError, 'resetPassword')
       return res.status(400).json({ error: validationError })
     }
 
@@ -486,5 +533,88 @@ export const resetPassword = async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error)
     return res.status(500).json({ error: 'Failed to reset password' })
+  }
+}
+
+export const verifySignupOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body
+
+    if (!email || !otp) {
+      return res
+        .status(400)
+        .json({ error: 'Email and verification code are required' })
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    }).populate('role')
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email' })
+    }
+
+    if (user.isEmailVerified) {
+      const userPortfolio = await getUserPortfolio(user._id)
+      return res
+        .cookie('token', signToken(user), cookieOptions)
+        .status(200)
+        .json({
+          user: userPortfolio || user,
+          message: 'Email verified successfully!',
+        })
+    }
+
+    const validationError = validateOtp(user, otp, 'signup')
+    if (validationError) {
+      await updateOtpAttempts(user, validationError, 'signup')
+      return res.status(400).json({ error: validationError })
+    }
+
+    user.isEmailVerified = true
+    user.signupOtp = null
+    user.signupOtpExpires = null
+    user.signupOtpAttempts = 0
+    await user.save()
+
+    const userPortfolio = await getUserPortfolio(user._id)
+
+    return res
+      .cookie('token', signToken(user), cookieOptions)
+      .status(200)
+      .json({
+        user: userPortfolio || user,
+        message: 'Email verified successfully!',
+      })
+  } catch (error) {
+    console.error('Verify signup OTP error:', error)
+    return res.status(500).json({ error: 'Failed to verify code' })
+  }
+}
+
+export const resendSignupOtp = async (req, res) => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' })
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email' })
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ error: 'Email is already verified' })
+    }
+
+    await issueAndSendOtp(user, 'SIGNUP')
+
+    return res.status(200).json({
+      message: 'A new 6-digit verification code has been sent to your email.',
+    })
+  } catch (error) {
+    console.error('Resend signup OTP error:', error)
+    return res.status(500).json({ error: 'Failed to resend verification code' })
   }
 }

@@ -58,6 +58,22 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    signupOtp: {
+      type: String,
+      default: null,
+    },
+    signupOtpExpires: {
+      type: Date,
+      default: null,
+    },
+    signupOtpAttempts: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

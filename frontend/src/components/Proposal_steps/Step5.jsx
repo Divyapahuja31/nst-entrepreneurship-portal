@@ -1,8 +1,11 @@
 import {
   Box,
   Divider,
+  Link,
   Typography,
 } from '@mui/material'
+
+import { normalizeWebsite } from '../proposalFormConfig.js'
 
 export default function Step5({ formData }) {
   return (
@@ -38,7 +41,7 @@ export default function Step5({ formData }) {
 
         <Typography>
           <strong>Industry:</strong>{' '}
-          {formData.industryName || formData.industry || '-'}
+          {formData.industryName || '-'}
         </Typography>
 
         <Divider />
@@ -100,12 +103,25 @@ export default function Step5({ formData }) {
 
         <Typography>
           <strong>Weekly hours:</strong>{' '}
-          {formData.weeklyHours || '-'}
+          {formData.weeklyHours !== '' && formData.weeklyHours !== undefined
+            ? formData.weeklyHours
+            : '-'}
         </Typography>
 
-        <Typography>
+        <Typography component="div">
           <strong>Website:</strong>{' '}
-          {formData.website || '-'}
+          {formData.website?.trim() ? (
+            <Link
+              href={normalizeWebsite(formData.website)}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="hover"
+            >
+              {normalizeWebsite(formData.website)}
+            </Link>
+          ) : (
+            '-'
+          )}
         </Typography>
       </Box>
     </Box>

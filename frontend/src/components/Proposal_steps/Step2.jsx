@@ -8,6 +8,7 @@ import {
 } from '@mui/material'
 
 import { getStages } from '../../api/stage'
+import { FIELD_LIMITS, validateField } from '../proposalFormConfig.js'
 
 export default function Step2({ formData, setFormData, errors = {}, setErrors }) {
   const [stages, setStages] = useState([])
@@ -38,9 +39,21 @@ export default function Step2({ formData, setFormData, errors = {}, setErrors })
     }))
 
     if (setErrors && errors[name]) {
+      const error = validateField(name, value, { ...formData, [name]: value })
       setErrors((prev) => ({
         ...prev,
-        [name]: '',
+        [name]: error,
+      }))
+    }
+  }
+
+  const handleBlur = (event) => {
+    const { name, value } = event.target
+    if (setErrors) {
+      const error = validateField(name, value, formData)
+      setErrors((prev) => ({
+        ...prev,
+        [name]: error,
       }))
     }
   }
@@ -76,6 +89,7 @@ export default function Step2({ formData, setFormData, errors = {}, setErrors })
           name="stage"
           value={formData.stage}
           onChange={handleChange}
+          onBlur={handleBlur}
           error={Boolean(errors.stage)}
           helperText={errors.stage}
           fullWidth
@@ -97,8 +111,13 @@ export default function Step2({ formData, setFormData, errors = {}, setErrors })
           name="currentTraction"
           value={formData.currentTraction}
           onChange={handleChange}
+          onBlur={handleBlur}
           error={Boolean(errors.currentTraction)}
-          helperText={errors.currentTraction}
+          helperText={
+            errors.currentTraction ||
+            `${formData.currentTraction?.length || 0} / ${FIELD_LIMITS.currentTraction.maxChars}`
+          }
+          inputProps={{ maxLength: FIELD_LIMITS.currentTraction.maxChars }}
           fullWidth
           required
           multiline
@@ -111,8 +130,13 @@ export default function Step2({ formData, setFormData, errors = {}, setErrors })
           name="businessModel"
           value={formData.businessModel}
           onChange={handleChange}
+          onBlur={handleBlur}
           error={Boolean(errors.businessModel)}
-          helperText={errors.businessModel}
+          helperText={
+            errors.businessModel ||
+            `${formData.businessModel?.length || 0} / ${FIELD_LIMITS.businessModel.maxChars}`
+          }
+          inputProps={{ maxLength: FIELD_LIMITS.businessModel.maxChars }}
           fullWidth
           required
           multiline
@@ -125,8 +149,13 @@ export default function Step2({ formData, setFormData, errors = {}, setErrors })
           name="achievementsTillNow"
           value={formData.achievementsTillNow}
           onChange={handleChange}
+          onBlur={handleBlur}
           error={Boolean(errors.achievementsTillNow)}
-          helperText={errors.achievementsTillNow}
+          helperText={
+            errors.achievementsTillNow ||
+            `${formData.achievementsTillNow?.length || 0} / ${FIELD_LIMITS.achievementsTillNow.maxChars}`
+          }
+          inputProps={{ maxLength: FIELD_LIMITS.achievementsTillNow.maxChars }}
           fullWidth
           multiline
           rows={3}

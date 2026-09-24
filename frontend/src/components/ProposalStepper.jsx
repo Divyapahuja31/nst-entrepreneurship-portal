@@ -9,112 +9,11 @@ import {
   Stepper,
 } from '@mui/material'
 
-const STEP_FIELDS = [
-  ['startupName', 'description', 'targetCustomer', 'industry'],
-  ['stage', 'currentTraction', 'businessModel'],
-  [
-    'assumption1',
-    'assumption2',
-    'assumption3',
-    'risk1',
-    'risk2',
-    'risk3',
-    'sixMonthGoals',
-  ],
-  ['techStack', 'capitalStatus', 'weeklyHours', 'website'],
-]
-
-const validateForm = data => {
-  const errs = {}
-
-  // Step 1
-  if (!data.startupName?.trim()) {
-    errs.startupName = 'Startup name is required'
-  }
-  if (!data.description?.trim()) {
-    errs.description = 'Problem description is required'
-  }
-  if (!data.targetCustomer?.trim()) {
-    errs.targetCustomer = 'Target customer is required'
-  }
-  if (!data.industry && !data.industryName?.trim()) {
-    errs.industry = 'Industry is required'
-  }
-
-  // Step 2
-  if (!data.stage) {
-    errs.stage = 'Current stage is required'
-  }
-  if (!data.currentTraction?.trim()) {
-    errs.currentTraction = 'Current traction is required'
-  }
-  if (!data.businessModel?.trim()) {
-    errs.businessModel = 'Business model is required'
-  }
-
-  // Step 3
-  if (!data.assumption1?.trim()) {
-    errs.assumption1 = 'Assumption 1 is required'
-  }
-  if (!data.assumption2?.trim()) {
-    errs.assumption2 = 'Assumption 2 is required'
-  }
-  if (!data.assumption3?.trim()) {
-    errs.assumption3 = 'Assumption 3 is required'
-  }
-  if (!data.risk1?.trim()) {
-    errs.risk1 = 'Risk 1 is required'
-  }
-  if (!data.risk2?.trim()) {
-    errs.risk2 = 'Risk 2 is required'
-  }
-  if (!data.risk3?.trim()) {
-    errs.risk3 = 'Risk 3 is required'
-  }
-  if (!data.sixMonthGoals?.trim()) {
-    errs.sixMonthGoals = 'Six-month goals are required'
-  }
-
-  // Step 4
-  if (!data.techStack?.trim()) {
-    errs.techStack = 'Tech stack is required'
-  }
-  if (!data.capitalStatus?.trim()) {
-    errs.capitalStatus = 'Capital status is required'
-  }
-  if (
-    data.weeklyHours === '' ||
-    data.weeklyHours === null ||
-    data.weeklyHours === undefined ||
-    isNaN(Number(data.weeklyHours)) ||
-    Number(data.weeklyHours) < 0
-  ) {
-    errs.weeklyHours = 'Weekly hours must be a valid non-negative number'
-  }
-  if (data.website?.trim()) {
-    const urlPattern =
-      /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/
-    if (!urlPattern.test(data.website.trim())) {
-      errs.website = 'Please enter a valid website URL'
-    }
-  }
-
-  return errs
-}
-
-const validateStep = (stepIndex, data) => {
-  const errs = validateForm(data)
-  const currentStepFields = STEP_FIELDS[stepIndex] || []
-  const stepErrors = {}
-
-  for (const field of currentStepFields) {
-    if (errs[field]) {
-      stepErrors[field] = errs[field]
-    }
-  }
-
-  return stepErrors
-}
+import {
+  STEP_FIELDS,
+  validateForm,
+  validateStep,
+} from './proposalFormConfig.js'
 
 const getFirstInvalidStep = errs => {
   for (let i = 0; i < STEP_FIELDS.length; i++) {

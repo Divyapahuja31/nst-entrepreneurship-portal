@@ -14,12 +14,12 @@ import {
   addFounderToVenture,
   deactivateFounder,
 } from '../utils/founderHelper.js'
-import { calculateFounderStudents } from '../utils/founderPortfolio.js'
+import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
 
 const getFounders = async (_, res) => {
   try {
     const [{ students }, campuses] = await Promise.all([
-      calculateFounderStudents(),
+      getFounderPortfolioData(),
       Campus.find().sort({ name: 1 }),
     ])
 
@@ -38,7 +38,7 @@ const getFounders = async (_, res) => {
   }
 }
 
-const getFounderOptions = async (_, res) => {
+const getFounderFormOptions = async (_, res) => {
   try {
     const [industries, batches] = await Promise.all([
       Industry.find().sort({ name: 1 }),
@@ -68,7 +68,7 @@ const getFounderOptions = async (_, res) => {
   }
 }
 
-const validateFounderPayload = payload => ({
+const validateCreateFounderInput = payload => ({
   founder: validateName(payload.founder),
   email: validateEmail(payload.email),
   startup: payload.startup ? '' : 'Startup name is required',
@@ -81,7 +81,11 @@ const validateFounderPayload = payload => ({
     : 'Stage is required',
 })
 
-const resolveFounderRefs = async ({ email, industry, batch }) => {
+const validateAndResolveFounderReferences = async ({
+  email,
+  industry,
+  batch,
+}) => {
   const [batchDoc, industryDoc, studentRole, existingUser] = await Promise.all([
     Batch.findById(batch),
     Industry.findById(industry),
@@ -109,7 +113,7 @@ const resolveFounderRefs = async ({ email, industry, batch }) => {
   return { batchDoc, industryDoc, studentRole }
 }
 
-const createFounderAccount = async ({
+const createFounderAndVenture = async ({
   founder,
   email,
   startup,
@@ -146,20 +150,20 @@ const createFounderAccount = async ({
 
 const createFounder = async (req, res) => {
   const payload = req.body ?? {}
-  const error = validateFounderPayload(payload)
+  const error = validateCreateFounderInput(payload)
 
   if (Object.values(error).some(Boolean)) {
     return res.status(400).json({ error })
   }
 
   try {
-    const refs = await resolveFounderRefs(payload)
+    const refs = await validateAndResolveFounderReferences(payload)
 
     if (refs.error) {
       return res.status(refs.status).json({ error: refs.error })
     }
 
-    const { user, venture } = await createFounderAccount({
+    const { user, venture } = await createFounderAndVenture({
       ...payload,
       ...refs,
     })
@@ -185,7 +189,7 @@ const createFounder = async (req, res) => {
   }
 }
 
-const removeFounderFromVenture = async founderId => {
+const removeFounderFromVentureById = async founderId => {
   if (!mongoose.isValidObjectId(founderId)) {
     return {
       founderId,
@@ -212,7 +216,9 @@ const removeFounderFromVenture = async founderId => {
 const deleteFounders = async (req, res) => {
   try {
     const founders = req.body.founders || []
-    const response = await Promise.all(founders.map(removeFounderFromVenture))
+    const response = await Promise.all(
+      founders.map(removeFounderFromVentureById)
+    )
 
     return res.status(200).json({ result: response })
   } catch (err) {
@@ -223,4 +229,4 @@ const deleteFounders = async (req, res) => {
   }
 }
 
-export { getFounders, getFounderOptions, createFounder, deleteFounders }
+export { getFounders, getFounderFormOptions, createFounder, deleteFounders }

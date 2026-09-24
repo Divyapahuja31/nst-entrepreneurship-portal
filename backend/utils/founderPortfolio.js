@@ -18,7 +18,7 @@ export const deriveStatus = score => {
   return ventureHealth.AT_RISK
 }
 
-export const calculateFounderStudents = async () => {
+export const getFounderPortfolioData = async () => {
   const [ventures, kpis] = await Promise.all([
     Venture.find()
       .populate('campus', 'name')

@@ -1,12 +1,18 @@
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
-import Drawer from '@mui/material/Drawer'
+import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemText from '@mui/material/ListItemText'
-import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import CloseIcon from '@mui/icons-material/Close'
+import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined'
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 
 const formatDate = value => {
   if (!value) return '-'
@@ -21,21 +27,23 @@ const formatDate = value => {
 function Field({ label, value }) {
   return (
     <Box sx={{ mb: 2 }}>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
         {label}
       </Typography>
-      <Typography variant="body1">{value || '-'}</Typography>
+      <Typography variant="body1" sx={{ mt: 0.5 }}>
+        {value || '-'}
+      </Typography>
     </Box>
   )
 }
 
 function Section({ title, children }) {
   return (
-    <Box sx={{ mt: 3 }}>
-      <Typography variant="subtitle2" gutterBottom>
+    <Box sx={{ mt: 3, '&:first-of-type': { mt: 1 } }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 0.5 }}>
         {title}
       </Typography>
-      <Divider sx={{ mb: 2 }} />
+      <Divider sx={{ my: 1.5 }} />
       {children}
     </Box>
   )
@@ -48,7 +56,7 @@ function ItemList({ items }) {
     <List dense disablePadding>
       {items.map((item, index) => (
         <ListItem key={index} disableGutters>
-          <ListItemText primary={item} />
+          <ListItemText primary={`• ${item}`} />
         </ListItem>
       ))}
     </List>
@@ -63,19 +71,45 @@ export default function ProposalDrawer({
   busy,
 }) {
   return (
-    <Drawer anchor="right" open={Boolean(proposal)} onClose={onClose}>
-      <Box sx={{ width: { xs: '100vw', sm: 480 }, p: 3 }}>
-        {proposal && (
-          <>
-            <Typography variant="h5" gutterBottom>
+    <Dialog
+      open={Boolean(proposal)}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      scroll="paper"
+      PaperProps={{
+        sx: {
+          borderRadius: 2,
+          maxHeight: '90vh',
+        },
+      }}
+    >
+      {proposal && (
+        <>
+          <DialogTitle sx={{ m: 0, p: 3, pb: 2, position: 'relative' }}>
+            <Typography variant="h5" component="div" sx={{ fontWeight: 700, pr: 4 }}>
               {proposal.startupName}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Submitted by {proposal.submittedBy?.username || '-'} on{' '}
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Submitted by <strong>{proposal.submittedBy?.username || '-'}</strong> on{' '}
               {formatDate(proposal.createdAt)}
             </Typography>
+            <IconButton
+              aria-label="close"
+              onClick={onClose}
+              sx={{
+                position: 'absolute',
+                right: 16,
+                top: 16,
+                color: theme => theme.palette.grey[500],
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
 
-            <Section title="The idea">
+          <DialogContent dividers sx={{ p: 3 }}>
+            <Section title="The Idea">
               <Field label="PROBLEM" value={proposal.description} />
               <Field label="TARGET CUSTOMER" value={proposal.targetCustomer} />
               <Field
@@ -85,7 +119,7 @@ export default function ProposalDrawer({
               <Field label="CAMPUS" value={proposal.campus?.name} />
             </Section>
 
-            <Section title="Where it stands">
+            <Section title="Where It Stands">
               <Field label="STAGE" value={proposal.stage} />
               <Field
                 label="CURRENT TRACTION"
@@ -98,24 +132,22 @@ export default function ProposalDrawer({
               />
             </Section>
 
-            <Section title="Assumptions & risks">
-              <Typography variant="caption" color="text.secondary">
+            <Section title="Assumptions & Risks">
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
                 ASSUMPTIONS
               </Typography>
-              <ItemList items={proposal.assumptions} />
+              <Box sx={{ mb: 2, mt: 0.5 }}>
+                <ItemList items={proposal.assumptions} />
+              </Box>
 
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mt: 2, display: 'block' }}
-              >
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
                 RISKS
               </Typography>
-              <ItemList items={proposal.risks} />
-
-              <Box sx={{ mt: 2 }}>
-                <Field label="SIX-MONTH GOALS" value={proposal.sixMonthGoals} />
+              <Box sx={{ mb: 2, mt: 0.5 }}>
+                <ItemList items={proposal.risks} />
               </Box>
+
+              <Field label="SIX-MONTH GOALS" value={proposal.sixMonthGoals} />
             </Section>
 
             <Section title="Execution">
@@ -129,29 +161,36 @@ export default function ProposalDrawer({
               />
               <Field label="WEBSITE" value={proposal.website} />
             </Section>
+          </DialogContent>
 
-            <Stack direction="row" spacing={1} sx={{ mt: 3 }}>
-              <Button
-                variant="contained"
-                disabled={busy}
-                onClick={() => onApprove(proposal)}
-              >
-                Approve
-              </Button>
+          <DialogActions sx={{ p: 2.5, px: 3, justifyContent: 'space-between' }}>
+            <Button onClick={onClose} disabled={busy} variant="outlined" color="inherit">
+              Close
+            </Button>
+
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
               <Button
                 variant="outlined"
+                color="error"
                 disabled={busy}
+                startIcon={<CancelOutlinedIcon />}
                 onClick={() => onReject(proposal)}
               >
                 Reject
               </Button>
-              <Button onClick={onClose} disabled={busy}>
-                Close
+              <Button
+                variant="contained"
+                color="primary"
+                disabled={busy}
+                startIcon={<CheckCircleOutlinedIcon />}
+                onClick={() => onApprove(proposal)}
+              >
+                Approve
               </Button>
-            </Stack>
-          </>
-        )}
-      </Box>
-    </Drawer>
+            </Box>
+          </DialogActions>
+        </>
+      )}
+    </Dialog>
   )
 }

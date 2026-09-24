@@ -118,16 +118,9 @@ const kpiSchema = new mongoose.Schema(
   }
 )
 
-// Keeps the two fields from contradicting each other: a founder KPI must name
-// its founder, and a venture KPI must not.
+// Automatically derives scope from founder: presence of founder means member-level, null means startup-level.
 kpiSchema.pre('validate', function () {
-  if (this.scope === 'FOUNDER' && !this.founder) {
-    this.invalidate('founder', 'A founder KPI must have a founder')
-  }
-
-  if (this.scope === 'VENTURE') {
-    this.founder = null
-  }
+  this.scope = this.founder ? 'FOUNDER' : 'VENTURE'
 })
 
 kpiSchema.index({ venture: 1, scope: 1 })

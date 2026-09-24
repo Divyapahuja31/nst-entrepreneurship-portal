@@ -110,6 +110,8 @@ export const createKPI = async (req, res) => {
       })
     )
 
+    await kpi.populate('founder', 'username email')
+
     return res.status(201).json({
       success: true,
       message: 'KPI created successfully',
@@ -137,14 +139,20 @@ export const getVentureKPIs = async (req, res) => {
       })
     }
 
-    const ventureFounders = await Founder.find({ venture: ventureId }).select(
-      'user'
-    )
-    const founderUserIds = ventureFounders.map(f => f.user).filter(Boolean)
+    const ventureFounders = await Founder.find({
+      venture: ventureId,
+      status: 'ACTIVE',
+    }).populate('user', 'username email')
 
-    const kpis = await KPI.find({
-      $or: [{ venture: ventureId }, { founder: { $in: founderUserIds } }],
-    })
+    const members = ventureFounders
+      .filter(f => f.user)
+      .map(f => ({
+        id: f.user._id,
+        username: f.user.username,
+        email: f.user.email,
+      }))
+
+    const kpis = await KPI.find({ venture: ventureId })
       .populate('venture', 'name')
       .populate('founder', 'username email')
       .populate('createdBy', 'username email')
@@ -155,6 +163,7 @@ export const getVentureKPIs = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: kpis.length,
+      members,
       data: kpis,
     })
   } catch (error) {
@@ -183,9 +192,23 @@ export const getMyKPIs = async (req, res) => {
         success: true,
         count: 0,
         venture: null,
+        members: [],
         data: [],
       })
     }
+
+    const ventureFounders = await Founder.find({
+      venture: venture._id,
+      status: 'ACTIVE',
+    }).populate('user', 'username email')
+
+    const members = ventureFounders
+      .filter(f => f.user)
+      .map(f => ({
+        id: f.user._id,
+        username: f.user.username,
+        email: f.user.email,
+      }))
 
     const kpis = await KPI.find(kpisVisibleTo(venture._id, req.user.id))
       .populate('createdBy', 'username email')
@@ -198,6 +221,7 @@ export const getMyKPIs = async (req, res) => {
       success: true,
       count: kpis.length,
       venture,
+      members,
       data: kpis,
     })
   } catch (error) {
@@ -222,8 +246,12 @@ export const getFounderKPIs = async (req, res) => {
       })
     }
 
-    const venture = await findVentureForUser(founderId)
-    if (!venture) {
+    const founderRecord = await Founder.findOne({
+      $or: [{ user: founderId }, { _id: founderId }],
+      status: 'ACTIVE',
+    }).populate('venture')
+
+    if (!founderRecord || !founderRecord.venture) {
       return res.status(200).json({
         success: true,
         count: 0,
@@ -232,12 +260,16 @@ export const getFounderKPIs = async (req, res) => {
       })
     }
 
-    const kpis = await KPI.find(kpisVisibleTo(venture._id, founderId))
+    const venture = founderRecord.venture
+    const actualUserId =
+      founderRecord.user?._id || founderRecord.user || founderId
+
+    const kpis = await KPI.find(kpisVisibleTo(venture._id, actualUserId))
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
       .populate('founder', 'username email')
       .populate('subKPIs')
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
 
     return res.status(200).json({
       success: true,
@@ -451,6 +483,7 @@ export const updateKPI = async (req, res) => {
     const updateFields = buildKPIUpdateFields(req.body)
     Object.assign(kpi, updateFields)
     await kpi.save()
+    await kpi.populate('founder', 'username email')
 
     return res
       .status(200)

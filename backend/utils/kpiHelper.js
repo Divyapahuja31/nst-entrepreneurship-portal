@@ -49,6 +49,7 @@ export const buildKPIUpdateFields = ({
   status,
   targetValue,
   actualValue,
+  founder,
 }) => {
   const fields = {}
   assignIfDefined(fields, 'title', title)
@@ -58,6 +59,10 @@ export const buildKPIUpdateFields = ({
   }
   assignIfDefined(fields, 'targetValue', targetValue)
   assignIfDefined(fields, 'actualValue', actualValue)
+  if (founder !== undefined) {
+    fields.founder = founder || null
+    fields.scope = founder ? 'FOUNDER' : 'VENTURE'
+  }
   if (status !== undefined) {
     const isSubmitting =
       status === 'SUBMIT' || status === 'WAITING_FOR_APPROVAL'
@@ -88,18 +93,17 @@ export const resolveEvidenceData = async (
   return { fileUrl, fileName, supportingText, uploadedAt: new Date() }
 }
 
-// A KPI is either venture-wide or tied to one founder. Returns the fields to
-// store, or an error message when the two inputs disagree.
+// A KPI belongs to the startup (founder: null) or a specific member (founder: ID).
 export const resolveKPIScope = ({ scope, founder }) => {
-  if (scope !== 'FOUNDER') {
-    return { scope: 'VENTURE', founder: null }
+  if (founder && mongoose.Types.ObjectId.isValid(founder)) {
+    return { scope: 'FOUNDER', founder }
   }
 
-  if (!mongoose.Types.ObjectId.isValid(founder)) {
-    return { error: 'A founder KPI needs a valid founder' }
+  if (scope === 'FOUNDER') {
+    return { error: 'A member KPI needs a valid member ID' }
   }
 
-  return { scope: 'FOUNDER', founder }
+  return { scope: 'VENTURE', founder: null }
 }
 
 export const checkKPILockStatus = kpi => {
@@ -117,7 +121,7 @@ export const checkKPILockStatus = kpi => {
 
 export const kpisVisibleTo = (ventureId, founderId) => ({
   venture: ventureId,
-  $or: [{ scope: 'VENTURE' }, { founder: founderId }],
+  $or: [{ founder: null }, { scope: 'VENTURE' }, { founder: founderId }],
 })
 
 export const canUserManageVentureKPI = async (user, ventureId) => {

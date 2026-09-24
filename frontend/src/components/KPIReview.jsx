@@ -22,6 +22,8 @@ import {
   Grid,
   Alert,
   Tooltip,
+  Tab,
+  Tabs,
 } from '@mui/material'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
@@ -59,7 +61,12 @@ const formatDate = dateStr => {
   }
 }
 
-export default function KPIReview({ kpis: propKpis, founder, venture }) {
+export default function KPIReview({
+  kpis: propKpis,
+  founder,
+  venture,
+  founders = [],
+}) {
   const loaderData = useLoaderData()
   const navigation = useNavigation()
   const revalidator = useRevalidator()
@@ -68,9 +75,80 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
   const loading = navigation.state === 'loading'
   const [savingEval, setSavingEval] = useState(false)
 
+  const members = (
+    founders.length > 0
+      ? founders
+      : founder
+        ? [founder]
+        : loaderData?.founders || []
+  ).map(f => ({
+    id: f.user?._id || f._id || f.id,
+    username: f.username || f.user?.username || 'Member',
+    email: f.email || f.user?.email || '',
+  }))
+
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [expandedId, setExpandedId] = useState(null)
+
+  const [tabIndex, setTabIndex] = useState(0)
+  const [selectedMemberId, setSelectedMemberId] = useState('')
+
+  const currentFounderId =
+    founder?._id || founder?.id || founder?.user?._id || founder?.user || null
+
+  const allMembersMap = new Map()
+  members.forEach(m => allMembersMap.set(String(m.id), m))
+  kpis.forEach(k => {
+    if (k.founder) {
+      const fid = String(k.founder._id || k.founder)
+      if (!allMembersMap.has(fid)) {
+        allMembersMap.set(fid, {
+          id: fid,
+          username: k.founder.username || 'Member',
+          email: k.founder.email || '',
+        })
+      }
+    }
+  })
+  const availableMembers = Array.from(allMembersMap.values())
+
+  const allCount = kpis.length
+  const startupKpisCount = kpis.filter(k => !k.founder).length
+  const founderKpisCount = founder
+    ? kpis.filter(
+        k =>
+          k.founder &&
+          String(k.founder._id || k.founder) === String(currentFounderId)
+      ).length
+    : kpis.filter(k => Boolean(k.founder)).length
+
+  const filteredKpis = kpis.filter(kpi => {
+    const kpiFounderId = kpi.founder?._id || kpi.founder
+    if (founder) {
+      if (tabIndex === 1) {
+        return (
+          kpiFounderId && String(kpiFounderId) === String(currentFounderId)
+        )
+      }
+      if (tabIndex === 2) {
+        return !kpi.founder
+      }
+      return true
+    }
+
+    if (tabIndex === 1) {
+      return !kpi.founder
+    }
+    if (tabIndex === 2) {
+      if (!kpi.founder) return false
+      if (selectedMemberId) {
+        return String(kpiFounderId) === String(selectedMemberId)
+      }
+      return true
+    }
+    return true
+  })
 
   const [evalDialogOpen, setEvalDialogOpen] = useState(false)
   const [selectedKpi, setSelectedKpi] = useState(null)
@@ -80,11 +158,15 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
   const handleCreateKpi = async payload => {
     try {
       const ventureId = venture?.id || venture?._id
+      const assignedFounder =
+        payload.founder !== undefined
+          ? payload.founder
+          : (founder?._id || founder?.id || null)
+
       const res = await createKPIWithSubKpis({
         ...payload,
         venture: ventureId,
-        scope: founder ? 'FOUNDER' : 'VENTURE',
-        founder: founder?._id || founder?.id || null,
+        founder: assignedFounder,
       })
       if (res?.error) {
         throw new Error(res.error)
@@ -126,14 +208,14 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
     setTimeout(() => setSuccessMsg(''), 4000)
   }
 
-  const totalCount = kpis.length
-  const pendingCount = kpis.filter(
+  const totalCount = filteredKpis.length
+  const pendingCount = filteredKpis.filter(
     k => k.status === 'WAITING_FOR_APPROVAL'
   ).length
-  const acceptedCount = kpis.filter(k => k.status === 'ACCEPTED').length
-  const gradedCount = kpis.filter(k => k.status === 'GRADED').length
+  const acceptedCount = filteredKpis.filter(k => k.status === 'ACCEPTED').length
+  const gradedCount = filteredKpis.filter(k => k.status === 'GRADED').length
 
-  const gradedKpisWithScores = kpis.filter(
+  const gradedKpisWithScores = filteredKpis.filter(
     k =>
       k.status === 'GRADED' &&
       typeof k.score === 'number' &&
@@ -260,44 +342,152 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 6 }}>
           <CircularProgress />
         </Box>
-      ) : kpis.length === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}
-        >
-          <Typography variant="body1" color="text.secondary" sx={{ mb: venture ? 2 : 0 }}>
-            {founder
-              ? 'No KPIs submitted or registered yet for this student.'
-              : 'No KPIs submitted or registered yet for this venture.'}
-          </Typography>
-          {venture && (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => setAddKpiOpen(true)}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
-            >
-              Add KPI
-            </Button>
-          )}
-        </Paper>
       ) : (
-        <TableContainer
-          component={Paper}
-          variant="outlined"
-          sx={{ borderRadius: 2 }}
-        >
-          <Table aria-label="KPI Review Table">
-            <TableHead sx={{ backgroundColor: '#f8fafc' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>KPI Title</TableCell>
-                {!founder && (
-                  <TableCell sx={{ fontWeight: 700 }} align="center">
-                    Scope / Owner
-                  </TableCell>
-                )}
+        <>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 2,
+              mb:
+                tabIndex === 2 && !founder && availableMembers.length > 0
+                  ? 1.5
+                  : 2,
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Tabs
+              value={tabIndex}
+              onChange={(_, newVal) => {
+                setTabIndex(newVal)
+                setSelectedMemberId('')
+              }}
+              textColor="primary"
+              indicatorColor="primary"
+            >
+              <Tab label={`All KPIs (${allCount})`} />
+              {founder ? (
+                <Tab
+                  label={`${founder.username || 'Student'}'s KPIs (${founderKpisCount})`}
+                />
+              ) : (
+                <Tab label={`Startup KPIs (${startupKpisCount})`} />
+              )}
+              {founder ? (
+                <Tab label={`Startup KPIs (${startupKpisCount})`} />
+              ) : (
+                <Tab label={`Member KPIs (${founderKpisCount})`} />
+              )}
+            </Tabs>
+          </Box>
+
+          {!founder && tabIndex === 2 && availableMembers.length > 0 && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                mb: 2,
+                flexWrap: 'wrap',
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 600, color: 'text.secondary', mr: 0.5 }}
+              >
+                Filter by Member:
+              </Typography>
+              <Chip
+                label={`All Members (${founderKpisCount})`}
+                color={selectedMemberId === '' ? 'primary' : 'default'}
+                variant={selectedMemberId === '' ? 'filled' : 'outlined'}
+                onClick={() => setSelectedMemberId('')}
+                size="small"
+                sx={{
+                  fontWeight: selectedMemberId === '' ? 700 : 500,
+                  cursor: 'pointer',
+                }}
+              />
+              {availableMembers.map(m => {
+                const count = kpis.filter(
+                  k =>
+                    k.founder &&
+                    String(k.founder._id || k.founder) === String(m.id)
+                ).length
+                const isSelected = selectedMemberId === String(m.id)
+                return (
+                  <Chip
+                    key={m.id}
+                    label={`${m.username} (${count})`}
+                    color={isSelected ? 'primary' : 'default'}
+                    variant={isSelected ? 'filled' : 'outlined'}
+                    onClick={() =>
+                      setSelectedMemberId(isSelected ? '' : String(m.id))
+                    }
+                    size="small"
+                    sx={{
+                      fontWeight: isSelected ? 700 : 500,
+                      cursor: 'pointer',
+                    }}
+                  />
+                )
+              })}
+            </Box>
+          )}
+
+          {filteredKpis.length === 0 ? (
+            <Paper
+              variant="outlined"
+              sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}
+            >
+              <Typography
+                variant="body1"
+                color="text.secondary"
+                sx={{ mb: venture ? 2 : 0 }}
+              >
+                {kpis.length === 0
+                  ? founder
+                    ? 'No KPIs submitted or registered yet for this student.'
+                    : 'No KPIs submitted or registered yet for this venture.'
+                  : tabIndex === 1
+                    ? founder
+                      ? `No personal KPIs found for ${founder?.username || 'this student'}.`
+                      : 'No startup-wide KPIs found.'
+                    : tabIndex === 2
+                      ? founder
+                        ? 'No startup-wide KPIs found.'
+                        : 'No member KPIs found.'
+                      : 'No KPIs found matching the selected filter.'}
+              </Typography>
+              {venture && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={() => setAddKpiOpen(true)}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                >
+                  Add KPI
+                </Button>
+              )}
+            </Paper>
+          ) : (
+            <TableContainer
+              component={Paper}
+              variant="outlined"
+              sx={{ borderRadius: 2 }}
+            >
+              <Table aria-label="KPI Review Table">
+                <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>KPI Title</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">
+                      Owner
+                    </TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="center">
                   Due Date
                 </TableCell>
@@ -319,7 +509,7 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {kpis.map((kpi, idx) => {
+              {filteredKpis.map((kpi, idx) => {
                 const isExpanded = expandedId === kpi._id
                 return (
                   <Fragment key={kpi._id}>
@@ -368,20 +558,17 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
                           {kpi.title}
                         </Box>
                       </TableCell>
-                      {!founder && (
-                        <TableCell align="center">
-                          <Chip
-                            label={
-                              kpi.scope === 'FOUNDER'
-                                ? kpi.founder?.username || 'Founder'
-                                : 'Whole Team'
-                            }
-                            size="small"
-                            variant="outlined"
-                            color={kpi.scope === 'FOUNDER' ? 'primary' : 'default'}
-                          />
-                        </TableCell>
-                      )}
+                      <TableCell align="center">
+                        <Chip
+                          label={
+                            kpi.founder?.username ||
+                            (kpi.founder ? 'Member' : 'Entire Startup')
+                          }
+                          size="small"
+                          variant="outlined"
+                          color={kpi.founder ? 'primary' : 'default'}
+                        />
+                      </TableCell>
                       <TableCell align="center">
                         <Typography variant="body2">
                           {formatDate(kpi.dueDate)}
@@ -572,7 +759,7 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
                     <TableRow>
                       <TableCell
                         style={{ paddingBottom: 0, paddingTop: 0 }}
-                        colSpan={founder ? 8 : 9}
+                        colSpan={9}
                       >
                         <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                           <KPIExpandedDetails kpi={kpi} />
@@ -585,6 +772,8 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
             </TableBody>
           </Table>
         </TableContainer>
+          )}
+        </>
       )}
 
       <KPIEvaluateDialog
@@ -600,6 +789,7 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
 
       <AddKpi
         open={addKpiOpen}
+        members={members}
         onClose={() => setAddKpiOpen(false)}
         onSave={handleCreateKpi}
       />

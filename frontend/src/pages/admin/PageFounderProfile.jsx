@@ -74,6 +74,11 @@ export default function BasicTabs() {
           founderId={founderId}
           founder={biweeklyData?.founder}
           venture={biweeklyData?.venture}
+          founders={
+            biweeklyData?.founder
+              ? [biweeklyData.founder, ...(biweeklyData.coFounders || [])]
+              : []
+          }
         />
       </CustomTabPanel>
       <CustomTabPanel value={value} index={1}>

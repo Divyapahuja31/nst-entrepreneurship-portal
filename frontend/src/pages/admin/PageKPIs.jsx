@@ -16,14 +16,11 @@ import { evaluateKPI } from '../../api/kpi'
 
 const columns = [
   { key: 'title', label: 'kpi' },
-  { key: 'scope', label: 'scope' },
-  { key: 'owner', label: 'belongs to' },
+  { key: 'owner', label: 'owner' },
   { key: 'venture', label: 'startup' },
   { key: 'status', label: 'status' },
   { key: 'dueDate', label: 'due' },
 ]
-
-const SCOPES = ['VENTURE', 'FOUNDER']
 
 const STATUS_LABELS = {
   DRAFT: 'Draft',
@@ -49,24 +46,25 @@ export default function PageKPIs() {
   const { kpis } = useLoaderData()
   const revalidator = useRevalidator()
 
-  const [scope, setScope] = React.useState('')
+  const [ownerFilter, setOwnerFilter] = React.useState('')
   const [status, setStatus] = React.useState('')
   const [busyId, setBusyId] = React.useState(null)
   const [error, setError] = React.useState('')
   const [success, setSuccess] = React.useState('')
   const [evaluating, setEvaluating] = React.useState(null)
 
-  const visible = kpis.filter(
-    kpi => (!scope || kpi.scope === scope) && (!status || kpi.status === status)
-  )
+  const visible = kpis.filter(kpi => {
+    if (ownerFilter === 'STARTUP' && kpi.founder) return false
+    if (ownerFilter === 'MEMBER' && !kpi.founder) return false
+    if (status && kpi.status !== status) return false
+    return true
+  })
 
   const rows = visible.map(kpi => ({
     id: kpi._id,
     kpi,
     title: kpi.title,
-    scope: kpi.scope,
-    owner:
-      kpi.scope === 'FOUNDER' ? kpi.founder?.username || '-' : 'Whole team',
+    owner: kpi.founder?.username || (kpi.founder ? 'Member' : 'Entire Startup'),
     venture: kpi.venture?.name || '-',
     rawStatus: kpi.status,
     status: STATUS_LABELS[kpi.status] || kpi.status,
@@ -216,17 +214,14 @@ export default function PageKPIs() {
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ my: 3 }}>
         <TextField
           select
-          label="Scope"
-          value={scope}
-          onChange={event => setScope(event.target.value)}
+          label="Owner"
+          value={ownerFilter}
+          onChange={event => setOwnerFilter(event.target.value)}
           sx={{ minWidth: 180 }}
         >
-          <MenuItem value="">All scopes</MenuItem>
-          {SCOPES.map(value => (
-            <MenuItem key={value} value={value}>
-              {value}
-            </MenuItem>
-          ))}
+          <MenuItem value="">All owners</MenuItem>
+          <MenuItem value="STARTUP">Entire Startup</MenuItem>
+          <MenuItem value="MEMBER">Specific Member</MenuItem>
         </TextField>
 
         <TextField

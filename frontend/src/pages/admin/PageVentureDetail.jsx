@@ -16,6 +16,7 @@ import Typography from '@mui/material/Typography'
 import CustomizedTable from '../../components/Table'
 import BiWeekly from './PageReportBiWeekly'
 import KPIReview from '../../components/KPIReview'
+import { normalizeWebsite } from '../../components/proposalFormConfig.js'
 
 const founderColumns = ['username', 'email', 'joinedAt']
 const pastFounderColumns = ['username', 'email', 'joinedAt', 'leftAt']
@@ -160,7 +161,12 @@ export default function PageVentureDetail() {
                   label="WEBSITE"
                   value={
                     venture.website ? (
-                      <Link href={venture.website} target="_blank">
+                      <Link
+                        href={normalizeWebsite(venture.website)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                      >
                         {venture.website}
                       </Link>
                     ) : null

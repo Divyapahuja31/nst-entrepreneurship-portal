@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import {
   Alert,
@@ -18,6 +18,7 @@ import Visibility from '@mui/icons-material/Visibility'
 import VisibilityOff from '@mui/icons-material/VisibilityOff'
 
 import AuthScreen from '../../components/AuthScreen'
+import OtpVerificationForm from '../../components/OtpVerificationForm'
 import { forgotPassword, verifyOtp, resetPassword } from '../../api/auth'
 
 function PageForgotPassword() {
@@ -28,21 +29,6 @@ function PageForgotPassword() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-
-  // Resend timer countdown (60s)
-  const [resendTimer, setResendTimer] = useState(0)
-
-  useEffect(() => {
-    let interval = null
-    if (resendTimer > 0) {
-      interval = setInterval(() => {
-        setResendTimer(prev => prev - 1)
-      }, 1000)
-    } else {
-      clearInterval(interval)
-    }
-    return () => clearInterval(interval)
-  }, [resendTimer])
 
   const handleSendOtp = async event => {
     event.preventDefault()
@@ -68,12 +54,12 @@ function PageForgotPassword() {
       setEmail(submittedEmail)
       setOtp('')
       setStep(2)
-      setResendTimer(60)
+      setSuccessMessage('A 6-digit verification code has been sent to your email.')
     }
   }
 
   const handleResendOtp = async () => {
-    if (resendTimer > 0 || !email) return
+    if (!email) return
     setSubmitting(true)
     setError('')
 
@@ -83,29 +69,24 @@ function PageForgotPassword() {
     if (result.error) {
       setError(result.error)
     } else {
-      setSuccessMessage('A new 6-digit verification code has been sent to your email.')
-      setResendTimer(60)
+      setSuccessMessage(
+        'A new 6-digit verification code has been sent to your email.'
+      )
     }
   }
 
-  const handleVerifyOtp = async event => {
-    event.preventDefault()
+  const handleVerifyOtp = async code => {
     setSubmitting(true)
     setError('')
     setSuccessMessage('')
 
-    if (!otp || otp.trim().length !== 6) {
-      setError('Please enter the 6-digit verification code.')
-      setSubmitting(false)
-      return
-    }
-
-    const result = await verifyOtp({ email, otp: otp.trim() })
+    const result = await verifyOtp({ email, otp: code })
     setSubmitting(false)
 
     if (result.error) {
       setError(result.error)
     } else {
+      setOtp(code)
       setStep(3)
     }
   }
@@ -132,14 +113,16 @@ function PageForgotPassword() {
       return
     }
 
-    const result = await resetPassword({ email, otp: otp.trim(), password })
+    const result = await resetPassword({ email, otp, password })
     setSubmitting(false)
 
     if (result.error) {
       setError(result.error)
     } else {
       setStep(4)
-      setSuccessMessage(result.message || 'Password reset successfully! You can now log in.')
+      setSuccessMessage(
+        result.message || 'Password reset successfully! You can now log in.'
+      )
     }
   }
 
@@ -164,18 +147,6 @@ function PageForgotPassword() {
       subtitle={renderStepSubtitle()}
     >
       <Grid size={12} sx={{ padding: 2 }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        {successMessage && step === 2 && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {successMessage}
-          </Alert>
-        )}
-
         {step === 4 ? (
           <Box sx={{ mt: 1 }}>
             <Alert severity="success" sx={{ mb: 3 }}>
@@ -194,6 +165,12 @@ function PageForgotPassword() {
           </Box>
         ) : step === 1 ? (
           <form onSubmit={handleSendOtp} autoComplete="off">
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+
             <TextField
               label="Email Address"
               type="email"
@@ -224,71 +201,28 @@ function PageForgotPassword() {
             </Typography>
           </form>
         ) : step === 2 ? (
-          <form onSubmit={handleVerifyOtp} autoComplete="off">
-            <TextField
-              id="otp-verification-code"
-              label="6-Digit Verification Code"
-              type="text"
-              name="otp"
-              value={otp}
-              onChange={e => setOtp(e.target.value)}
-              required
-              fullWidth
-              autoComplete="one-time-code"
-              inputProps={{
-                maxLength: 6,
-                autoComplete: 'one-time-code',
-                style: { letterSpacing: '4px', fontWeight: 'bold' },
-              }}
-              placeholder="123456"
-              sx={{ mb: 3 }}
-            />
-
-            <Button
-              fullWidth
-              variant="contained"
-              type="submit"
-              size="large"
-              disabled={submitting || otp.trim().length !== 6}
-              endIcon={<ArrowForwardRoundedIcon />}
-              sx={{ mb: 2 }}
-            >
-              {submitting ? 'Verifying Code...' : 'Verify Code'}
-            </Button>
-
-            <Box
-              sx={{
-                display: 'flex',
-                justify: 'space-between',
-                alignItems: 'center',
-                mt: 1,
-              }}
-            >
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => {
-                  setStep(1)
-                  setError('')
-                  setSuccessMessage('')
-                }}
-                startIcon={<ArrowBackRoundedIcon />}
-              >
-                Change Email
-              </Button>
-
-              <Button
-                variant="text"
-                size="small"
-                onClick={handleResendOtp}
-                disabled={resendTimer > 0 || submitting}
-              >
-                {resendTimer > 0 ? `Resend Code (${resendTimer}s)` : 'Resend Code'}
-              </Button>
-            </Box>
-          </form>
+          <OtpVerificationForm
+            onVerify={handleVerifyOtp}
+            onResend={handleResendOtp}
+            onBack={() => {
+              setStep(1)
+              setError('')
+              setSuccessMessage('')
+            }}
+            submitting={submitting}
+            error={error}
+            successMessage={successMessage}
+            submitLabel="Verify Code"
+            backLabel="Change Email"
+          />
         ) : (
           <form onSubmit={handleResetPassword} autoComplete="off">
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+
             <Alert severity="info" icon={<CheckCircleOutlineRoundedIcon />} sx={{ mb: 2 }}>
               Verification code verified successfully. Set your new password below.
             </Alert>

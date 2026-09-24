@@ -12,6 +12,8 @@ import {
   forgotPassword,
   verifyOtp,
   resetPassword,
+  verifySignupOtp,
+  resendSignupOtp,
 } from '../controllers/user.js'
 
 const router = Router()
@@ -22,6 +24,8 @@ router.post('/google/complete-signup', completeGoogleSignup)
 router.get('/google/signup-options', getGoogleSignupOptions)
 
 router.post('/signup', signUp)
+router.post('/verify-signup-otp', verifySignupOtp)
+router.post('/resend-signup-otp', resendSignupOtp)
 router.post('/signin', signIn)
 router.post('/signout', signOut)
 router.post('/forgot-password', forgotPassword)

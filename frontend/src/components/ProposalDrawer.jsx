@@ -9,10 +9,12 @@ import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemText from '@mui/material/ListItemText'
+import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
 import CloseIcon from '@mui/icons-material/Close'
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
+import { normalizeWebsite } from './proposalFormConfig.js'
 
 const formatDate = value => {
   if (!value) return '-'
@@ -24,14 +26,28 @@ const formatDate = value => {
   })
 }
 
-function Field({ label, value }) {
+function Field({ label, value, isLink }) {
+  const href = isLink && value?.trim() ? normalizeWebsite(value) : null
+
   return (
     <Box sx={{ mb: 2 }}>
       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
         {label}
       </Typography>
       <Typography variant="body1" sx={{ mt: 0.5 }}>
-        {value || '-'}
+        {href ? (
+          <Link
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="hover"
+            color="primary"
+          >
+            {value}
+          </Link>
+        ) : (
+          value || '-'
+        )}
       </Typography>
     </Box>
   )
@@ -159,7 +175,7 @@ export default function ProposalDrawer({
                   proposal.weeklyHours ? `${proposal.weeklyHours} hours` : null
                 }
               />
-              <Field label="WEBSITE" value={proposal.website} />
+              <Field label="WEBSITE" value={proposal.website} isLink />
             </Section>
           </DialogContent>
 

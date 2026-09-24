@@ -53,9 +53,8 @@ const biWeeklyObservationSchema = new mongoose.Schema(
   }
 )
 
-const Observation = mongoose.model(
-  'BiWeeklyObservationSchema',
-  biWeeklyObservationSchema
-)
+export const modelName = 'BiWeeklyObservation'
+
+const Observation = mongoose.model(modelName, biWeeklyObservationSchema)
 
 export default Observation

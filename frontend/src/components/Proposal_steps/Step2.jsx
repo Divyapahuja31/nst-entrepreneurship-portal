@@ -128,7 +128,6 @@ export default function Step2({ formData, setFormData, errors = {}, setErrors })
           error={Boolean(errors.achievementsTillNow)}
           helperText={errors.achievementsTillNow}
           fullWidth
-          required
           multiline
           rows={3}
           placeholder="Key milestones, awards, grants, pilot results, or notable progress achieved so far."

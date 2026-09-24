@@ -1,14 +1,30 @@
 import { useState } from 'react'
-import { Dialog, DialogContent, Typography, TextField, Button, Box, IconButton } from '@mui/material'
+import {
+  Dialog,
+  DialogContent,
+  Typography,
+  TextField,
+  Button,
+  Box,
+  IconButton,
+  MenuItem,
+} from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 
-export default function AddKpi({ open, onClose, onSave, initialData }) {
+export default function AddKpi({
+  open,
+  onClose,
+  onSave,
+  initialData,
+  members = [],
+}) {
   const [prevData, setPrevData] = useState(null)
   const [prevOpen, setPrevOpen] = useState(false)
 
   const [kpiName, setKpiName] = useState('')
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [founderId, setFounderId] = useState('')
   const [subKpis, setSubKpis] = useState([])
 
   if (open !== prevOpen || initialData !== prevData) {
@@ -18,6 +34,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
       setKpiName(initialData.title || '')
       setDescription(initialData.description || '')
       setDueDate(initialData.dueDate ? initialData.dueDate.split('T')[0] : '')
+      setFounderId(initialData.founder?._id || initialData.founder || '')
       setSubKpis(
         initialData.subKPIs
           ? initialData.subKPIs.map((sub, idx) => ({
@@ -30,6 +47,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
       setKpiName('')
       setDescription('')
       setDueDate('')
+      setFounderId('')
       setSubKpis([])
     }
   }
@@ -83,12 +101,14 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
         description: description.trim() || kpiName.trim(),
         dueDate,
         status,
+        founder: founderId || null,
         subKpis: validSubKpis,
       })
 
       setKpiName('')
       setDescription('')
       setDueDate('')
+      setFounderId('')
       setSubKpis([])
 
       onClose()
@@ -101,6 +121,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
     setKpiName('')
     setDescription('')
     setDueDate('')
+    setFounderId('')
     setSubKpis([])
     onClose()
   }
@@ -194,6 +215,43 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
             },
           }}
         />
+
+        <Typography
+          sx={{
+            fontSize: '14px',
+            marginBottom: 1,
+          }}
+        >
+          Owner
+        </Typography>
+
+        <TextField
+          select
+          fullWidth
+          size="small"
+          value={founderId}
+          onChange={e => setFounderId(e.target.value)}
+          sx={{
+            mb: 3,
+
+            '& .MuiInputBase-root': {
+              backgroundColor: '#ffffff',
+              color: '#000000',
+            },
+          }}
+        >
+          <MenuItem value="">
+            <em>Entire Startup (Startup-wide KPI)</em>
+          </MenuItem>
+          {members.map(member => (
+            <MenuItem
+              key={member.id || member._id}
+              value={member.id || member._id}
+            >
+              {member.username || member.email || 'Member'}
+            </MenuItem>
+          ))}
+        </TextField>
 
         <Typography
           sx={{

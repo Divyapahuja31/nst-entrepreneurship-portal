@@ -21,6 +21,8 @@ import {
   Collapse,
   Chip,
   Tooltip,
+  Tab,
+  Tabs,
 } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -75,12 +77,22 @@ export default function Kpis() {
     userProfile?.ventureId ||
     userProfile?.venture?._id
   const kpis = loaderData?.data || []
+  const members = loaderData?.members || []
 
+  const [tabIndex, setTabIndex] = useState(0)
   const [openAddKpi, setOpenAddKpi] = useState(false)
   const [editingKpi, setEditingKpi] = useState(null)
   const [expandedKpiId, setExpandedKpiId] = useState(null)
   const [evidenceDialogOpen, setEvidenceDialogOpen] = useState(false)
   const [selectedKpiForEvidence, setSelectedKpiForEvidence] = useState(null)
+
+  const currentUserId = userProfile?._id || userProfile?.id
+  const myKpis = kpis.filter(
+    k => (k.founder?._id || k.founder) === currentUserId
+  )
+  const startupKpis = kpis.filter(k => !k.founder)
+  const visibleKpis =
+    tabIndex === 1 ? myKpis : tabIndex === 2 ? startupKpis : kpis
 
   const [busy, setBusy] = useState(false)
   const [actionErrorMsg, setActionErrorMsg] = useState('')
@@ -128,6 +140,7 @@ export default function Kpis() {
       description: kpiData.description,
       dueDate: kpiData.dueDate,
       status: kpiData.status,
+      founder: kpiData.founder || null,
       subKpis: kpiData.subKpis,
       venture: ventureId,
     }
@@ -276,6 +289,28 @@ export default function Kpis() {
       )}
 
       {!isLoading && !displayError && (
+        <Box
+          sx={{
+            maxWidth: '95%',
+            margin: '0 auto 24px auto',
+            borderBottom: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <Tabs
+            value={tabIndex}
+            onChange={(_, val) => setTabIndex(val)}
+            textColor="primary"
+            indicatorColor="primary"
+          >
+            <Tab label={`All KPIs (${kpis.length})`} />
+            <Tab label={`My KPIs (${myKpis.length})`} />
+            <Tab label={`Startup KPIs (${startupKpis.length})`} />
+          </Tabs>
+        </Box>
+      )}
+
+      {!isLoading && !displayError && (
         <Table
           sx={{
             maxWidth: '95%',
@@ -288,6 +323,9 @@ export default function Kpis() {
             <TableRow sx={{ backgroundColor: '#f8fafc' }}>
               <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>KPI</TableCell>
+              <TableCell sx={{ fontWeight: 700 }} align="center">
+                Owner
+              </TableCell>
               <TableCell sx={{ fontWeight: 700 }} align="center">
                 Due Date
               </TableCell>
@@ -313,7 +351,7 @@ export default function Kpis() {
           </TableHead>
 
           <TableBody>
-            {kpis.map((kpi, index) => {
+            {visibleKpis.map((kpi, index) => {
               const isExpanded = expandedKpiId === kpi._id
               const isPastDue =
                 kpi.dueDate && new Date(kpi.dueDate) < new Date()
@@ -359,6 +397,31 @@ export default function Kpis() {
                         </IconButton>
                         {kpi.title}
                       </Box>
+                    </TableCell>
+
+                    <TableCell align="center">
+                      {kpi.founder ? (
+                        <Chip
+                          label={
+                            (kpi.founder._id || kpi.founder) === currentUserId
+                              ? `Me (${kpi.founder.username || 'Member'})`
+                              : kpi.founder.username || 'Member'
+                          }
+                          size="small"
+                          color={
+                            (kpi.founder._id || kpi.founder) === currentUserId
+                              ? 'primary'
+                              : 'default'
+                          }
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Chip
+                          label="Entire Startup"
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
                     </TableCell>
 
                     <TableCell align="center">
@@ -969,9 +1032,9 @@ export default function Kpis() {
               )
             })}
 
-            {kpis.length === 0 && (
+            {visibleKpis.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} align="center">
+                <TableCell colSpan={10} align="center">
                   No KPIs found
                 </TableCell>
               </TableRow>
@@ -983,6 +1046,7 @@ export default function Kpis() {
       <AddKpi
         key={editingKpi?._id || (openAddKpi ? 'open' : 'closed')}
         open={openAddKpi}
+        members={members}
         onClose={() => {
           setOpenAddKpi(false)
           setEditingKpi(null)

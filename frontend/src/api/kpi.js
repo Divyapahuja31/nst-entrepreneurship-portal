@@ -242,7 +242,8 @@ export const kpisLoader = async ({ request, params }) => {
 // Creating or editing a KPI also reconciles its sub-KPIs, so both live here as
 // one operation rather than being re-assembled by every caller.
 export const createKPIWithSubKpis = async payload => {
-  const { title, description, dueDate, venture, status, subKpis } = payload
+  const { title, description, dueDate, venture, status, subKpis, founder } =
+    payload
 
   try {
     const res = await api.post('/kpis', {
@@ -251,6 +252,7 @@ export const createKPIWithSubKpis = async payload => {
       dueDate: dueDate || null,
       venture,
       status,
+      founder: founder || null,
     })
 
     const newKpi = res.data?.data
@@ -273,8 +275,16 @@ export const createKPIWithSubKpis = async payload => {
 }
 
 export const updateKPIWithSubKpis = async payload => {
-  const { kpiId, title, description, dueDate, status, subKpis, venture } =
-    payload
+  const {
+    kpiId,
+    title,
+    description,
+    dueDate,
+    status,
+    subKpis,
+    venture,
+    founder,
+  } = payload
 
   try {
     const { data: res } = await api.put(`/kpis/${kpiId}`, {
@@ -282,6 +292,7 @@ export const updateKPIWithSubKpis = async payload => {
       description,
       dueDate: dueDate || null,
       status,
+      ...(founder !== undefined ? { founder: founder || null } : {}),
     })
 
     // Sub-KPIs the user removed in the form have to be deleted explicitly.

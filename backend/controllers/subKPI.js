@@ -47,10 +47,6 @@ export const createSubKPI = async (req, res) => {
       parentKPI: kpiId,
     })
 
-    kpi.subKPIs.push(subKPI._id)
-
-    await kpi.save()
-
     return res.status(201).json({
       success: true,
       message: 'SubKPI created successfully',
@@ -123,8 +119,6 @@ export const deleteSubKPI = async (req, res) => {
         .status(404)
         .json({ success: false, message: 'SubKPI not found' })
     }
-
-    await KPI.updateOne({ _id: subKPI.parentKPI }, { $pull: { subKPIs: id } })
 
     return res.status(200).json({ success: true, message: 'SubKPI deleted' })
   } catch (error) {

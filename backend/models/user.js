@@ -35,12 +35,6 @@ const userSchema = new mongoose.Schema(
       ref: 'Role',
       required: true,
     },
-    biWeeklySubmission: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'BiWeeklySubmission',
-      },
-    ],
     googleId: {
       type: String,
       unique: true,
@@ -77,8 +71,16 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 )
+
+userSchema.virtual('biWeeklySubmissions', {
+  ref: 'BiWeeklySubmission',
+  localField: '_id',
+  foreignField: 'founder',
+})
 
 userSchema.pre('save', async function () {
   if (!this.isModified('password')) {

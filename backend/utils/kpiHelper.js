@@ -170,7 +170,6 @@ export const buildNewKPIDocument = ({
     scope: resolvedScope.scope,
     founder: resolvedScope.founder,
     createdBy: userId,
-    subKPIs: [],
     status: isSubmitted ? 'WAITING_FOR_APPROVAL' : 'DRAFT',
     submissionDate: isSubmitted ? new Date() : null,
   }

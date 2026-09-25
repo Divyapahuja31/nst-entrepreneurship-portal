@@ -105,18 +105,19 @@ const kpiSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
-
-    subKPIs: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'SubKPI',
-      },
-    ],
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 )
+
+kpiSchema.virtual('subKPIs', {
+  ref: 'SubKPI',
+  localField: '_id',
+  foreignField: 'parentKPI',
+})
 
 // Automatically derives scope from founder: presence of founder means member-level, null means startup-level.
 kpiSchema.pre('validate', function () {

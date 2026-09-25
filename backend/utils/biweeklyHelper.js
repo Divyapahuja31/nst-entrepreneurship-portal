@@ -127,13 +127,6 @@ export const updateOrCreateVentureSubmission = async ({
     { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
   )
 
-  if (userId && isSubmit) {
-    await User.updateOne(
-      { _id: userId },
-      { $addToSet: { biWeeklySubmission: submission._id } }
-    )
-  }
-
   return submission
 }
 

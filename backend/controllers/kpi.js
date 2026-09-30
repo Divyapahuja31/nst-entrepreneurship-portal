@@ -542,6 +542,13 @@ export const uploadKPIEvidence = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
+    if (!(await canUserAccessKPI(req.user, kpi))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to upload evidence for this KPI',
+      })
+    }
+
     const lockError = checkKPILockStatus(kpi)
     if (lockError) {
       return res.status(400).json({ success: false, message: lockError })
@@ -589,6 +596,13 @@ export const deleteKPIEvidence = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
+    if (!(await canUserAccessKPI(req.user, kpi))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to delete evidence for this KPI',
+      })
+    }
+
     const lockError = checkKPILockStatus(kpi)
     if (lockError) {
       return res.status(400).json({ success: false, message: lockError })
@@ -618,6 +632,18 @@ export const deleteKPIEvidence = async (req, res) => {
   }
 }
 
+const sendEvidenceFile = async (fileUrl, res) => {
+  const isS3 = fileUrl.includes('.s3.') || fileUrl.includes('amazonaws.com')
+  if (isS3) {
+    const pathname = new URL(fileUrl).pathname
+    const key = pathname.startsWith('/') ? pathname.slice(1) : pathname
+    const s3Data = await downloadFromS3(key)
+    return await streamS3ToResponse(s3Data, res)
+  }
+
+  return res.redirect(fileUrl)
+}
+
 export const downloadKPIEvidence = async (req, res) => {
   try {
     const { kpiId } = req.params
@@ -626,6 +652,13 @@ export const downloadKPIEvidence = async (req, res) => {
     }
 
     const kpi = await KPI.findById(kpiId)
+    if (kpi && !(await canUserAccessKPI(req.user, kpi))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to download evidence for this KPI',
+      })
+    }
+
     const fileUrl = kpi?.evidence?.fileUrl
     if (!fileUrl) {
       return res
@@ -639,15 +672,7 @@ export const downloadKPIEvidence = async (req, res) => {
       `attachment; filename="${encodeURIComponent(downloadName)}"`
     )
 
-    const isS3 = fileUrl.includes('.s3.') || fileUrl.includes('amazonaws.com')
-    if (isS3) {
-      const pathname = new URL(fileUrl).pathname
-      const key = pathname.startsWith('/') ? pathname.slice(1) : pathname
-      const s3Data = await downloadFromS3(key)
-      return await streamS3ToResponse(s3Data, res)
-    }
-
-    return res.redirect(fileUrl)
+    return await sendEvidenceFile(fileUrl, res)
   } catch (error) {
     console.error('Download KPI evidence error:', error)
     return res.status(500).json({

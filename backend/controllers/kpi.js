@@ -21,6 +21,8 @@ import {
 } from '../utils/kpiHelper.js'
 import { downloadFromS3 } from '../config/s3.js'
 
+const STUDENT_SETTABLE_STATUSES = ['DRAFT', 'SUBMIT', 'WAITING_FOR_APPROVAL']
+
 export const getAllKPIs = async (req, res) => {
   try {
     const { scope, status } = req.query
@@ -478,6 +480,19 @@ export const updateKPI = async (req, res) => {
     const lockError = checkKPILockStatus(kpi)
     if (lockError) {
       return res.status(400).json({ success: false, message: lockError })
+    }
+
+    // Accepting, rejecting and grading go through the admin-only evaluate route.
+    const { status } = req.body
+    if (
+      req.user.role !== 'admin' &&
+      status !== undefined &&
+      !STUDENT_SETTABLE_STATUSES.includes(status)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only save a KPI as draft or submit it for approval',
+      })
     }
 
     const updateFields = buildKPIUpdateFields(req.body)

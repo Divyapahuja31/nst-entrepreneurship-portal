@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
 import { validateSubKPIRequest } from '../utils/kpiValidator.js'
+import { canUserEditSubKPI } from '../utils/kpiHelper.js'
 
 export const createSubKPI = async (req, res) => {
   try {
@@ -82,15 +83,22 @@ export const updateSubKPI = async (req, res) => {
       updateFields.description = description.trim()
     }
 
-    const subKPI = await SubKPI.findByIdAndUpdate(id, updateFields, {
-      returnDocument: 'after',
-    })
-
+    const subKPI = await SubKPI.findById(id)
     if (!subKPI) {
       return res
         .status(404)
         .json({ success: false, message: 'SubKPI not found' })
     }
+
+    if (!(await canUserEditSubKPI(req.user, subKPI))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not allowed to modify this SubKPI',
+      })
+    }
+
+    Object.assign(subKPI, updateFields)
+    await subKPI.save()
 
     return res
       .status(200)
@@ -113,12 +121,21 @@ export const deleteSubKPI = async (req, res) => {
         .json({ success: false, message: 'Invalid SubKPI ID' })
     }
 
-    const subKPI = await SubKPI.findByIdAndDelete(id)
+    const subKPI = await SubKPI.findById(id)
     if (!subKPI) {
       return res
         .status(404)
         .json({ success: false, message: 'SubKPI not found' })
     }
+
+    if (!(await canUserEditSubKPI(req.user, subKPI))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not allowed to delete this SubKPI',
+      })
+    }
+
+    await subKPI.deleteOne()
 
     return res.status(200).json({ success: true, message: 'SubKPI deleted' })
   } catch (error) {

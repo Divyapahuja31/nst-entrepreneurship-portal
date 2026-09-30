@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 
 import { uploadToS3 } from '../config/s3.js'
+import KPI from '../models/kpi.js'
 import { findVentureForUser } from './founderHelper.js'
 
 export const parseEvaluationScore = score => {
@@ -150,6 +151,12 @@ export const canUserAccessKPI = async (user, kpi, allowCreator = false) => {
     return true
   }
   return isFounderOrCreator(kpi, user?.id, allowCreator)
+}
+
+// A SubKPI may be changed by whoever may change its parent KPI.
+export const canUserEditSubKPI = async (user, subKPI) => {
+  const parentKPI = await KPI.findById(subKPI.parentKPI)
+  return Boolean(parentKPI) && canUserAccessKPI(user, parentKPI)
 }
 
 export const buildNewKPIDocument = ({

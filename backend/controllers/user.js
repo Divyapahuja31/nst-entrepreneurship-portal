@@ -553,15 +553,12 @@ export const verifySignupOtp = async (req, res) => {
       return res.status(404).json({ error: 'No account found with this email' })
     }
 
+    // Never issue a session here without a valid code, or anyone could log in
+    // as a verified user just by knowing their email.
     if (user.isEmailVerified) {
-      const userPortfolio = await getUserPortfolio(user._id)
       return res
-        .cookie('token', signToken(user), cookieOptions)
-        .status(200)
-        .json({
-          user: userPortfolio || user,
-          message: 'Email verified successfully!',
-        })
+        .status(400)
+        .json({ error: 'Email is already verified. Please sign in.' })
     }
 
     const validationError = validateOtp(user, otp, 'signup')

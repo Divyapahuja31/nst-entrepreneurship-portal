@@ -277,6 +277,14 @@ export const googleAuthCallback = async (req, res) => {
     }).populate('role')
 
     if (user) {
+      if (!user.isEmailVerified) {
+        // Nobody proved ownership of this email before Google did, so the
+        // password may have been set by someone else. Drop it.
+        user.password = undefined
+        user.signupOtp = null
+        user.signupOtpExpires = null
+        user.signupOtpAttempts = 0
+      }
       if (!user.googleId || !user.isEmailVerified) {
         user.googleId = googleId
         user.isEmailVerified = true

@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
@@ -164,14 +165,38 @@ export const portfolio = async (req, res) => {
   return res.json(data)
 }
 
+// Ties Google's callback to the browser that started sign-in. Without it, an
+// attacker could send someone their own callback link and sign them in to
+// the attacker's account.
+const OAUTH_STATE_COOKIE = 'google_oauth_state'
+const oauthStateCookieOptions = { ...cookieOptions, maxAge: 10 * 60 * 1000 }
+
 export const googleAuth = (req, res) => {
-  const url = getGoogleAuthUrl()
-  return res.redirect(url)
+  const state = crypto.randomBytes(32).toString('hex')
+  return res
+    .cookie(OAUTH_STATE_COOKIE, state, oauthStateCookieOptions)
+    .redirect(getGoogleAuthUrl(state))
+}
+
+const hasValidOAuthState = req => {
+  const { state } = req.query
+  const expected = req.cookies[OAUTH_STATE_COOKIE]
+  return typeof state === 'string' && Boolean(expected) && state === expected
 }
 
 export const googleAuthCallback = async (req, res) => {
   try {
     const { code } = req.query
+    const validState = hasValidOAuthState(req)
+    res.clearCookie(OAUTH_STATE_COOKIE, oauthStateCookieOptions)
+    if (!validState) {
+      return res
+        .status(400)
+        .send(
+          'Google sign-in expired or was not started here. Please try again.'
+        )
+    }
+
     if (!code) {
       return res.status(400).send('Google authorization code is missing.')
     }

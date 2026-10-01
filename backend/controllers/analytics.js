@@ -1,6 +1,7 @@
 import KpiModel from '../models/kpi.js'
 import Venture from '../models/venture.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
+import startupStage from '../models/enums/startupStage.js'
 import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
 
 const MONTH_NAMES = [
@@ -82,6 +83,24 @@ async function getMonthlyAverageKPIScores({
   return result
 }
 
+// Every stage in pipeline order, including empty ones, so the chart reads
+// as a funnel from Ideation to Fund Raising.
+const countStages = ventures =>
+  Object.entries(startupStage).map(([key, label]) => ({
+    key,
+    label,
+    count: ventures.filter(v => v.stage === key).length,
+  }))
+
+const countCampuses = ventures => {
+  const counts = new Map()
+  for (const venture of ventures) {
+    const name = venture.campus?.name ?? 'Unknown'
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return [...counts].map(([name, count]) => ({ name, count }))
+}
+
 const getOverview = async (_, res) => {
   try {
     const [{ ventures, students, ventureHealth: health }, kpi] =
@@ -102,19 +121,12 @@ const getOverview = async (_, res) => {
       noReviews: countHealth(ventureHealth.NO_REVIEWS),
     }
 
-    const result = ventures.reduce(
-      (accumulate, currentValue) => {
-        const campusKey = currentValue.campus?.name ?? 'Unknown'
-        const stageKey = currentValue.stage ?? 'Unknown'
-
-        accumulate.campus[campusKey] = (accumulate.campus[campusKey] ?? 0) + 1
-        accumulate.stage[stageKey] = (accumulate.stage[stageKey] ?? 0) + 1
-
-        return accumulate
-      },
-      { campus: {}, stage: {} }
-    )
-    return res.json({ result, kpi, overview })
+    return res.json({
+      kpi,
+      overview,
+      stages: countStages(ventures),
+      campuses: countCampuses(ventures),
+    })
   } catch (err) {
     console.error('Get overview error:', err.message || err)
     return res.status(500).json({

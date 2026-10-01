@@ -1,22 +1,28 @@
 import { BarChart } from '@mui/x-charts/BarChart'
 
-const chartSetting = {
-  height: 150,
-  margin: { left: 0 },
-}
-
-export default function HorizontalBars({ campus }) {
-  const campusData = Object.entries(campus ?? {}).map(([name, count]) => ({
-    campus: name,
-    count: count,
-  }))
+// One labelled bar per category, in the order given. `data` is
+// [{ label, count }].
+export default function HorizontalBars({ data, label }) {
+  // Each bar shows its count, so the value axis is hidden; the headroom
+  // keeps the longest bar's count from being clipped.
+  const max = Math.max(1, ...data.map(item => item.count))
   return (
     <BarChart
-      dataset={campusData}
-      yAxis={[{ scaleType: 'band', dataKey: 'campus' }]}
-      series={[{ dataKey: 'count', label: 'Student' }]}
+      dataset={data}
       layout="horizontal"
-      {...chartSetting}
+      yAxis={[{ scaleType: 'band', dataKey: 'label', width: 100 }]}
+      xAxis={[{ min: 0, max: max * 1.15, position: 'none' }]}
+      series={[
+        {
+          dataKey: 'count',
+          label,
+          barLabel: 'value',
+          barLabelPlacement: 'outside',
+        },
+      ]}
+      height={Math.max(160, data.length * 34)}
+      borderRadius={4}
+      hideLegend
     />
   )
 }

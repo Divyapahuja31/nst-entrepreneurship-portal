@@ -25,16 +25,21 @@ const lastActivity = date => {
   return days < 1 ? 'Today' : `${days} day${days === 1 ? '' : 's'} ago`
 }
 
+const countReason = (checkIns, reason) =>
+  checkIns.filter(v => v.reasons.includes(reason)).length
+
 const summarize = (checkIns, ventureCount, inactiveDays) => {
   if (checkIns.length === 0) {
-    return `Every venture has KPI activity in the last ${inactiveDays} days.`
+    return `Every venture has KPI activity in the last ${inactiveDays} days and more than one founder.`
   }
-  const notStarted = checkIns.filter(v => v.reasons.includes('NO_KPIS')).length
-  const idle = checkIns.length - notStarted
+  const notStarted = countReason(checkIns, 'NO_KPIS')
+  const idle = countReason(checkIns, 'INACTIVE')
+  const solo = countReason(checkIns, 'SOLO_FOUNDER')
   return [
     notStarted &&
       `${notStarted} of ${ventureCount} ventures haven't set a KPI yet.`,
     idle && `${idle} had no KPI activity in the last ${inactiveDays} days.`,
+    solo && `${solo} ${solo === 1 ? 'has' : 'have'} a solo founder.`,
   ]
     .filter(Boolean)
     .join(' ')
@@ -52,6 +57,7 @@ export default function VentureCheckIns({
       label: `No KPI activity in ${inactiveDays}+ days`,
       color: 'warning',
     },
+    SOLO_FOUNDER: { label: 'Solo founder', color: 'info' },
   }
   return (
     <Card variant="outlined">

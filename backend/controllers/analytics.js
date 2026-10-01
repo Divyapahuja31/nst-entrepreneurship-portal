@@ -106,9 +106,9 @@ const countCampuses = ventures => {
 const DAY_MS = 24 * 60 * 60 * 1000
 const INACTIVE_DAYS = 14
 
-// Ventures an admin should check in on, and why: no KPIs at all, or none
-// touched in the last two weeks. Not-started ventures come first, then the
-// longest idle.
+// Ventures an admin should check in on, and why: no KPIs at all, none
+// touched in the last two weeks, or a single founder carrying the venture.
+// Not-started ventures come first, then the longest idle.
 const getVentureCheckIns = async ventures => {
   const activity = await KpiModel.aggregate([
     {
@@ -126,17 +126,21 @@ const getVentureCheckIns = async ventures => {
     .map(venture => {
       const { kpiCount = 0, lastActivityAt = null } =
         byVenture.get(String(venture._id)) ?? {}
+      const team = venture.founders.filter(founder => founder.user).length
       const reasons = []
       if (!kpiCount) {
         reasons.push('NO_KPIS')
       } else if (lastActivityAt.getTime() < cutoff) {
         reasons.push('INACTIVE')
       }
+      if (team === 1) {
+        reasons.push('SOLO_FOUNDER')
+      }
       return {
         id: venture._id,
         name: venture.name,
         stage: startupStage[venture.stage] ?? null,
-        team: venture.founders.filter(founder => founder.user).length,
+        team,
         kpiCount,
         lastActivityAt,
         reasons,

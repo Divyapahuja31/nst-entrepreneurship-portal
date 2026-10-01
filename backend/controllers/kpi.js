@@ -14,6 +14,8 @@ import {
   kpisVisibleTo,
   canUserManageVentureKPI,
   canUserAccessKPI,
+  kpiOwnerError,
+  kpiOwnerChangeError,
   buildNewKPIDocument,
   applyKPIProgress,
   buildEvidencePayload,
@@ -98,6 +100,11 @@ export const createKPI = async (req, res) => {
         success: false,
         message: resolvedScope.error,
       })
+    }
+
+    const ownerError = kpiOwnerError(req.user, resolvedScope.founder)
+    if (ownerError) {
+      return res.status(403).json({ success: false, message: ownerError })
     }
 
     const kpi = await KPI.create(
@@ -489,6 +496,18 @@ export const submitKPIEvidence = async (req, res) => {
   }
 }
 
+// Limits on what non-admins may change. Accepting, rejecting and grading go
+// through the admin-only evaluate route.
+const memberUpdateError = (user, kpi, { status, founder }) => {
+  if (user.role === 'admin') {
+    return null
+  }
+  if (status !== undefined && !STUDENT_SETTABLE_STATUSES.includes(status)) {
+    return 'You can only save a KPI as draft or submit it for approval'
+  }
+  return kpiOwnerChangeError(user, kpi, founder)
+}
+
 export const updateKPI = async (req, res) => {
   try {
     const { kpiId } = req.params
@@ -520,17 +539,9 @@ export const updateKPI = async (req, res) => {
       return res.status(400).json({ success: false, message: lockError })
     }
 
-    // Accepting, rejecting and grading go through the admin-only evaluate route.
-    const { status } = req.body
-    if (
-      req.user.role !== 'admin' &&
-      status !== undefined &&
-      !STUDENT_SETTABLE_STATUSES.includes(status)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only save a KPI as draft or submit it for approval',
-      })
+    const memberError = memberUpdateError(req.user, kpi, req.body)
+    if (memberError) {
+      return res.status(403).json({ success: false, message: memberError })
     }
 
     const updateFields = buildKPIUpdateFields(req.body)
@@ -562,7 +573,7 @@ export const deleteKPI = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
-    if (!(await canUserManageVentureKPI(req.user, kpi.venture))) {
+    if (!(await canUserAccessKPI(req.user, kpi))) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to delete this KPI',

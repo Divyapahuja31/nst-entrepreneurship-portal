@@ -398,13 +398,13 @@ export const resetPassword = async (req, res) => {
 
 export const verifySignupOtp = async (req, res) => {
   try {
-    const { otp } = req.body
+    const { otp, password } = req.body
     const email = normalizeEmail(req.body.email)
 
-    if (!email || !otp) {
-      return res
-        .status(400)
-        .json({ error: 'Email and verification code are required' })
+    if (!email || !otp || !password) {
+      return res.status(400).json({
+        error: 'Email, password and verification code are required',
+      })
     }
 
     const user = await User.findOne({ email }).populate('role')
@@ -423,6 +423,14 @@ export const verifySignupOtp = async (req, res) => {
     const validationError = await checkSignupCode(user, otp)
     if (validationError) {
       return res.status(400).json({ error: validationError })
+    }
+
+    // Anyone can sign up again with an unverified email and replace its
+    // password. Checked after the code so this can't be used to guess passwords.
+    if (!(await user.comparePassword(password))) {
+      return res.status(400).json({
+        error: 'Your sign-up details have changed. Please sign up again.',
+      })
     }
 
     user.isEmailVerified = true

@@ -36,6 +36,7 @@ function SignUp() {
 
   const [step, setStep] = useState(1) // 1: Sign Up details, 2: OTP Verification
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [action, setAction] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -88,6 +89,7 @@ function SignUp() {
 
     if (result.requireOtp) {
       setEmail(result.email || payload.email)
+      setPassword(payload.password)
       setOtpError('')
       setOtpSuccess(
         result.message || 'A 6-digit verification code has been sent to your email.'
@@ -106,7 +108,7 @@ function SignUp() {
     setSubmitting(true)
     setOtpError('')
 
-    const result = await verifySignupOtp({ email, otp })
+    const result = await verifySignupOtp({ email, otp, password })
     setSubmitting(false)
 
     if (result.error) {

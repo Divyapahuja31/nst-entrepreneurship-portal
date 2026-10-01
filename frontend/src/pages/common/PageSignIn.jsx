@@ -32,6 +32,7 @@ function SignIn() {
 
   const [step, setStep] = useState(1) // 1: Sign In form, 2: OTP Verification
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [action, setAction] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -49,6 +50,7 @@ function SignIn() {
     setSubmitting(false)
     if (result.requireOtp) {
       setEmail(result.email || payload.email)
+      setPassword(payload.password)
       setOtpError('')
       setOtpSuccess(
         result.error || 'A 6-digit verification code has been sent to your email.'
@@ -70,7 +72,7 @@ function SignIn() {
     setSubmitting(true)
     setOtpError('')
 
-    const result = await verifySignupOtp({ email, otp })
+    const result = await verifySignupOtp({ email, otp, password })
     setSubmitting(false)
 
     if (result.error) {

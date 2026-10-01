@@ -52,6 +52,14 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    resetPasswordOtpFailures: {
+      type: Number,
+      default: 0,
+    },
+    resetPasswordOtpFailuresSince: {
+      type: Date,
+      default: null,
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,
@@ -67,6 +75,14 @@ const userSchema = new mongoose.Schema(
     signupOtpAttempts: {
       type: Number,
       default: 0,
+    },
+    signupOtpFailures: {
+      type: Number,
+      default: 0,
+    },
+    signupOtpFailuresSince: {
+      type: Date,
+      default: null,
     },
   },
   {
@@ -100,6 +116,19 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.set('toJSON', {
   transform: (_, ret) => {
     delete ret.password
+    // A 6-digit code's hash is cracked in under a second, so these never
+    // leave the server.
+    for (const prefix of ['signup', 'resetPassword']) {
+      for (const suffix of [
+        '',
+        'Expires',
+        'Attempts',
+        'Failures',
+        'FailuresSince',
+      ]) {
+        delete ret[`${prefix}Otp${suffix}`]
+      }
+    }
     return ret
   },
 })

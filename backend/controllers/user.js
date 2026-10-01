@@ -6,11 +6,11 @@ import { getUserPortfolio } from '../utils/userPortfolio.js'
 import {
   otpCooldownMessage,
   sendSignupCode,
-  checkSignupCode,
+  redeemSignupCode,
   clearSignupCode,
   sendPasswordResetCode,
   checkPasswordResetCode,
-  clearPasswordResetCode,
+  redeemPasswordResetCode,
 } from '../utils/otpHelper.js'
 import {
   cookieOptions,
@@ -115,11 +115,12 @@ export const signIn = async (req, res) => {
     }
 
     if (!user.isEmailVerified && !user.googleId) {
-      await sendSignupCode(user)
+      const { retryAfter } = await sendSignupCode(user)
 
       return res.status(403).json({
-        error:
-          'Your email address is not verified yet. A 6-digit verification code has been sent to your email.',
+        error: retryAfter
+          ? `Your email address is not verified yet. ${otpCooldownMessage(retryAfter)}`
+          : 'Your email address is not verified yet. A 6-digit verification code has been sent to your email.',
         requireOtp: true,
         email: user.email,
       })
@@ -377,13 +378,12 @@ export const resetPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ email })
-    const validationError = await checkPasswordResetCode(user, otp)
+    const validationError = await redeemPasswordResetCode(user, otp)
     if (validationError) {
       return res.status(400).json({ error: validationError })
     }
 
     user.password = password
-    clearPasswordResetCode(user)
     await user.save()
 
     return res
@@ -419,7 +419,7 @@ export const verifySignupOtp = async (req, res) => {
         .json({ error: 'Email is already verified. Please sign in.' })
     }
 
-    const validationError = await checkSignupCode(user, otp)
+    const validationError = await redeemSignupCode(user, otp)
     if (validationError) {
       return res.status(400).json({ error: validationError })
     }
@@ -433,7 +433,6 @@ export const verifySignupOtp = async (req, res) => {
     }
 
     user.isEmailVerified = true
-    clearSignupCode(user)
     await user.save()
 
     return await startSession(res, user, {

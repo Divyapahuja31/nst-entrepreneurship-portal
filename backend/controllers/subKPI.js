@@ -63,7 +63,6 @@ export const createSubKPI = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to create SubKPI',
-      error: error.message,
     })
   }
 }
@@ -108,10 +107,10 @@ export const updateSubKPI = async (req, res) => {
       .status(200)
       .json({ success: true, message: 'SubKPI updated', data: subKPI })
   } catch (error) {
+    console.error('Update SubKPI error:', error)
     return res.status(500).json({
       success: false,
       message: 'Failed to update SubKPI',
-      error: error.message,
     })
   }
 }
@@ -143,10 +142,10 @@ export const deleteSubKPI = async (req, res) => {
 
     return res.status(200).json({ success: true, message: 'SubKPI deleted' })
   } catch (error) {
+    console.error('Delete SubKPI error:', error)
     return res.status(500).json({
       success: false,
       message: 'Failed to delete SubKPI',
-      error: error.message,
     })
   }
 }

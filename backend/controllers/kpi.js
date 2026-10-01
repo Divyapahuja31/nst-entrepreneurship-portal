@@ -57,7 +57,6 @@ export const getAllKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs',
-      error: error.message,
     })
   }
 }
@@ -133,7 +132,6 @@ export const createKPI = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to create KPI',
-      error: error.message,
     })
   }
 }
@@ -194,7 +192,6 @@ export const getVentureKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs',
-      error: error.message,
     })
   }
 }
@@ -252,7 +249,6 @@ export const getMyKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs',
-      error: error.message,
     })
   }
 }
@@ -315,7 +311,6 @@ export const getFounderKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs for founder',
-      error: error.message,
     })
   }
 }
@@ -367,7 +362,6 @@ export const submitKPIForApproval = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to submit KPI',
-      error: error.message,
     })
   }
 }
@@ -428,7 +422,6 @@ export const evaluateKPI = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to evaluate KPI',
-      error: error.message,
     })
   }
 }
@@ -497,7 +490,6 @@ export const submitKPIEvidence = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to submit evidence',
-      error: error.message,
     })
   }
 }
@@ -559,10 +551,10 @@ export const updateKPI = async (req, res) => {
       .status(200)
       .json({ success: true, message: 'KPI updated', data: kpi })
   } catch (error) {
+    console.error('Update KPI error:', error)
     return res.status(500).json({
       success: false,
       message: 'Failed to update KPI',
-      error: error.message,
     })
   }
 }
@@ -592,10 +584,10 @@ export const deleteKPI = async (req, res) => {
 
     return res.status(200).json({ success: true, message: 'KPI deleted' })
   } catch (error) {
+    console.error('Delete KPI error:', error)
     return res.status(500).json({
       success: false,
       message: 'Failed to delete KPI',
-      error: error.message,
     })
   }
 }
@@ -649,7 +641,6 @@ export const uploadKPIEvidence = async (req, res) => {
     return res.status(500).json({
       success: false,
       message,
-      error: error.message,
     })
   }
 }
@@ -697,7 +688,6 @@ export const deleteKPIEvidence = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to delete evidence',
-      error: error.message,
     })
   }
 }
@@ -749,7 +739,6 @@ export const downloadKPIEvidence = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to download evidence',
-      error: error.message,
     })
   }
 }

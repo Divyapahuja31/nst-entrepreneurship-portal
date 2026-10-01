@@ -201,7 +201,9 @@ export default function MiniDrawer() {
           )}
         </Box>
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      {/* minWidth 0 lets wide content (tables) scroll inside main instead
+          of stretching the whole page past the screen on phones. */}
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
         <DrawerHeader />
         <Outlet />
       </Box>

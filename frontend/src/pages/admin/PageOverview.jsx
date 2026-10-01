@@ -5,6 +5,7 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { useLoaderData } from 'react-router'
 
+import ActionQueue from '../../components/ActionQueue'
 import BarChart from '../../components/BarChart'
 import ChartCard from '../../components/ChartCard'
 import HorizontalBars from '../../components/HorizontalBars'
@@ -49,7 +50,7 @@ const cards = [
 ]
 
 function Index() {
-  const { kpi, overview, stages = [], campuses = [] } = useLoaderData()
+  const { actions, kpi, overview, stages = [], campuses = [] } = useLoaderData()
   const ventureCount = overview?.ventures ?? 0
   const hasScores = Object.values(kpi ?? {}).some(score => score != null)
 
@@ -63,6 +64,8 @@ function Index() {
           {ventureCount} ventures · {overview?.founders ?? 0} founders
         </Typography>
       </Box>
+
+      <ActionQueue actions={actions} />
 
       <Box
         sx={{

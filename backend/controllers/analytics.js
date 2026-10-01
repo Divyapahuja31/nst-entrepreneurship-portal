@@ -1,5 +1,7 @@
 import KpiModel from '../models/kpi.js'
 import Venture from '../models/venture.js'
+import VentureProposal from '../models/ventureProposal.js'
+import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
 import startupStage from '../models/enums/startupStage.js'
 import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
@@ -101,12 +103,45 @@ const countCampuses = ventures => {
   return [...counts].map(([name, count]) => ({ name, count }))
 }
 
+// How many items wait in a queue and since when the oldest has waited.
+const queueOf = async (Model, filter, dateField) => {
+  const [count, oldest] = await Promise.all([
+    Model.countDocuments(filter),
+    Model.findOne(filter)
+      .sort({ [dateField]: 1 })
+      .select(dateField)
+      .lean(),
+  ])
+  return { count, oldestAt: oldest?.[dateField] ?? null }
+}
+
+// Work waiting on admins, so the overview starts with what to act on.
+const getActionQueue = async () => {
+  const [proposals, joinRequests, kpisToGrade, missedDeadlines] =
+    await Promise.all([
+      queueOf(VentureProposal, { status: 'PENDING' }, 'createdAt'),
+      queueOf(VentureJoinRequest, { status: 'PENDING' }, 'createdAt'),
+      queueOf(KpiModel, { status: 'WAITING_FOR_APPROVAL' }, 'submissionDate'),
+      // Past the due date and never submitted: the KPI is now locked.
+      queueOf(
+        KpiModel,
+        {
+          status: { $in: ['DRAFT', 'REJECTED'] },
+          dueDate: { $lt: new Date() },
+        },
+        'dueDate'
+      ),
+    ])
+  return { proposals, joinRequests, kpisToGrade, missedDeadlines }
+}
+
 const getOverview = async (_, res) => {
   try {
-    const [{ ventures, students, ventureHealth: health }, kpi] =
+    const [{ ventures, students, ventureHealth: health }, kpi, actions] =
       await Promise.all([
         getFounderPortfolioData(),
         getMonthlyAverageKPIScores(),
+        getActionQueue(),
       ])
 
     // Counted per venture, so a four-person team counts once, and every
@@ -122,6 +157,7 @@ const getOverview = async (_, res) => {
     }
 
     return res.json({
+      actions,
       kpi,
       overview,
       stages: countStages(ventures),

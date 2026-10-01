@@ -9,6 +9,7 @@ import ActionQueue from '../../components/ActionQueue'
 import BarChart from '../../components/BarChart'
 import ChartCard from '../../components/ChartCard'
 import HorizontalBars from '../../components/HorizontalBars'
+import VentureCheckIns from '../../components/VentureCheckIns'
 
 // Health is per venture, so the last four cards add up to the first.
 const cards = [
@@ -50,7 +51,15 @@ const cards = [
 ]
 
 function Index() {
-  const { actions, kpi, overview, stages = [], campuses = [] } = useLoaderData()
+  const {
+    actions,
+    checkIns,
+    inactiveDays,
+    kpi,
+    overview,
+    stages = [],
+    campuses = [],
+  } = useLoaderData()
   const ventureCount = overview?.ventures ?? 0
   const hasScores = Object.values(kpi ?? {}).some(score => score != null)
 
@@ -118,6 +127,12 @@ function Index() {
           <HorizontalBars data={stages} label="Ventures" />
         </ChartCard>
       </Box>
+
+      <VentureCheckIns
+        checkIns={checkIns}
+        ventureCount={ventureCount}
+        inactiveDays={inactiveDays}
+      />
 
       {/* A single campus is just the venture total again. */}
       {campuses.length > 1 && (

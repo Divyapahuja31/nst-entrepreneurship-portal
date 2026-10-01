@@ -103,6 +103,52 @@ const countCampuses = ventures => {
   return [...counts].map(([name, count]) => ({ name, count }))
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+const INACTIVE_DAYS = 14
+
+// Ventures an admin should check in on, and why: no KPIs at all, or none
+// touched in the last two weeks. Not-started ventures come first, then the
+// longest idle.
+const getVentureCheckIns = async ventures => {
+  const activity = await KpiModel.aggregate([
+    {
+      $group: {
+        _id: '$venture',
+        kpiCount: { $sum: 1 },
+        lastActivityAt: { $max: '$updatedAt' },
+      },
+    },
+  ])
+  const byVenture = new Map(activity.map(a => [String(a._id), a]))
+  const cutoff = Date.now() - INACTIVE_DAYS * DAY_MS
+
+  return ventures
+    .map(venture => {
+      const { kpiCount = 0, lastActivityAt = null } =
+        byVenture.get(String(venture._id)) ?? {}
+      const reasons = []
+      if (!kpiCount) {
+        reasons.push('NO_KPIS')
+      } else if (lastActivityAt.getTime() < cutoff) {
+        reasons.push('INACTIVE')
+      }
+      return {
+        id: venture._id,
+        name: venture.name,
+        stage: startupStage[venture.stage] ?? null,
+        team: venture.founders.filter(founder => founder.user).length,
+        kpiCount,
+        lastActivityAt,
+        reasons,
+      }
+    })
+    .filter(venture => venture.reasons.length)
+    .sort(
+      (a, b) =>
+        (a.lastActivityAt?.getTime() ?? 0) - (b.lastActivityAt?.getTime() ?? 0)
+    )
+}
+
 // How many items wait in a queue and since when the oldest has waited.
 const queueOf = async (Model, filter, dateField) => {
   const [count, oldest] = await Promise.all([
@@ -143,6 +189,7 @@ const getOverview = async (_, res) => {
         getMonthlyAverageKPIScores(),
         getActionQueue(),
       ])
+    const checkIns = await getVentureCheckIns(ventures)
 
     // Counted per venture, so a four-person team counts once, and every
     // venture lands in exactly one bucket (including "no reviews yet").
@@ -158,6 +205,8 @@ const getOverview = async (_, res) => {
 
     return res.json({
       actions,
+      checkIns,
+      inactiveDays: INACTIVE_DAYS,
       kpi,
       overview,
       stages: countStages(ventures),

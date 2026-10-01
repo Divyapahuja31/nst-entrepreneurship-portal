@@ -20,6 +20,9 @@
     "useRevalidator",
     "revalidator",
 
+    "nosniff",
+    "clickjacking",
+
     "Divya",
     "Pahuja",
     "Kanishk",

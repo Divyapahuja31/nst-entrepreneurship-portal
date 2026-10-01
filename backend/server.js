@@ -35,6 +35,22 @@ if (TRUST_PROXY) {
   app.set('trust proxy', Number(TRUST_PROXY))
 }
 
+app.disable('x-powered-by')
+
+// Baseline security headers. Framing is blocked so another site can't overlay
+// admin actions (clickjacking), and nosniff stops browsers treating an
+// uploaded evidence file as a page. A full Content-Security-Policy needs
+// testing against MUI's inline styles, so only frame-ancestors is set here.
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': "frame-ancestors 'none'",
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+  })
+  next()
+})
+
 // The frontend calls the API on its own origin, so other sites get no
 // credentialed cross-origin access.
 app.use(

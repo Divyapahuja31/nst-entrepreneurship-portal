@@ -137,7 +137,12 @@ export const createJoinRequest = async (req, res) => {
     }
 
     const { ventureId } = req.params
-    const { message } = req.body
+    const message =
+      typeof req.body.message === 'string' ? req.body.message.trim() : ''
+
+    if (!mongoose.isValidObjectId(ventureId)) {
+      return res.status(400).json({ error: 'Valid ventureId is required' })
+    }
 
     const venture = await Venture.findById(ventureId)
     if (!venture) {

@@ -1,3 +1,6 @@
+import mongoose from 'mongoose'
+import Batch from '../models/batch.js'
+import Campus from '../models/campus.js'
 import Role from '../models/role.js'
 
 const validateName = name => {
@@ -60,8 +63,28 @@ const validateAll = async ({ username, email, password, position }) => {
   return error
 }
 
+// batch and campus must name existing records. A malformed ID used to reach
+// Mongoose and come back as a 500. With required false, a missing value is
+// allowed (email sign-up has always treated them as optional).
+const validateBatchAndCampus = async ({ batch, campus }, { required }) => {
+  const check = async (value, Model, label) => {
+    if (!value) {
+      return required ? `${label} is required` : ''
+    }
+    const exists =
+      mongoose.isValidObjectId(value) && (await Model.exists({ _id: value }))
+    return exists ? '' : `Please select a valid ${label.toLowerCase()}`
+  }
+  const [batchError, campusError] = await Promise.all([
+    check(batch, Batch, 'Batch'),
+    check(campus, Campus, 'Campus'),
+  ])
+  return { batch: batchError, campus: campusError }
+}
+
 export {
   validateName,
+  validateBatchAndCampus,
   validateEmail,
   validatePassword,
   validatePosition,

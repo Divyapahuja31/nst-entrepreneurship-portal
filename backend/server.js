@@ -21,6 +21,20 @@ mongoose
 const app = express()
 const PORT = process.env.PORT || 4000
 
+// Behind a reverse proxy, set TRUST_PROXY to the number of proxy hops so
+// req.ip is the client's address. Otherwise rate limits would treat every
+// user as one client. Only a hop count is accepted: `true` would trust a
+// spoofed X-Forwarded-For and let anyone dodge the limits.
+const { TRUST_PROXY } = process.env
+if (TRUST_PROXY) {
+  if (!/^\d+$/.test(TRUST_PROXY)) {
+    throw new Error(
+      `TRUST_PROXY must be the number of proxy hops (e.g. 1), got "${TRUST_PROXY}"`
+    )
+  }
+  app.set('trust proxy', Number(TRUST_PROXY))
+}
+
 app.use(
   cors({
     origin: true,

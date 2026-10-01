@@ -13,6 +13,7 @@ import {
   closeOtherApplications,
 } from '../utils/applicationHelper.js'
 import Venture from '../models/venture.js'
+import startupStage from '../models/enums/startupStage.js'
 
 // Best effort: the approval already succeeded, so a failure here is logged
 // rather than reported as a failed review.
@@ -30,17 +31,27 @@ export const getPendingApplications = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
+    // Oldest first, so whoever has waited longest is reviewed first.
     const [proposals, joinRequests] = await Promise.all([
       VentureProposal.find({ status: 'PENDING' })
+        .sort({ createdAt: 1 })
         .populate('submittedBy', 'username email')
         .populate('industry', 'name')
-        .populate('campus', 'name'),
+        .populate('campus', 'name')
+        .lean(),
       VentureJoinRequest.find({ status: 'PENDING' })
+        .sort({ createdAt: 1 })
         .populate('requestedBy', 'username email')
         .populate('venture', 'name'),
     ])
 
-    return res.status(200).json({ proposals, joinRequests })
+    return res.status(200).json({
+      proposals: proposals.map(proposal => ({
+        ...proposal,
+        stageLabel: startupStage[proposal.stage] ?? proposal.stage,
+      })),
+      joinRequests,
+    })
   } catch (error) {
     console.error('Error fetching pending applications:', error)
 

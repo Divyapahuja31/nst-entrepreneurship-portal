@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import Founder from '../models/founder.js'
 import Venture from '../models/venture.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
+import startupStage from '../models/enums/startupStage.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 
 export const getVentures = async (req, res) => {
@@ -24,7 +25,8 @@ export const getVentures = async (req, res) => {
         id: data._id,
         name: data.name,
         campus: data.campus?.name || '-',
-        stage: data.stage,
+        // Readable label ("Fund Raising"), not the stored key.
+        stage: startupStage[data.stage] ?? data.stage ?? '-',
         industry: data.industry?.name || '-',
         founders: founders.map(founder => founder.username).join(', ') || '-',
         team: founders.length,

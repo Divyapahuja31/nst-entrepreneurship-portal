@@ -70,6 +70,16 @@ const studentCell = (name, otherApplication) => (
   </>
 )
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// "Sep 25, 2026 · 6 days ago", so the longest-waiting items stand out.
+const describeWait = value => {
+  if (!value) return '-'
+  const days = Math.floor((Date.now() - new Date(value).getTime()) / DAY_MS)
+  const ago = days < 1 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`
+  return `${formatDate(value)} · ${ago}`
+}
+
 const formatDate = value => {
   if (!value) return '-'
 
@@ -110,8 +120,8 @@ export default function PageVentures() {
     ),
     campus: proposal.campus?.name,
     industry: proposal.industry?.name || proposal.industryName,
-    stage: proposal.stage,
-    submitted: formatDate(proposal.createdAt),
+    stage: proposal.stageLabel ?? proposal.stage,
+    submitted: describeWait(proposal.createdAt),
   }))
 
   const joinRequestRows = joinRequests.map(request => ({
@@ -123,7 +133,7 @@ export default function PageVentures() {
     ),
     venture: request.venture?.name,
     message: request.message,
-    submitted: formatDate(request.createdAt),
+    submitted: describeWait(request.createdAt),
   }))
 
   const runReview = async review => {

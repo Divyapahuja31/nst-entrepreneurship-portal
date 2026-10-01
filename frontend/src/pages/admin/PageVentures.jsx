@@ -29,12 +29,12 @@ function TabPanel({ children, value, index }) {
 }
 
 const ventureColumns = [
-  'name',
-  'campus',
-  'stage',
-  'industry',
-  'founders',
-  'team',
+  { key: 'name', label: 'Startup' },
+  { key: 'campus', label: 'Campus' },
+  { key: 'stage', label: 'Stage' },
+  { key: 'industry', label: 'Industry' },
+  { key: 'founders', label: 'Founders' },
+  { key: 'team', label: 'Team', align: 'right' },
 ]
 
 const proposalColumns = [
@@ -95,7 +95,6 @@ export default function PageVentures() {
   const revalidator = useRevalidator()
 
   const [tab, setTab] = React.useState(0)
-  const [selectedRows, setSelectedRows] = React.useState([])
   const [busyId, setBusyId] = React.useState(null)
   const [error, setError] = React.useState('')
   const [viewing, setViewing] = React.useState(null)
@@ -218,8 +217,6 @@ export default function PageVentures() {
           <CustomizedTable
             columnNames={ventureColumns}
             data={ventures}
-            selectedRows={selectedRows}
-            setSelectedRows={setSelectedRows}
             targetRoute="/admin/venture"
           />
         ) : (

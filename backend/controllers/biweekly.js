@@ -4,6 +4,7 @@ import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   validateCycleNumber,
+  pickStudentSubmissionFields,
   resolveVentureAndContext,
   loadVentureSubmissions,
   updateOrCreateVentureSubmission,
@@ -72,7 +73,8 @@ export const submitBiWeeklyCycle = async (req, res) => {
         .json({ error: 'Admins cannot submit student bi-weekly progress' })
     }
 
-    const { cycle_number, isSubmit, ...data } = req.body
+    const { cycle_number, isSubmit } = req.body
+    const data = pickStudentSubmissionFields(req.body)
     const cycleNum = validateCycleNumber(cycle_number)
 
     if (!cycleNum) {

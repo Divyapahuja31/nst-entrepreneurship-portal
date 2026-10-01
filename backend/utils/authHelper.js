@@ -1,5 +1,8 @@
 import { OAuth2Client } from 'google-auth-library'
 import 'dotenv/config'
+import Role from '../models/role.js'
+import { cookieOptions, signToken } from './token.js'
+import { getUserPortfolio } from './userPortfolio.js'
 
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -21,6 +24,29 @@ export const determineUserRole = email => {
     return 'admin'
   }
   return 'student'
+}
+
+// Non-strings become null so a JSON object can never reach a query.
+export const normalizeEmail = email =>
+  typeof email === 'string' ? email.toLowerCase().trim() : null
+
+export const findRoleForEmail = async email => {
+  const position = determineUserRole(email)
+  const role = await Role.findOne({ name: position })
+  return { position, role }
+}
+
+// Sets the session cookie and responds with the user's portfolio.
+export const startSession = async (
+  res,
+  user,
+  { status = 200, message } = {}
+) => {
+  const userPortfolio = await getUserPortfolio(user._id)
+  return res
+    .cookie('token', signToken(user), cookieOptions)
+    .status(status)
+    .json({ user: userPortfolio || user, ...(message && { message }) })
 }
 
 export const getGoogleAuthUrl = () => {

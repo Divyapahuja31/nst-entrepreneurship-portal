@@ -54,7 +54,10 @@ function PageForgotPassword() {
       setEmail(submittedEmail)
       setOtp('')
       setStep(2)
-      setSuccessMessage('A 6-digit verification code has been sent to your email.')
+      setSuccessMessage(
+        result.message ||
+          'A 6-digit verification code has been sent to your email.'
+      )
     }
   }
 
@@ -70,7 +73,8 @@ function PageForgotPassword() {
       setError(result.error)
     } else {
       setSuccessMessage(
-        'A new 6-digit verification code has been sent to your email.'
+        result.message ||
+          'A new 6-digit verification code has been sent to your email.'
       )
     }
   }

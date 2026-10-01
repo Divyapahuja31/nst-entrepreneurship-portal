@@ -24,7 +24,12 @@ const JWT_OPTIONS = {
 export const signToken = user => {
   const roleName = user.role?.name || user.role
   return jwt.sign(
-    { userId: user._id, email: user.email, role: roleName },
+    {
+      userId: user._id,
+      email: user.email,
+      role: roleName,
+      sessionVersion: user.sessionVersion ?? 0,
+    },
     getJwtSecret(),
     JWT_OPTIONS
   )

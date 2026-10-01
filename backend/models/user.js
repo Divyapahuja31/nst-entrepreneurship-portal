@@ -60,6 +60,11 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Bumped to sign out every existing session, e.g. on password reset.
+    sessionVersion: {
+      type: Number,
+      default: 0,
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,

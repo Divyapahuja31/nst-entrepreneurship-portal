@@ -384,6 +384,8 @@ export const resetPassword = async (req, res) => {
     }
 
     user.password = password
+    // Whoever needed a reset may have had their session stolen too.
+    user.sessionVersion += 1
     await user.save()
 
     return res

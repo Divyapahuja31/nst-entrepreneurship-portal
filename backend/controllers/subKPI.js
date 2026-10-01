@@ -2,13 +2,17 @@ import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
 import { validateSubKPIRequest } from '../utils/kpiValidator.js'
-import { canUserEditSubKPI } from '../utils/kpiHelper.js'
+import { canUserAccessKPI, canUserEditSubKPI } from '../utils/kpiHelper.js'
+
+// Only a KPI's creator adds SubKPIs, and only while they may still access it
+// (a personal KPI is its owner's alone).
+const canAddSubKPI = async (user, kpi) =>
+  String(kpi.createdBy) === String(user.id) && canUserAccessKPI(user, kpi)
 
 export const createSubKPI = async (req, res) => {
   try {
     const { kpiId } = req.params
     const { name, description } = req.body
-    const userId = req.user?.id
 
     const validationError = validateSubKPIRequest(req)
 
@@ -28,7 +32,7 @@ export const createSubKPI = async (req, res) => {
       })
     }
 
-    if (kpi.createdBy.toString() !== userId.toString()) {
+    if (!(await canAddSubKPI(req.user, kpi))) {
       return res.status(403).json({
         success: false,
         message: 'You are not allowed to modify this KPI',

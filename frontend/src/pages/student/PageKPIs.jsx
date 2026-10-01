@@ -77,7 +77,11 @@ export default function Kpis() {
     userProfile?.ventureId ||
     userProfile?.venture?._id
   const kpis = loaderData?.data || []
-  const members = loaderData?.members || []
+  // Personal KPIs are private to their owner, so students can only assign
+  // one to themselves; the rest of the team sees startup KPIs.
+  const members = (loaderData?.members || []).filter(
+    member => String(member.id) === String(userProfile?._id ?? userProfile?.id)
+  )
 
   const [tabIndex, setTabIndex] = useState(0)
   const [openAddKpi, setOpenAddKpi] = useState(false)

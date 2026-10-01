@@ -49,17 +49,17 @@ export const startSession = async (
     .json({ user: userPortfolio || user, ...(message && { message }) })
 }
 
-export const getGoogleAuthUrl = () => {
+export const getGoogleAuthUrl = state => {
   return client.generateAuthUrl({
     access_type: 'offline',
     scope: ['openid', 'email'],
     prompt: 'select_account',
+    state,
   })
 }
 
 export const verifyGoogleAuthCode = async code => {
   const { tokens } = await client.getToken(code)
-  client.setCredentials(tokens)
 
   const ticket = await client.verifyIdToken({
     idToken: tokens.id_token,

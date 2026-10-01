@@ -14,12 +14,14 @@ import {
   kpisVisibleTo,
   canUserManageVentureKPI,
   canUserAccessKPI,
+  kpiOwnerError,
+  kpiOwnerChangeError,
   buildNewKPIDocument,
   applyKPIProgress,
   buildEvidencePayload,
   streamS3ToResponse,
 } from '../utils/kpiHelper.js'
-import { downloadFromS3 } from '../config/s3.js'
+import { downloadFromS3, evidenceKeyFromUrl } from '../config/s3.js'
 
 const STUDENT_SETTABLE_STATUSES = ['DRAFT', 'SUBMIT', 'WAITING_FOR_APPROVAL']
 
@@ -100,6 +102,11 @@ export const createKPI = async (req, res) => {
       })
     }
 
+    const ownerError = kpiOwnerError(req.user, resolvedScope.founder)
+    if (ownerError) {
+      return res.status(403).json({ success: false, message: ownerError })
+    }
+
     const kpi = await KPI.create(
       buildNewKPIDocument({
         title,
@@ -141,6 +148,16 @@ export const getVentureKPIs = async (req, res) => {
       })
     }
 
+    // Admins see every venture; members see only their own, and only the
+    // KPIs /kpis shows them, not teammates' personal ones.
+    const isAdmin = req.user.role === 'admin'
+    if (!isAdmin && !(await canUserManageVentureKPI(req.user, ventureId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to view KPIs for this venture',
+      })
+    }
+
     const ventureFounders = await Founder.find({
       venture: ventureId,
       status: 'ACTIVE',
@@ -154,7 +171,9 @@ export const getVentureKPIs = async (req, res) => {
         email: f.user.email,
       }))
 
-    const kpis = await KPI.find({ venture: ventureId })
+    const kpis = await KPI.find(
+      isAdmin ? { venture: ventureId } : kpisVisibleTo(ventureId, req.user.id)
+    )
       .populate('venture', 'name')
       .populate('founder', 'username email')
       .populate('createdBy', 'username email')
@@ -265,6 +284,16 @@ export const getFounderKPIs = async (req, res) => {
     const venture = founderRecord.venture
     const actualUserId =
       founderRecord.user?._id || founderRecord.user || founderId
+
+    if (
+      req.user.role !== 'admin' &&
+      String(actualUserId) !== String(req.user.id)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to view these KPIs',
+      })
+    }
 
     const kpis = await KPI.find(kpisVisibleTo(venture._id, actualUserId))
       .populate('createdBy', 'username email')
@@ -398,6 +427,19 @@ export const evaluateKPI = async (req, res) => {
   }
 }
 
+// Files only arrive through the upload endpoint. The client can keep the
+// stored file or clear it, never point evidence at another URL: the download
+// would fetch it from our bucket with the server's access.
+const keptEvidenceFile = (kpi, { fileName, fileUrl }) => {
+  if (!fileUrl || !kpi.evidence?.fileUrl) {
+    return { fileName: '', fileUrl: '' }
+  }
+  return {
+    fileName: fileName || kpi.evidence.fileName,
+    fileUrl: kpi.evidence.fileUrl,
+  }
+}
+
 export const submitKPIEvidence = async (req, res) => {
   try {
     const { kpiId } = req.params
@@ -426,7 +468,10 @@ export const submitKPIEvidence = async (req, res) => {
     }
 
     applyKPIProgress(kpi, { actualValue, targetValue })
-    kpi.evidence = buildEvidencePayload({ supportingText, fileName, fileUrl })
+    kpi.evidence = buildEvidencePayload({
+      supportingText,
+      ...keptEvidenceFile(kpi, { fileName, fileUrl }),
+    })
     kpi.submissionDate = new Date()
 
     await kpi.save()
@@ -449,6 +494,18 @@ export const submitKPIEvidence = async (req, res) => {
       error: error.message,
     })
   }
+}
+
+// Limits on what non-admins may change. Accepting, rejecting and grading go
+// through the admin-only evaluate route.
+const memberUpdateError = (user, kpi, { status, founder }) => {
+  if (user.role === 'admin') {
+    return null
+  }
+  if (status !== undefined && !STUDENT_SETTABLE_STATUSES.includes(status)) {
+    return 'You can only save a KPI as draft or submit it for approval'
+  }
+  return kpiOwnerChangeError(user, kpi, founder)
 }
 
 export const updateKPI = async (req, res) => {
@@ -482,17 +539,9 @@ export const updateKPI = async (req, res) => {
       return res.status(400).json({ success: false, message: lockError })
     }
 
-    // Accepting, rejecting and grading go through the admin-only evaluate route.
-    const { status } = req.body
-    if (
-      req.user.role !== 'admin' &&
-      status !== undefined &&
-      !STUDENT_SETTABLE_STATUSES.includes(status)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only save a KPI as draft or submit it for approval',
-      })
+    const memberError = memberUpdateError(req.user, kpi, req.body)
+    if (memberError) {
+      return res.status(403).json({ success: false, message: memberError })
     }
 
     const updateFields = buildKPIUpdateFields(req.body)
@@ -524,7 +573,7 @@ export const deleteKPI = async (req, res) => {
       return res.status(404).json({ success: false, message: 'KPI not found' })
     }
 
-    if (!(await canUserManageVentureKPI(req.user, kpi.venture))) {
+    if (!(await canUserAccessKPI(req.user, kpi))) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to delete this KPI',
@@ -647,16 +696,17 @@ export const deleteKPIEvidence = async (req, res) => {
   }
 }
 
+// Serves only evidence objects in our bucket. Anything else (another key,
+// another host) is refused rather than fetched or redirected to.
 const sendEvidenceFile = async (fileUrl, res) => {
-  const isS3 = fileUrl.includes('.s3.') || fileUrl.includes('amazonaws.com')
-  if (isS3) {
-    const pathname = new URL(fileUrl).pathname
-    const key = pathname.startsWith('/') ? pathname.slice(1) : pathname
-    const s3Data = await downloadFromS3(key)
-    return await streamS3ToResponse(s3Data, res)
+  const key = evidenceKeyFromUrl(fileUrl)
+  if (!key) {
+    return res
+      .status(404)
+      .json({ success: false, message: 'Evidence file not found' })
   }
-
-  return res.redirect(fileUrl)
+  const s3Data = await downloadFromS3(key)
+  return await streamS3ToResponse(s3Data, res)
 }
 
 export const downloadKPIEvidence = async (req, res) => {

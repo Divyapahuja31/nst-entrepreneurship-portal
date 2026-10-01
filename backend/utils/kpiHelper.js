@@ -135,22 +135,49 @@ export const canUserManageVentureKPI = async (user, ventureId) => {
   )
 }
 
-const isFounderOrCreator = (kpi, userId, allowCreator) => {
-  if (kpi.scope === 'FOUNDER' && kpi.founder?.toString() === userId) {
-    return true
-  }
-  return Boolean(allowCreator && kpi.createdBy?.toString() === userId)
+const ownerId = founder => (founder ? String(founder._id ?? founder) : null)
+
+// A personal KPI (assigned to one member) is private to that member: only
+// they and admins may see or change it, matching what /kpis lists.
+const isPersonalKPI = kpi => Boolean(kpi.founder) && kpi.scope !== 'VENTURE'
+
+const isVentureMember = async (user, ventureId) => {
+  const userVenture = await findVentureForUser(user?.id)
+  return Boolean(userVenture) && String(userVenture._id) === String(ventureId)
 }
 
 export const canUserAccessKPI = async (user, kpi, allowCreator = false) => {
   if (user?.role === 'admin') {
     return true
   }
-  const userVenture = await findVentureForUser(user?.id)
-  if (userVenture && userVenture._id.toString() === kpi.venture.toString()) {
+  if (isPersonalKPI(kpi)) {
+    return ownerId(kpi.founder) === user?.id
+  }
+  if (await isVentureMember(user, kpi.venture)) {
     return true
   }
-  return isFounderOrCreator(kpi, user?.id, allowCreator)
+  return allowCreator && String(kpi.createdBy) === user?.id
+}
+
+// Members may create startup KPIs or personal KPIs for themselves. A KPI
+// assigned to a teammate would be hidden from the member who created it.
+export const kpiOwnerError = (user, founder) =>
+  user.role !== 'admin' && founder && ownerId(founder) !== user.id
+    ? 'You can only create personal KPIs for yourself'
+    : null
+
+// Members can't hand a KPI to someone else or take a startup KPI private,
+// but may turn their own personal KPI into a startup KPI.
+export const kpiOwnerChangeError = (user, kpi, founder) => {
+  if (user.role === 'admin' || founder === undefined) {
+    return null
+  }
+  const current = ownerId(kpi.founder)
+  const requested = ownerId(founder || null)
+  if (requested === current || (requested === null && current === user.id)) {
+    return null
+  }
+  return 'Only admins can change who a KPI belongs to'
 }
 
 // A SubKPI may be changed by whoever may change its parent KPI.

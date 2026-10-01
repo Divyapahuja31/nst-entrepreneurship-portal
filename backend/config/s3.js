@@ -12,12 +12,34 @@ const s3Client = new S3Client({
   },
 })
 
+const EVIDENCE_PREFIX = 'evidence/'
+
+const getBucketName = () =>
+  process.env.AWS_S3_BUCKET_NAME ||
+  process.env.AWS_S3_BUCKET ||
+  'nst-evidence-uploads'
+
+// The S3 key of an evidence file we uploaded, or null for any other URL, so a
+// stored URL can't make us fetch another object or another host.
+export const evidenceKeyFromUrl = fileUrl => {
+  let url, key
+  try {
+    url = new URL(fileUrl)
+    key = decodeURIComponent(url.pathname.slice(1))
+  } catch {
+    return null
+  }
+  const bucketName = getBucketName()
+  const isOurBucket =
+    url.protocol === 'https:' &&
+    url.hostname.startsWith(`${bucketName}.s3.`) &&
+    url.hostname.endsWith('.amazonaws.com')
+  return isOurBucket && key.startsWith(EVIDENCE_PREFIX) ? key : null
+}
+
 export async function uploadToS3(fileBuffer, fileName, mimeType) {
-  const bucketName =
-    process.env.AWS_S3_BUCKET_NAME ||
-    process.env.AWS_S3_BUCKET ||
-    'nst-evidence-uploads'
-  const key = `evidence/${Date.now()}_${fileName.replace(/\s+/g, '_')}`
+  const bucketName = getBucketName()
+  const key = `${EVIDENCE_PREFIX}${Date.now()}_${fileName.replace(/\s+/g, '_')}`
 
   const command = new PutObjectCommand({
     Bucket: bucketName,
@@ -32,10 +54,7 @@ export async function uploadToS3(fileBuffer, fileName, mimeType) {
 }
 
 export async function downloadFromS3(key) {
-  const bucketName =
-    process.env.AWS_S3_BUCKET_NAME ||
-    process.env.AWS_S3_BUCKET ||
-    'nst-evidence-uploads'
+  const bucketName = getBucketName()
 
   const command = new GetObjectCommand({
     Bucket: bucketName,

@@ -35,9 +35,11 @@ if (TRUST_PROXY) {
   app.set('trust proxy', Number(TRUST_PROXY))
 }
 
+// The frontend calls the API on its own origin, so other sites get no
+// credentialed cross-origin access.
 app.use(
   cors({
-    origin: true,
+    origin: process.env.FRONTEND_URL || false,
     credentials: true,
   })
 )

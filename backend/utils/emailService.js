@@ -11,6 +11,17 @@ const sendWithFallback = async (resend, payload) => {
   })
 }
 
+// Usernames are chosen at sign-up, so they must not be able to add HTML
+// (links, fake buttons) to emails we send to other people's addresses.
+const escapeHtml = value =>
+  String(value).replace(
+    /[&<>"']/g,
+    char =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        char
+      ]
+  )
+
 const sendOtpEmail = async ({ to, username, otp, title, message, subject }) => {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) {
@@ -25,7 +36,7 @@ const sendOtpEmail = async ({ to, username, otp, title, message, subject }) => {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
       <h2 style="color: #0f172a; margin-bottom: 16px;">${title}</h2>
-      <p style="color: #334155; font-size: 15px; line-height: 1.5;">Hi ${name},</p>
+      <p style="color: #334155; font-size: 15px; line-height: 1.5;">Hi ${escapeHtml(name)},</p>
       <p style="color: #334155; font-size: 15px; line-height: 1.5;">${message}</p>
       <div style="margin: 24px 0; text-align: center;">
         <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #2563eb; background-color: #eff6ff; padding: 12px 24px; border-radius: 8px; border: 1px dashed #bfdbfe; display: inline-block;">

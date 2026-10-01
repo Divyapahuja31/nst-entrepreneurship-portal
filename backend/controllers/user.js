@@ -1,7 +1,7 @@
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
-import { validateAll } from '../utils/validator.js'
+import { validateAll, validatePassword } from '../utils/validator.js'
 import { getUserPortfolio } from '../utils/userPortfolio.js'
 import {
   otpCooldownMessage,
@@ -371,10 +371,9 @@ export const resetPassword = async (req, res) => {
       })
     }
 
-    if (password.length < 8) {
-      return res
-        .status(400)
-        .json({ error: 'Password must be at least 8 characters long' })
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError })
     }
 
     const user = await User.findOne({ email })

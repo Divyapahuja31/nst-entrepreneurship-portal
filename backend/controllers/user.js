@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs'
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
@@ -26,6 +27,18 @@ import {
   verifyGoogleAuthCode,
 } from '../utils/authHelper.js'
 
+// Responses must not reveal whether an email has an account, so endpoints
+// that take only an email answer the same way either way.
+const SIGNUP_CODE_MESSAGE =
+  'If this email is not registered yet, a 6-digit verification code has been sent to it. Already have an account? Sign in or reset your password instead.'
+const RESET_CODE_MESSAGE =
+  'If an account exists for this email, a 6-digit verification code has been sent to it. You can request a new code once a minute.'
+const INVALID_VERIFICATION = 'Invalid or expired verification request'
+
+// Compared against when no user matches, so sign-in takes as long as a real
+// password check and its timing doesn't reveal which emails exist.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('no-such-user', 10)
+
 export const signUp = async (req, res) => {
   try {
     const { username, email, password, batch, campus } = req.body
@@ -50,12 +63,14 @@ export const signUp = async (req, res) => {
     const normalizedEmail = normalizeEmail(email)
     let user = await User.findOne({ email: normalizedEmail })
 
+    const codeResponse = {
+      requireOtp: true,
+      email: normalizedEmail,
+      message: SIGNUP_CODE_MESSAGE,
+    }
+
     if (user && user.isEmailVerified) {
-      return res.status(409).json({
-        error: {
-          email: 'Email already in use',
-        },
-      })
+      return res.status(200).json(codeResponse)
     }
 
     if (user) {
@@ -76,15 +91,9 @@ export const signUp = async (req, res) => {
       })
     }
 
-    const { retryAfter } = await sendSignupCode(user)
+    await sendSignupCode(user)
 
-    return res.status(200).json({
-      requireOtp: true,
-      email: user.email,
-      message: retryAfter
-        ? otpCooldownMessage(retryAfter)
-        : 'A 6-digit verification code has been sent to your email.',
-    })
+    return res.status(200).json(codeResponse)
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
@@ -108,6 +117,9 @@ export const signIn = async (req, res) => {
     const user = await User.findOne({ email: normalizeEmail(email) }).populate(
       'role'
     )
+    if (!user) {
+      await bcrypt.compare(String(password), DUMMY_PASSWORD_HASH)
+    }
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({
         error: 'Invalid email or password',
@@ -306,22 +318,14 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ error: 'Email is required' })
     }
 
+    // Same answer for unknown emails and during the cooldown, when the code
+    // sent moments ago is still valid.
     const user = await User.findOne({ email })
-    if (!user) {
-      return res.status(404).json({
-        error: 'No account found with this email address.',
-      })
+    if (user) {
+      await sendPasswordResetCode(user)
     }
 
-    // On cooldown the code sent moments ago is still valid, so let the user
-    // carry on to entering it rather than failing.
-    const { retryAfter } = await sendPasswordResetCode(user)
-
-    return res.status(200).json({
-      message: retryAfter
-        ? otpCooldownMessage(retryAfter)
-        : 'A 6-digit verification code has been sent to your email.',
-    })
+    return res.status(200).json({ message: RESET_CODE_MESSAGE })
   } catch (error) {
     console.error('Forgot password error:', error)
     const isDbTimeout =
@@ -408,17 +412,12 @@ export const verifySignupOtp = async (req, res) => {
       })
     }
 
-    const user = await User.findOne({ email }).populate('role')
-    if (!user) {
-      return res.status(404).json({ error: 'No account found with this email' })
-    }
-
     // Never issue a session here without a valid code, or anyone could log in
-    // as a verified user just by knowing their email.
-    if (user.isEmailVerified) {
-      return res
-        .status(400)
-        .json({ error: 'Email is already verified. Please sign in.' })
+    // as a verified user just by knowing their email. Unknown and verified
+    // emails get the same error as a bad request.
+    const user = await User.findOne({ email }).populate('role')
+    if (!user || user.isEmailVerified) {
+      return res.status(400).json({ error: INVALID_VERIFICATION })
     }
 
     const validationError = await redeemSignupCode(user, otp)
@@ -455,22 +454,11 @@ export const resendSignupOtp = async (req, res) => {
     }
 
     const user = await User.findOne({ email })
-    if (!user) {
-      return res.status(404).json({ error: 'No account found with this email' })
+    if (user && !user.isEmailVerified) {
+      await sendSignupCode(user)
     }
 
-    if (user.isEmailVerified) {
-      return res.status(400).json({ error: 'Email is already verified' })
-    }
-
-    const { retryAfter } = await sendSignupCode(user)
-    if (retryAfter) {
-      return res.status(429).json({ error: otpCooldownMessage(retryAfter) })
-    }
-
-    return res.status(200).json({
-      message: 'A new 6-digit verification code has been sent to your email.',
-    })
+    return res.status(200).json({ message: SIGNUP_CODE_MESSAGE })
   } catch (error) {
     console.error('Resend signup OTP error:', error)
     return res.status(500).json({ error: 'Failed to resend verification code' })

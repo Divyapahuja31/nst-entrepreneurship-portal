@@ -74,17 +74,19 @@ const sendCode = async (user, flow) => {
   user[flow.attemptsField] = 0
   await user.save()
 
-  try {
-    await flow.sendEmail({ to: user.email, username: user.username, otp })
-  } catch (error) {
-    // No code reached the user, so drop it. Otherwise its cooldown would stop
-    // them asking for one that does.
-    await User.updateOne(
-      { _id: user._id, [flow.otpField]: hash },
-      { $set: cleared(flow) }
-    )
-    throw error
-  }
+  // Sent in the background: waiting for the email would make registered
+  // emails answer slower than unknown ones, revealing which exist.
+  flow
+    .sendEmail({ to: user.email, username: user.username, otp })
+    .catch(async error => {
+      console.error('Failed to send verification email:', error)
+      // No code reached the user, so drop it. Otherwise its cooldown would
+      // stop them asking for one that does.
+      await User.updateOne(
+        { _id: user._id, [flow.otpField]: hash },
+        { $set: cleared(flow) }
+      ).catch(err => console.error('Failed to drop unsent code:', err))
+    })
   return { sent: true, retryAfter: 0 }
 }
 

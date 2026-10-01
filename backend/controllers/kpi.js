@@ -7,6 +7,7 @@ import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   resolveKPIScope,
   parseEvaluationScore,
+  isValidKPIStatus,
   buildEvaluationFields,
   buildKPIUpdateFields,
   resolveEvidenceData,
@@ -384,8 +385,13 @@ export const evaluateKPI = async (req, res) => {
     if (parsedScore === -1) {
       return res.status(400).json({
         success: false,
-        message: 'Score must be a valid non-negative number',
+        message: 'Score must be a number from 0 to 100',
       })
+    }
+    if (!isValidKPIStatus(status)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid KPI status' })
     }
 
     const updateFields = buildEvaluationFields({
@@ -398,7 +404,7 @@ export const evaluateKPI = async (req, res) => {
     const updatedKPI = await KPI.findByIdAndUpdate(
       kpiId,
       { $set: updateFields },
-      { new: true }
+      { new: true, runValidators: true }
     )
       .populate('venture', 'name')
       .populate('founder', 'username email')

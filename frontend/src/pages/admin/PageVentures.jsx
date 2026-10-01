@@ -4,6 +4,7 @@ import { useLoaderData, useRevalidator } from 'react-router'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -52,6 +53,23 @@ const joinRequestColumns = [
   { key: 'submitted', label: 'requested' },
 ]
 
+// Name plus a note when the same student has another application pending:
+// approving either one closes the other.
+const studentCell = (name, otherApplication) => (
+  <>
+    {name || '-'}
+    {otherApplication && (
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        label={otherApplication}
+        sx={{ ml: 1 }}
+      />
+    )}
+  </>
+)
+
 const formatDate = value => {
   if (!value) return '-'
 
@@ -74,11 +92,22 @@ export default function PageVentures() {
   const [rejecting, setRejecting] = React.useState(null)
   const [remarks, setRemarks] = React.useState('')
 
+  const proposalByStudent = new Map(
+    proposals.map(p => [p.submittedBy?._id, p.startupName])
+  )
+  const joinRequestByStudent = new Map(
+    joinRequests.map(r => [r.requestedBy?._id, r.venture?.name])
+  )
+
   const proposalRows = proposals.map(proposal => ({
     id: proposal._id,
     proposal,
     startup: proposal.startupName,
-    founder: proposal.submittedBy?.username,
+    founder: studentCell(
+      proposal.submittedBy?.username,
+      joinRequestByStudent.has(proposal.submittedBy?._id) &&
+        `Also asked to join ${joinRequestByStudent.get(proposal.submittedBy?._id)}`
+    ),
     campus: proposal.campus?.name,
     industry: proposal.industry?.name || proposal.industryName,
     stage: proposal.stage,
@@ -87,7 +116,11 @@ export default function PageVentures() {
 
   const joinRequestRows = joinRequests.map(request => ({
     id: request._id,
-    founder: request.requestedBy?.username,
+    founder: studentCell(
+      request.requestedBy?.username,
+      proposalByStudent.has(request.requestedBy?._id) &&
+        `Also proposed ${proposalByStudent.get(request.requestedBy?._id)}`
+    ),
     venture: request.venture?.name,
     message: request.message,
     submitted: formatDate(request.createdAt),

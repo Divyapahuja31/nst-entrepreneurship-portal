@@ -10,7 +10,19 @@ import {
   handleJoinRequestApproval,
   buildJoinRequestUpdate,
   rollbackJoinRequestApproval,
+  closeOtherApplications,
 } from '../utils/applicationHelper.js'
+import Venture from '../models/venture.js'
+
+// Best effort: the approval already succeeded, so a failure here is logged
+// rather than reported as a failed review.
+const closeOthersAfterApproval = async args => {
+  try {
+    await closeOtherApplications(args)
+  } catch (error) {
+    console.error('Could not close other applications:', error)
+  }
+}
 
 export const getPendingApplications = async (req, res) => {
   try {
@@ -99,6 +111,15 @@ export const reviewProposal = async (req, res) => {
       })
     }
 
+    if (status === 'APPROVED') {
+      await closeOthersAfterApproval({
+        studentId: proposal.submittedBy,
+        reviewerId: req.user.id,
+        ventureName: proposal.startupName,
+        keepProposalId: proposal._id,
+      })
+    }
+
     return res.status(200).json({ proposal: updatedProposal })
   } catch (error) {
     await rollbackProposalApproval(
@@ -159,6 +180,16 @@ export const reviewJoinRequest = async (req, res) => {
       await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
       return res.status(409).json({
         error: 'This join request has already been reviewed',
+      })
+    }
+
+    if (status === 'APPROVED') {
+      const venture = await Venture.findById(joinRequest.venture).select('name')
+      await closeOthersAfterApproval({
+        studentId: joinRequest.requestedBy,
+        reviewerId: req.user.id,
+        ventureName: venture?.name ?? 'a venture',
+        keepJoinRequestId: joinRequest._id,
       })
     }
 

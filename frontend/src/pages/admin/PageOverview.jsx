@@ -9,30 +9,37 @@ import DonutChart from '../../components/DonutChart'
 import HorizontalBars from '../../components/HorizontalBars'
 import { useLoaderData } from 'react-router'
 
+// Health is per venture, so the last four cards add up to the first.
 const cards = [
   {
     id: 1,
-    title: 'Founder',
-    data: 'founder',
-    description: 'Total active founders enrolled in the program.',
+    title: 'Ventures',
+    data: 'ventures',
+    description: 'Ventures in the program.',
   },
   {
     id: 2,
     title: 'On Track',
     data: 'onTrack',
-    description: 'Founders on track with average KPI score ≥ 70.',
+    description: 'Average KPI score of 70 or more.',
   },
   {
     id: 3,
     title: 'Watch',
     data: 'watch',
-    description: 'Founders needing mentorship with average KPI score 40–69.',
+    description: 'Average KPI score of 40 to 69. Needs mentorship.',
   },
   {
     id: 4,
     title: 'At Risk',
     data: 'atRisk',
-    description: 'Founders requiring critical intervention with average KPI score < 40.',
+    description: 'Average KPI score below 40. Needs intervention.',
+  },
+  {
+    id: 5,
+    title: 'No reviews yet',
+    data: 'noReviews',
+    description: 'No graded KPIs yet, so health is unknown.',
   },
 ]
 
@@ -54,7 +61,7 @@ function Index() {
         sx={{
           width: '100%',
           display: 'grid',
-          gridTemplateColumns: 'repeat(4 , 1fr)',
+          gridTemplateColumns: 'repeat(5, 1fr)',
           gap: 2,
         }}
       >

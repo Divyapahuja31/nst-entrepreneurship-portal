@@ -28,7 +28,8 @@ export const getFounderPortfolioData = async () => {
       })
       .sort({ name: 1 }),
 
-    KpiModel.find({ status: 'GRADED', score: { $gt: 0 } }),
+    // A score of 0 is a real grade; leaving it out inflated every average.
+    KpiModel.find({ status: 'GRADED', score: { $gte: 0 } }),
   ])
 
   const kpisByVenture = new Map()
@@ -42,16 +43,21 @@ export const getFounderPortfolioData = async () => {
     }
   }
 
-  const students = ventures.flatMap(venture => {
-    const founders = venture.founders
-      .map(founder => founder.user)
-      .filter(Boolean)
+  // Health is a property of the venture; each founder inherits it.
+  const ventureHealthRows = ventures.map(venture => {
     const ventureKpis = kpisByVenture.get(venture._id.toString()) || []
     const score = ventureKpis.length
       ? Math.round(
           ventureKpis.reduce((sum, k) => sum + k.score, 0) / ventureKpis.length
         )
       : null
+    return { venture, score, status: deriveStatus(score) }
+  })
+
+  const students = ventureHealthRows.flatMap(({ venture, score }) => {
+    const founders = venture.founders
+      .map(founder => founder.user)
+      .filter(Boolean)
 
     return founders.map(founder => ({
       id: founder._id,
@@ -65,5 +71,5 @@ export const getFounderPortfolioData = async () => {
     }))
   })
 
-  return { ventures, students }
+  return { ventures, students, ventureHealth: ventureHealthRows }
 }

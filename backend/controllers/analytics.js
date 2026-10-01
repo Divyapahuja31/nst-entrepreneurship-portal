@@ -48,8 +48,9 @@ async function getMonthlyAverageKPIScores({
   const result = {}
   MONTH_NAMES.forEach((monthName, monthIndex) => {
     const monthKpis = kpisByMonth[monthIndex]
+    // No grades that month: there is no score, which is not the same as 0.
     if (monthKpis.length === 0) {
-      result[monthName] = 0
+      result[monthName] = null
       return
     }
 
@@ -73,7 +74,9 @@ async function getMonthlyAverageKPIScores({
       totalWeight += weight
     }
 
-    result[monthName] = totalWeight ? Math.round(totalScore / totalWeight) : 0
+    result[monthName] = totalWeight
+      ? Math.round(totalScore / totalWeight)
+      : null
   })
 
   return result
@@ -81,16 +84,22 @@ async function getMonthlyAverageKPIScores({
 
 const getOverview = async (_, res) => {
   try {
-    const [{ ventures, students }, kpi] = await Promise.all([
-      getFounderPortfolioData(),
-      getMonthlyAverageKPIScores(),
-    ])
+    const [{ ventures, students, ventureHealth: health }, kpi] =
+      await Promise.all([
+        getFounderPortfolioData(),
+        getMonthlyAverageKPIScores(),
+      ])
 
+    // Counted per venture, so a four-person team counts once, and every
+    // venture lands in exactly one bucket (including "no reviews yet").
+    const countHealth = status => health.filter(h => h.status === status).length
     const overview = {
-      founder: students.length,
-      onTrack: students.filter(s => s.status === ventureHealth.ON_TRACK).length,
-      watch: students.filter(s => s.status === ventureHealth.WATCH).length,
-      atRisk: students.filter(s => s.status === ventureHealth.AT_RISK).length,
+      ventures: ventures.length,
+      founders: students.length,
+      onTrack: countHealth(ventureHealth.ON_TRACK),
+      watch: countHealth(ventureHealth.WATCH),
+      atRisk: countHealth(ventureHealth.AT_RISK),
+      noReviews: countHealth(ventureHealth.NO_REVIEWS),
     }
 
     const result = ventures.reduce(

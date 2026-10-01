@@ -15,11 +15,11 @@ const chartSetting = {
 export default function BarGraph({ kpiDistribution }) {
   const kpiData = Object.entries(kpiDistribution ?? {}).map(
     ([month, value]) => {
-      const score = typeof value === 'number' ? value : 0
+      // null means nothing was graded that month; keep it empty, not 0.
+      const score = typeof value === 'number' ? value : null
       return {
         month: month.charAt(0).toUpperCase() + month.slice(1, 3),
         score,
-        count: score,
       }
     }
   )

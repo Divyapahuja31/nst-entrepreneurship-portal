@@ -38,19 +38,19 @@ const ventureColumns = [
 ]
 
 const proposalColumns = [
-  { key: 'startup', label: 'startup' },
-  { key: 'founder', label: 'submitted by' },
-  { key: 'campus', label: 'campus' },
-  { key: 'industry', label: 'industry' },
-  { key: 'stage', label: 'stage' },
-  { key: 'submitted', label: 'submitted' },
+  { key: 'startup', label: 'Startup' },
+  { key: 'founder', label: 'Submitted by' },
+  { key: 'campus', label: 'Campus' },
+  { key: 'industry', label: 'Industry' },
+  { key: 'stage', label: 'Stage' },
+  { key: 'submitted', label: 'Submitted' },
 ]
 
 const joinRequestColumns = [
-  { key: 'founder', label: 'student' },
-  { key: 'venture', label: 'startup' },
-  { key: 'message', label: 'message' },
-  { key: 'submitted', label: 'requested' },
+  { key: 'founder', label: 'Student' },
+  { key: 'venture', label: 'Startup' },
+  { key: 'message', label: 'Message' },
+  { key: 'submitted', label: 'Requested' },
 ]
 
 // Name plus a note when the same student has another application pending:
@@ -100,6 +100,9 @@ export default function PageVentures() {
   const [viewing, setViewing] = React.useState(null)
   const [rejecting, setRejecting] = React.useState(null)
   const [remarks, setRemarks] = React.useState('')
+  // A decision waiting for confirmation: { title, body, confirmLabel, run }.
+  const [confirming, setConfirming] = React.useState(null)
+  const [notice, setNotice] = React.useState('')
 
   const proposalByStudent = new Map(
     proposals.map(p => [p.submittedBy?._id, p.startupName])
@@ -112,6 +115,8 @@ export default function PageVentures() {
     id: proposal._id,
     proposal,
     startup: proposal.startupName,
+    studentName: proposal.submittedBy?.username,
+    otherApplication: joinRequestByStudent.get(proposal.submittedBy?._id),
     founder: studentCell(
       proposal.submittedBy?.username,
       joinRequestByStudent.has(proposal.submittedBy?._id) &&
@@ -125,18 +130,36 @@ export default function PageVentures() {
 
   const joinRequestRows = joinRequests.map(request => ({
     id: request._id,
+    studentName: request.requestedBy?.username,
+    ventureName: request.venture?.name,
+    otherApplication: proposalByStudent.get(request.requestedBy?._id),
     founder: studentCell(
       request.requestedBy?.username,
       proposalByStudent.has(request.requestedBy?._id) &&
         `Also proposed ${proposalByStudent.get(request.requestedBy?._id)}`
     ),
     venture: request.venture?.name,
-    message: request.message,
+    // Two lines at most; the full message is in the tooltip.
+    message: request.message ? (
+      <Box
+        title={request.message}
+        sx={{
+          maxWidth: 420,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
+      >
+        {request.message}
+      </Box>
+    ) : null,
     submitted: describeWait(request.createdAt),
   }))
 
-  const runReview = async review => {
+  const runReview = async (review, successMessage) => {
     setError('')
+    setNotice('')
 
     const result = await review()
 
@@ -147,15 +170,29 @@ export default function PageVentures() {
       return
     }
 
+    setNotice(successMessage)
     revalidator.revalidate()
   }
 
+  // Approvals and join-request rejections can't be undone, so each asks first.
   const handleApproveProposal = row => {
     const proposalId = row.id ?? row._id
+    const startup = row.startup ?? row.startupName
+    const student = row.studentName ?? row.submittedBy?.username
 
     setViewing(null)
-    setBusyId(proposalId)
-    runReview(() => reviewProposal(proposalId, 'APPROVED'))
+    setConfirming({
+      title: `Approve ${startup}?`,
+      body: `This creates the startup with ${student} as its founder.`,
+      confirmLabel: 'Approve',
+      run: () => {
+        setBusyId(proposalId)
+        runReview(
+          () => reviewProposal(proposalId, 'APPROVED'),
+          `Approved ${startup}.`
+        )
+      },
+    })
   }
 
   const startRejectProposal = row => {
@@ -168,13 +205,36 @@ export default function PageVentures() {
   }
 
   const handleApproveJoinRequest = row => {
-    setBusyId(row.id)
-    runReview(() => reviewJoinRequest(row.id, 'APPROVED'))
+    const other = row.otherApplication
+      ? ` Their pending proposal for ${row.otherApplication} will be closed.`
+      : ''
+    setConfirming({
+      title: `Add ${row.studentName} to ${row.ventureName}?`,
+      body: `${row.studentName} becomes a founder of ${row.ventureName}.${other}`,
+      confirmLabel: 'Approve',
+      run: () => {
+        setBusyId(row.id)
+        runReview(
+          () => reviewJoinRequest(row.id, 'APPROVED'),
+          `${row.studentName} joined ${row.ventureName}.`
+        )
+      },
+    })
   }
 
   const handleRejectJoinRequest = row => {
-    setBusyId(row.id)
-    runReview(() => reviewJoinRequest(row.id, 'REJECTED'))
+    setConfirming({
+      title: `Reject ${row.studentName}'s request?`,
+      body: `${row.studentName} won't join ${row.ventureName}. This can't be undone.`,
+      confirmLabel: 'Reject',
+      run: () => {
+        setBusyId(row.id)
+        runReview(
+          () => reviewJoinRequest(row.id, 'REJECTED'),
+          `Rejected ${row.studentName}'s request to join ${row.ventureName}.`
+        )
+      },
+    })
   }
 
   const handleConfirmRejectProposal = () => {
@@ -182,7 +242,10 @@ export default function PageVentures() {
 
     setRejecting(null)
     setBusyId(proposalId)
-    runReview(() => reviewProposal(proposalId, 'REJECTED', remarks))
+    runReview(
+      () => reviewProposal(proposalId, 'REJECTED', remarks),
+      `Rejected ${rejecting.startup}.`
+    )
   }
 
   return (
@@ -197,6 +260,11 @@ export default function PageVentures() {
       {error && (
         <Alert severity="error" sx={{ mt: 2 }}>
           {error}
+        </Alert>
+      )}
+      {notice && (
+        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setNotice('')}>
+          {notice}
         </Alert>
       )}
 
@@ -227,6 +295,7 @@ export default function PageVentures() {
       <TabPanel value={tab} index={1}>
         {proposalRows.length ? (
           <ReviewTable
+            actionsLabel="Actions"
             columns={proposalColumns}
             rows={proposalRows}
             busyId={busyId}
@@ -242,6 +311,7 @@ export default function PageVentures() {
       <TabPanel value={tab} index={2}>
         {joinRequestRows.length ? (
           <ReviewTable
+            actionsLabel="Actions"
             columns={joinRequestColumns}
             rows={joinRequestRows}
             busyId={busyId}
@@ -289,6 +359,31 @@ export default function PageVentures() {
           <Button onClick={() => setRejecting(null)}>Cancel</Button>
           <Button variant="contained" onClick={handleConfirmRejectProposal}>
             Reject
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(confirming)}
+        onClose={() => setConfirming(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{confirming?.title}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{confirming?.body}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirming(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color={confirming?.confirmLabel === 'Reject' ? 'error' : 'primary'}
+            onClick={() => {
+              confirming.run()
+              setConfirming(null)
+            }}
+          >
+            {confirming?.confirmLabel}
           </Button>
         </DialogActions>
       </Dialog>

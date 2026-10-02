@@ -173,6 +173,15 @@ const CHECKLISTS = [
 
 const STATUS_COLOR = { green: 'success', yellow: 'warning', red: 'error' }
 
+// Evidence URLs are typed by students; only web addresses become links.
+const isWebUrl = value => {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol)
+  } catch {
+    return false
+  }
+}
+
 function computeCycles(startISO) {
   const start = new Date(startISO)
   return Array.from({ length: CYCLES }, (_, i) => {
@@ -1202,7 +1211,7 @@ function MentorObservationSection({
                           sx={{ alignItems: 'center' }}
                         >
                           <OpenInNewIcon fontSize="inherit" />
-                          {link.url ? (
+                          {isWebUrl(link.url) ? (
                             <Link
                               href={link.url}
                               target="_blank"

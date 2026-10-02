@@ -35,7 +35,126 @@ export const pickStudentSubmissionFields = body =>
 
 export const validateCycleNumber = n => {
   const num = Number(n)
-  return num >= 1 && num <= 13 ? num : null
+  return Number.isInteger(num) && num >= 1 && num <= 13 ? num : null
+}
+
+const MAX_EVIDENCE_LINKS = 20
+const CYCLE_DAYS = 14
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// Evidence URLs are typed by students and shown to faculty as links, so only
+// web addresses are kept: no javascript:, data: or other schemes.
+const isWebUrl = value => {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol)
+  } catch {
+    return false
+  }
+}
+
+const isValidEvidenceLink = link =>
+  link !== null &&
+  typeof link === 'object' &&
+  (link.url === undefined ||
+    link.url === '' ||
+    (typeof link.url === 'string' && isWebUrl(link.url.trim())))
+
+// Returns an error message, or null when the evidence links are acceptable.
+export const validateEvidenceLinks = links => {
+  if (links === undefined) {
+    return null
+  }
+  if (!Array.isArray(links) || links.length > MAX_EVIDENCE_LINKS) {
+    return `Add at most ${MAX_EVIDENCE_LINKS} evidence links`
+  }
+  if (!links.every(isValidEvidenceLink)) {
+    return 'Evidence links must be web addresses starting with http:// or https://'
+  }
+  return null
+}
+
+// Cycles open every 14 days from the venture's creation, as on the bi-weekly
+// page. A day of slack covers the student's time zone.
+export const hasCycleStarted = (ventureCreatedAt, cycleNum, now = Date.now()) =>
+  new Date(ventureCreatedAt).getTime() +
+    ((cycleNum - 1) * CYCLE_DAYS - 1) * DAY_MS <=
+  now
+
+// Checks a student's submit or save request. Returns { error } or the
+// cleaned { cycleNum, data, isSubmit }.
+export const parseStudentSubmission = body => {
+  const cycleNum = validateCycleNumber(body.cycle_number)
+  if (!cycleNum) {
+    return { error: 'Invalid cycle number (1-13)' }
+  }
+
+  const data = pickStudentSubmissionFields(body)
+  const linkError = validateEvidenceLinks(data.evidence_links)
+  if (linkError) {
+    return { error: linkError }
+  }
+
+  // Only a real `true` submits and locks the cycle; "false" must not.
+  return { cycleNum, data, isSubmit: body.isSubmit === true }
+}
+
+const SCORE_FIELDS = [
+  'execution_score',
+  'customer_score',
+  'business_score',
+  'behavior_score',
+]
+
+// Returns { error } or { scores } with each pillar a number from 0 to 100.
+// Pillars left out keep their current value.
+export const parseEvaluationScores = body => {
+  const scores = {}
+  for (const field of SCORE_FIELDS) {
+    const value = body[field]
+    if (value === undefined) {
+      continue
+    }
+    if (typeof value !== 'number' || !(value >= 0 && value <= 100)) {
+      return { error: 'Each pillar score must be a number from 0 to 100' }
+    }
+    scores[field] = value
+  }
+  return { scores }
+}
+
+const OBSERVATION_TEXT_FIELDS = [
+  'observation',
+  'strengths',
+  'concerns',
+  'action_items',
+]
+
+// Returns { error } or the observation fields from the body.
+export const parseObservation = body => {
+  const fields = {}
+  for (const field of OBSERVATION_TEXT_FIELDS) {
+    if (body[field] === undefined) {
+      continue
+    }
+    if (typeof body[field] !== 'string') {
+      return { error: `${field} must be text` }
+    }
+    fields[field] = body[field]
+  }
+
+  const reviewed = body.evidence_reviewed
+  if (reviewed !== undefined) {
+    const valid =
+      Array.isArray(reviewed) &&
+      reviewed.length <= MAX_EVIDENCE_LINKS &&
+      reviewed.every(i => Number.isInteger(i) && i >= 0)
+    if (!valid) {
+      return { error: 'evidence_reviewed must list evidence link positions' }
+    }
+    fields.evidence_reviewed = reviewed
+  }
+
+  return { fields }
 }
 
 export const findVenture = async (ventureId, founder, user) => {

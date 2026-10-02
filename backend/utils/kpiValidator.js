@@ -41,7 +41,7 @@ export const validateCreateKPI = ({ title, description, venture, userId }) => {
 
 export const validateSubKPIRequest = req => {
   const { kpiId } = req.params
-  const { name } = req.body
+  const { name, description } = req.body
   const userId = req.user?.id
   if (!userId) {
     return {
@@ -57,10 +57,17 @@ export const validateSubKPIRequest = req => {
     }
   }
 
-  if (!name?.trim()) {
+  if (typeof name !== 'string' || !name.trim()) {
     return {
       statusCode: 400,
       message: 'SubKPI name is required',
+    }
+  }
+
+  if (description !== undefined && typeof description !== 'string') {
+    return {
+      statusCode: 400,
+      message: 'SubKPI description must be text',
     }
   }
 

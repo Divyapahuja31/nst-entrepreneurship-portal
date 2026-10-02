@@ -4,6 +4,11 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3'
 
+import {
+  evidenceContentType,
+  safeEvidenceFileName,
+} from '../utils/evidenceFile.js'
+
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
   credentials: {
@@ -37,15 +42,16 @@ export const evidenceKeyFromUrl = fileUrl => {
   return isOurBucket && key.startsWith(EVIDENCE_PREFIX) ? key : null
 }
 
-export async function uploadToS3(fileBuffer, fileName, mimeType) {
+// The content type follows the file's extension, not the browser's claim.
+export async function uploadToS3(fileBuffer, fileName) {
   const bucketName = getBucketName()
-  const key = `${EVIDENCE_PREFIX}${Date.now()}_${fileName.replace(/\s+/g, '_')}`
+  const key = `${EVIDENCE_PREFIX}${Date.now()}_${safeEvidenceFileName(fileName)}`
 
   const command = new PutObjectCommand({
     Bucket: bucketName,
     Key: key,
     Body: fileBuffer,
-    ContentType: mimeType,
+    ContentType: evidenceContentType(fileName),
   })
 
   await s3Client.send(command)

@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Chip,
   Divider,
+  Alert,
 } from '@mui/material'
 import RateReviewIcon from '@mui/icons-material/RateReview'
 import DownloadIcon from '@mui/icons-material/Download'
@@ -29,6 +30,30 @@ const formatDate = dateStr => {
   }
 }
 
+// What a KPI can become from each status; mirrors EVALUATION_TRANSITIONS on
+// the server. A draft hasn't been submitted, so it has no decisions.
+const DECISIONS = {
+  WAITING_FOR_APPROVAL: ['ACCEPTED', 'REJECTED'],
+  REJECTED: ['ACCEPTED', 'REJECTED'],
+  ACCEPTED: ['GRADED'],
+  GRADED: ['GRADED'],
+}
+
+const DECISION_LABELS = {
+  ACCEPTED: 'Accept (approve the KPI proposal)',
+  GRADED: 'Grade (assign a score)',
+  REJECTED: 'Reject (the student revises it)',
+}
+
+const SUBMIT_LABELS = {
+  ACCEPTED: 'Approve KPI',
+  GRADED: 'Submit grade',
+  REJECTED: 'Reject KPI',
+}
+
+const isValidScore = value =>
+  value !== '' && Number(value) >= 0 && Number(value) <= 100
+
 export default function KPIEvaluateDialog({
   open,
   onClose,
@@ -41,7 +66,7 @@ export default function KPIEvaluateDialog({
 }) {
   const [prevOpen, setPrevOpen] = useState(false)
   const [prevKpi, setPrevKpi] = useState(null)
-  const [evalStatus, setEvalStatus] = useState('ACCEPTED')
+  const [evalStatus, setEvalStatus] = useState('')
   const [evalScore, setEvalScore] = useState('')
   const [evalFeedback, setEvalFeedback] = useState('')
 
@@ -49,34 +74,32 @@ export default function KPIEvaluateDialog({
     setPrevOpen(open)
     setPrevKpi(kpi)
     if (open && kpi) {
+      // Score defaults to 0 on the server; only show it once a grade exists.
       setEvalScore(
-        kpi.score !== undefined && kpi.score !== null ? String(kpi.score) : ''
+        kpi.status === 'GRADED' && kpi.score != null ? String(kpi.score) : ''
       )
       setEvalFeedback(kpi.feedback || '')
-      if (initialStatus) {
-        setEvalStatus(initialStatus)
-      } else if (
-        kpi.status === 'WAITING_FOR_APPROVAL' ||
-        kpi.status === 'DRAFT'
-      ) {
-        setEvalStatus('ACCEPTED')
-      } else if (kpi.status === 'ACCEPTED') {
-        setEvalStatus('GRADED')
-      } else {
-        setEvalStatus(kpi.status || 'ACCEPTED')
-      }
+      const options = DECISIONS[kpi.status] ?? []
+      setEvalStatus(
+        options.includes(initialStatus) ? initialStatus : (options[0] ?? '')
+      )
     }
   }
 
+  const decisions = DECISIONS[kpi?.status] ?? []
+  const scoreMissing = evalStatus === 'GRADED' && !isValidScore(evalScore)
+  const reasonMissing = evalStatus === 'REJECTED' && !evalFeedback.trim()
+  const canSubmit = Boolean(evalStatus) && !scoreMissing && !reasonMissing
+  const hasEvidenceFile = Boolean(
+    kpi?.evidence?.fileUrl || kpi?.evidence?.fileName
+  )
+
   const handleSubmit = () => {
-    if (!kpi) return
+    if (!kpi || !canSubmit) return
     onSave({
       kpiId: kpi._id,
       status: evalStatus,
-      score:
-        evalStatus === 'GRADED' && evalScore !== ''
-          ? Number(evalScore)
-          : undefined,
+      score: evalStatus === 'GRADED' ? Number(evalScore) : undefined,
       feedback: evalFeedback,
     })
   }
@@ -101,11 +124,13 @@ export default function KPIEvaluateDialog({
             <Typography
               variant="caption"
               color="text.secondary"
-              display="block"
+              sx={{ display: 'block' }}
             >
-              Student / Startup:{' '}
+              Owner:{' '}
               <strong>
-                {founder?.username || kpi?.founder?.username || 'Student'}
+                {founder?.username ||
+                  kpi?.founder?.username ||
+                  'Entire startup'}
               </strong>{' '}
               {venture?.name || kpi?.venture?.name
                 ? `(${venture?.name || kpi?.venture?.name})`
@@ -114,10 +139,10 @@ export default function KPIEvaluateDialog({
             <Typography
               variant="caption"
               color="text.secondary"
-              display="block"
+              sx={{ display: 'block' }}
             >
-              Due Date: <strong>{formatDate(kpi?.dueDate)}</strong> |
-              Submission Date:{' '}
+              Due Date: <strong>{formatDate(kpi?.dueDate)}</strong> | Submission
+              Date:{' '}
               <strong>
                 {formatDate(kpi?.submissionDate || kpi?.evidence?.submittedAt)}
               </strong>
@@ -210,9 +235,7 @@ export default function KPIEvaluateDialog({
               </Box>
             )}
 
-            {(kpi?.evidence?.fileName ||
-              kpi?.evidence?.fileUrl ||
-              kpi?._id) && (
+            {hasEvidenceFile && (
               <Box
                 sx={{
                   mt: 1,
@@ -228,7 +251,7 @@ export default function KPIEvaluateDialog({
                   <Typography
                     variant="caption"
                     color="text.secondary"
-                    display="block"
+                    sx={{ display: 'block' }}
                   >
                     Attached Evidence File:
                   </Typography>
@@ -259,95 +282,101 @@ export default function KPIEvaluateDialog({
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2.5 }}>
-          <TextField
-            select
-            label="Action / Status"
-            size="small"
-            fullWidth
-            value={evalStatus}
-            onChange={e => setEvalStatus(e.target.value)}
-            helperText={
-              evalStatus === 'ACCEPTED'
-                ? 'Approve this KPI definition proposed by student'
-                : evalStatus === 'GRADED'
-                  ? 'Assign performance grade/score and stamp evaluation date'
-                  : evalStatus === 'REJECTED'
-                    ? 'Reject this KPI definition with feedback so student can revise'
-                    : ''
-            }
-          >
-            <MenuItem value="ACCEPTED">
-              Accepted (Approve KPI Proposal)
-            </MenuItem>
-            <MenuItem value="GRADED">
-              Graded (Assign Score & Evaluation Date)
-            </MenuItem>
-            <MenuItem value="REJECTED">
-              Rejected (Require Student Revision)
-            </MenuItem>
-          </TextField>
+        {decisions.length === 0 ? (
+          <Alert severity="info">
+            This KPI is still a draft. You can review it once the student
+            submits it for approval.
+          </Alert>
+        ) : (
+          <>
+            <Box
+              sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2.5 }}
+            >
+              <TextField
+                select
+                label="Decision"
+                size="small"
+                fullWidth
+                value={evalStatus}
+                onChange={e => setEvalStatus(e.target.value)}
+              >
+                {decisions.map(value => (
+                  <MenuItem key={value} value={value}>
+                    {DECISION_LABELS[value]}
+                  </MenuItem>
+                ))}
+              </TextField>
 
-          {evalStatus === 'GRADED' && (
+              {evalStatus === 'GRADED' && (
+                <TextField
+                  label="Score (0–100)"
+                  type="number"
+                  size="small"
+                  fullWidth
+                  required
+                  value={evalScore}
+                  onChange={e => setEvalScore(e.target.value)}
+                  placeholder="e.g. 85"
+                  slotProps={{ htmlInput: { min: 0, max: 100, step: 1 } }}
+                  error={evalScore !== '' && scoreMissing}
+                  helperText={
+                    evalScore !== '' && scoreMissing
+                      ? 'Enter a score from 0 to 100'
+                      : 'Required to grade the KPI'
+                  }
+                />
+              )}
+            </Box>
+
             <TextField
-              label="Grade / Score"
-              type="number"
-              size="small"
+              label={
+                evalStatus === 'REJECTED'
+                  ? 'Reason and guidance for the student'
+                  : 'Feedback'
+              }
+              multiline
+              rows={4}
               fullWidth
-              value={evalScore}
-              onChange={e => setEvalScore(e.target.value)}
-              placeholder="e.g. 85"
-              inputProps={{ min: 0, max: 100 }}
-              helperText="Enter score (e.g. 0 - 100)"
-              required
+              required={evalStatus === 'REJECTED'}
+              value={evalFeedback}
+              onChange={e => setEvalFeedback(e.target.value)}
+              placeholder={
+                evalStatus === 'REJECTED'
+                  ? 'Explain why this KPI is rejected and how the student should improve it...'
+                  : 'Feedback, observations or advice...'
+              }
+              helperText={
+                evalStatus === 'REJECTED'
+                  ? 'Required. Visible to the student.'
+                  : 'Visible to the student.'
+              }
             />
-          )}
-        </Box>
-
-        <TextField
-          label={
-            evalStatus === 'REJECTED'
-              ? 'Rejection Reason / Guidance for Student'
-              : 'Teacher Feedback / Remarks'
-          }
-          multiline
-          rows={4}
-          fullWidth
-          value={evalFeedback}
-          onChange={e => setEvalFeedback(e.target.value)}
-          placeholder={
-            evalStatus === 'REJECTED'
-              ? 'Explain why this KPI is rejected and how the student should improve the metric...'
-              : 'Enter constructive feedback, milestone validation observations, or advice...'
-          }
-          helperText="Visible to the student."
-        />
+          </>
+        )}
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose} disabled={saving} color="inherit">
-          Cancel
+          {decisions.length ? 'Cancel' : 'Close'}
         </Button>
-        <Button
-          variant="contained"
-          color={
-            evalStatus === 'REJECTED'
-              ? 'error'
-              : evalStatus === 'GRADED'
-                ? 'primary'
-                : 'success'
-          }
-          onClick={handleSubmit}
-          disabled={saving}
-          startIcon={
-            saving ? <CircularProgress size={16} /> : <RateReviewIcon />
-          }
-        >
-          {saving
-            ? 'Saving...'
-            : evalStatus === 'GRADED'
-              ? 'Submit Grade'
-              : `Mark as ${evalStatus}`}
-        </Button>
+        {decisions.length > 0 && (
+          <Button
+            variant="contained"
+            color={
+              evalStatus === 'REJECTED'
+                ? 'error'
+                : evalStatus === 'GRADED'
+                  ? 'primary'
+                  : 'success'
+            }
+            onClick={handleSubmit}
+            disabled={saving || !canSubmit}
+            startIcon={
+              saving ? <CircularProgress size={16} /> : <RateReviewIcon />
+            }
+          >
+            {saving ? 'Saving...' : SUBMIT_LABELS[evalStatus]}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   )

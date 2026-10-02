@@ -15,11 +15,11 @@ import KPIEvaluateDialog from '../../components/KPIEvaluateDialog'
 import { evaluateKPI } from '../../api/kpi'
 
 const columns = [
-  { key: 'title', label: 'kpi' },
-  { key: 'owner', label: 'owner' },
-  { key: 'venture', label: 'startup' },
-  { key: 'status', label: 'status' },
-  { key: 'dueDate', label: 'due' },
+  { key: 'title', label: 'KPI' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'venture', label: 'Startup' },
+  { key: 'status', label: 'Status' },
+  { key: 'dueDate', label: 'Due' },
 ]
 
 const STATUS_LABELS = {
@@ -52,6 +52,13 @@ export default function PageKPIs() {
   const [error, setError] = React.useState('')
   const [success, setSuccess] = React.useState('')
   const [evaluating, setEvaluating] = React.useState(null)
+  // The decision the dialog opens on, e.g. REJECTED from the Reject button.
+  const [initialDecision, setInitialDecision] = React.useState(null)
+
+  const openReview = (kpi, decision = null) => {
+    setInitialDecision(decision)
+    setEvaluating(kpi)
+  }
 
   const visible = kpis.filter(kpi => {
     if (ownerFilter === 'STARTUP' && kpi.founder) return false
@@ -64,7 +71,8 @@ export default function PageKPIs() {
     id: kpi._id,
     kpi,
     title: kpi.title,
-    owner: kpi.founder?.username || (kpi.founder ? 'Member' : 'Entire Startup'),
+    owner:
+      kpi.founder?.username || (kpi.founder ? 'Founder' : 'Entire startup'),
     venture: kpi.venture?.name || '-',
     rawStatus: kpi.status,
     status: STATUS_LABELS[kpi.status] || kpi.status,
@@ -112,7 +120,7 @@ export default function PageKPIs() {
         spacing={1}
         sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
       >
-        <Button size="small" onClick={() => setEvaluating(kpi)}>
+        <Button size="small" onClick={() => openReview(kpi)}>
           View
         </Button>
         {kpi.status === 'WAITING_FOR_APPROVAL' && (
@@ -131,7 +139,7 @@ export default function PageKPIs() {
               variant="outlined"
               color="error"
               disabled={isBusy}
-              onClick={() => setEvaluating(kpi)}
+              onClick={() => openReview(kpi, 'REJECTED')}
             >
               Reject
             </Button>
@@ -143,7 +151,7 @@ export default function PageKPIs() {
             variant="contained"
             color="primary"
             disabled={isBusy}
-            onClick={() => setEvaluating(kpi)}
+            onClick={() => openReview(kpi)}
           >
             Grade KPI
           </Button>
@@ -154,7 +162,7 @@ export default function PageKPIs() {
             variant="outlined"
             color="primary"
             disabled={isBusy}
-            onClick={() => setEvaluating(kpi)}
+            onClick={() => openReview(kpi)}
           >
             Update Grade
           </Button>
@@ -165,7 +173,7 @@ export default function PageKPIs() {
             variant="outlined"
             color="warning"
             disabled={isBusy}
-            onClick={() => setEvaluating(kpi)}
+            onClick={() => openReview(kpi)}
           >
             Review / Accept
           </Button>
@@ -215,8 +223,8 @@ export default function PageKPIs() {
           sx={{ minWidth: 180 }}
         >
           <MenuItem value="">All owners</MenuItem>
-          <MenuItem value="STARTUP">Entire Startup</MenuItem>
-          <MenuItem value="MEMBER">Specific Member</MenuItem>
+          <MenuItem value="STARTUP">Entire startup</MenuItem>
+          <MenuItem value="MEMBER">One founder</MenuItem>
         </TextField>
 
         <TextField
@@ -238,6 +246,7 @@ export default function PageKPIs() {
       <Box>
         {rows.length ? (
           <ReviewTable
+            actionsLabel="Actions"
             columns={columns}
             rows={rows}
             busyId={busyId}
@@ -251,6 +260,7 @@ export default function PageKPIs() {
       <KPIEvaluateDialog
         open={Boolean(evaluating)}
         kpi={evaluating}
+        initialStatus={initialDecision}
         founder={evaluating?.founder}
         venture={evaluating?.venture}
         saving={Boolean(busyId)}

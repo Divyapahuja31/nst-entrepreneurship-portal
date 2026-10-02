@@ -71,7 +71,10 @@ const getFounderFormOptions = async (_, res) => {
 const validateCreateFounderInput = payload => ({
   founder: validateName(payload.founder),
   email: validateEmail(payload.email),
-  startup: payload.startup ? '' : 'Startup name is required',
+  startup:
+    typeof payload.startup === 'string' && payload.startup.trim()
+      ? ''
+      : 'Startup name is required',
   industry: mongoose.isValidObjectId(payload.industry)
     ? ''
     : 'Industry is required',
@@ -133,7 +136,7 @@ const createFounderAndVenture = async ({
 
   try {
     const venture = await Venture.create({
-      name: startup,
+      name: startup.trim(),
       campus: batchDoc.campus,
       stage,
       industry: industryDoc._id,
@@ -213,9 +216,23 @@ const removeFounderFromVentureById = async founderId => {
   }
 }
 
+// Removes founders from their startups (their accounts stay). One request may
+// remove at most this many, matching what an admin can select on one page.
+const MAX_FOUNDERS_PER_REQUEST = 100
+
 const deleteFounders = async (req, res) => {
   try {
-    const founders = req.body.founders || []
+    const founders = req.body?.founders
+    if (
+      !Array.isArray(founders) ||
+      founders.length === 0 ||
+      founders.length > MAX_FOUNDERS_PER_REQUEST
+    ) {
+      return res.status(400).json({
+        error: `Send a list of 1 to ${MAX_FOUNDERS_PER_REQUEST} founder IDs`,
+      })
+    }
+
     const response = await Promise.all(
       founders.map(removeFounderFromVentureById)
     )

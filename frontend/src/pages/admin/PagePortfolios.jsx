@@ -1,5 +1,10 @@
 import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import MenuItem from '@mui/material/MenuItem'
 import FormControl from '@mui/material/FormControl'
 import Select from '@mui/material/Select'
@@ -18,21 +23,25 @@ const FILTER_LABELS = {
 }
 
 const columnNames = [
-  'founder',
-  'startup',
-  'campus',
-  'stage',
-  'team',
-  'score',
-  'status',
+  { key: 'founder', label: 'Founder' },
+  { key: 'startup', label: 'Startup' },
+  { key: 'campus', label: 'Campus' },
+  { key: 'stage', label: 'Stage' },
+  { key: 'team', label: 'Team', align: 'right' },
+  { key: 'score', label: 'Score', align: 'right' },
+  { key: 'status', label: 'Status' },
 ]
+
+const REMOVED = 'Founder removed successfully'
 
 function Portfolio() {
   const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
   const revalidator = useRevalidator()
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [confirming, setConfirming] = React.useState(false)
   const [error, setError] = React.useState('')
+  const [notice, setNotice] = React.useState('')
   const [filters, setFilters] = React.useState({})
   const [selectedRows, setSelectedRows] = React.useState([])
   const founderQuery = (filters.founder ?? '').trim().toLowerCase()
@@ -53,36 +62,57 @@ function Portfolio() {
       )
     })
   })
-  const handleDeleteFounders = async () => {
-    if (selectedRows.length === 0) {
-      alert('Please select at least one founder to delete.')
-      return
-    }
+  // Only rows that are still visible count as selected: a founder hidden by
+  // a filter must never be removed by a click the admin can't see.
+  const visibleById = new Map(
+    visibleStudents.map(student => [String(student.id), student])
+  )
+  const selectedVisible = selectedRows.filter(id => visibleById.has(String(id)))
+  const selectedStudents = selectedVisible.map(id =>
+    visibleById.get(String(id))
+  )
 
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete ${selectedRows.length} founder(s)?`
-    )
-    if (!confirmDelete) {
-      return
-    }
+  const nameOf = id =>
+    students.find(student => String(student.id) === String(id))?.founder ?? id
 
-    const founders = selectedRows
+  const handleRemoveFounders = async () => {
+    const founders = selectedVisible
 
-    setSelectedRows([])
+    setConfirming(false)
     setIsDeleting(true)
     setError('')
+    setNotice('')
 
-    const result = await deleteFounders(founders)
+    const response = await deleteFounders(founders)
 
     setIsDeleting(false)
 
-    if (result.error) {
-      setError(result.error)
+    if (response.error) {
+      // Keep the selection so the admin can retry.
+      setError(response.error)
       return
     }
 
+    const results = response.data?.result ?? []
+    const failed = results.filter(item => item.message !== REMOVED)
+    const removedCount = results.length - failed.length
+
+    setSelectedRows([])
+    if (removedCount) {
+      setNotice(
+        `Removed ${removedCount} founder${removedCount === 1 ? '' : 's'} from their startup.`
+      )
+    }
+    if (failed.length) {
+      setError(
+        `Could not remove ${failed
+          .map(item => `${nameOf(item.founderId)} (${item.message})`)
+          .join(', ')}.`
+      )
+    }
     revalidator.revalidate()
   }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -92,8 +122,13 @@ function Portfolio() {
       </div>
 
       {error && (
-        <Alert severity="error" sx={{ my: 1 }}>
+        <Alert severity="error" sx={{ my: 1 }} onClose={() => setError('')}>
           {error}
+        </Alert>
+      )}
+      {notice && (
+        <Alert severity="success" sx={{ my: 1 }} onClose={() => setNotice('')}>
+          {notice}
         </Alert>
       )}
 
@@ -118,13 +153,15 @@ function Portfolio() {
             }
           />
           <Button
-            onClick={handleDeleteFounders}
-            disabled={selectedRows.length === 0 || isDeleting}
+            onClick={() => setConfirming(true)}
+            disabled={selectedVisible.length === 0 || isDeleting}
             variant="contained"
             color="error"
             style={{ marginTop: '2%', marginLeft: '10px' }}
           >
-            {isDeleting ? 'Deleting...' : 'Delete Founders'}
+            {isDeleting
+              ? 'Removing...'
+              : `Remove from startup${selectedVisible.length ? ` (${selectedVisible.length})` : ''}`}
           </Button>
         </div>
         <div>
@@ -155,11 +192,48 @@ function Portfolio() {
 
       <CustomizedTable
         data={visibleStudents}
-        selectedRows={selectedRows}
+        selectedRows={selectedVisible}
         setSelectedRows={setSelectedRows}
         columnNames={columnNames}
         targetRoute="/admin/profile"
       />
+
+      <Dialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          Remove {selectedStudents.length} founder
+          {selectedStudents.length === 1 ? '' : 's'} from their startup?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+              {selectedStudents.map(student => (
+                <li key={student.id}>
+                  {student.founder} ({student.startup})
+                </li>
+              ))}
+            </ul>
+            <p style={{ marginBottom: 0 }}>
+              Their accounts and past KPIs stay. They can join or propose a
+              startup again later.
+            </p>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirming(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleRemoveFounders}
+          >
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   )
 }

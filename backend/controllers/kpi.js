@@ -415,7 +415,7 @@ export const evaluateKPI = async (req, res) => {
     const updatedKPI = await KPI.findOneAndUpdate(
       { _id: kpiId, status: kpi.status },
       { $set: updateFields },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     )
       .populate('venture', 'name')
       .populate('founder', 'username email')

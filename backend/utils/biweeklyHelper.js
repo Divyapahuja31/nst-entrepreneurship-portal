@@ -74,7 +74,8 @@ export const getTargetFounderId = (user, query = {}, body = {}) => {
 
 export const findFounder = async founderId => {
   if (founderId && mongoose.isValidObjectId(founderId)) {
-    return User.findById(founderId).select('-password').exec()
+    // Only what the bi-weekly page shows; not role, batch or Google IDs.
+    return User.findById(founderId).select('username email createdAt').exec()
   }
   return null
 }

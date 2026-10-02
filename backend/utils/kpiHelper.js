@@ -2,15 +2,21 @@ import mongoose from 'mongoose'
 
 import { uploadToS3 } from '../config/s3.js'
 import KPI from '../models/kpi.js'
+import KPIStatus from '../models/enums/KPIStatus.js'
 import { findVentureForUser } from './founderHelper.js'
 
+// Scores are out of 100; health thresholds and the overview chart assume it.
+// Returns null when no score was sent and -1 when it is out of range.
 export const parseEvaluationScore = score => {
   if (score === undefined || score === null || score === '') {
     return null
   }
   const num = Number(score)
-  return !Number.isNaN(num) && num >= 0 ? num : -1
+  return Number.isFinite(num) && num >= 0 && num <= 100 ? num : -1
 }
+
+export const isValidKPIStatus = status =>
+  status === undefined || Object.hasOwn(KPIStatus, status)
 
 export const buildEvaluationFields = ({
   parsedScore,

@@ -5,6 +5,34 @@ import Founder from '../models/founder.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import { findVentureForUser } from './founderHelper.js'
 
+// The only fields a student may write on a submission. Everything else
+// (evaluation and observation links, submitter, the cycle key) is set by
+// the server or by faculty; accepting it from the body let students swap in
+// another venture's grade or move a submission out from under its lock.
+const STUDENT_SUBMISSION_FIELDS = [
+  'progress_summary',
+  'wins',
+  'blockers',
+  'hours_worked',
+  'customer_interviews',
+  'features_shipped',
+  'revenue',
+  'users_acquired',
+  'experiments_run',
+  'mentor_meeting_date',
+  'mentor_meeting_notes',
+  'goals_next_cycle',
+  'ask_for_help',
+  'evidence_links',
+]
+
+export const pickStudentSubmissionFields = body =>
+  Object.fromEntries(
+    STUDENT_SUBMISSION_FIELDS.filter(field => body[field] !== undefined).map(
+      field => [field, body[field]]
+    )
+  )
+
 export const validateCycleNumber = n => {
   const num = Number(n)
   return num >= 1 && num <= 13 ? num : null

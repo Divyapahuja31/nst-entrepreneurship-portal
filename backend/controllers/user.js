@@ -3,7 +3,12 @@ import bcrypt from 'bcryptjs'
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
-import { validateAll, validatePassword } from '../utils/validator.js'
+import {
+  validateAll,
+  validateBatchAndCampus,
+  validateName,
+  validatePassword,
+} from '../utils/validator.js'
 import { getUserPortfolio } from '../utils/userPortfolio.js'
 import {
   otpCooldownMessage,
@@ -51,12 +56,10 @@ export const signUp = async (req, res) => {
       })
     }
 
-    const error = await validateAll({
-      username,
-      email,
-      password,
-      position,
-    })
+    const error = {
+      ...(await validateAll({ username, email, password, position })),
+      ...(await validateBatchAndCampus({ batch, campus }, { required: false })),
+    }
     if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
     }
@@ -285,10 +288,15 @@ export const completeGoogleSignup = async (req, res) => {
 
     const { googleId, email } = parsed.data
 
-    if (!username || !batch || !campus) {
-      return res.status(400).json({
-        error: 'Name, batch and campus are required',
-      })
+    // Same name rules as email sign-up, and real batch/campus records.
+    const fieldErrors = [
+      validateName(username),
+      ...Object.values(
+        await validateBatchAndCampus({ batch, campus }, { required: true })
+      ),
+    ].filter(Boolean)
+    if (fieldErrors.length) {
+      return res.status(400).json({ error: fieldErrors[0] })
     }
 
     const { position, role } = await findRoleForEmail(email)

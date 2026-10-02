@@ -6,6 +6,9 @@ import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import startupStage from '../models/enums/startupStage.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 
+// Readable label ("Fund Raising"), not the stored key.
+const stageLabel = stage => startupStage[stage] ?? stage
+
 export const getVentures = async (req, res) => {
   try {
     const data = await Venture.find({})
@@ -25,8 +28,7 @@ export const getVentures = async (req, res) => {
         id: data._id,
         name: data.name,
         campus: data.campus?.name || '-',
-        // Readable label ("Fund Raising"), not the stored key.
-        stage: startupStage[data.stage] ?? data.stage ?? '-',
+        stage: stageLabel(data.stage) ?? '-',
         industry: data.industry?.name || '-',
         founders: founders.map(founder => founder.username).join(', ') || '-',
         team: founders.length,
@@ -77,7 +79,7 @@ export const getVentureById = async (req, res) => {
         description: venture.description || null,
         campus: venture.campus?.name || null,
         industry: venture.industry?.name || null,
-        stage: venture.stage,
+        stage: stageLabel(venture.stage),
         website: venture.website || null,
         createdAt: venture.createdAt,
       },

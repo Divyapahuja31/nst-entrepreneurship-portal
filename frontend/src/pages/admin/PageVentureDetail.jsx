@@ -18,8 +18,12 @@ import BiWeekly from './PageReportBiWeekly'
 import KPIReview from '../../components/KPIReview'
 import { normalizeWebsite } from '../../components/proposalFormConfig.js'
 
-const founderColumns = ['username', 'email', 'joinedAt']
-const pastFounderColumns = ['username', 'email', 'joinedAt', 'leftAt']
+const founderColumns = [
+  { key: 'username', label: 'Founder' },
+  { key: 'email', label: 'Email' },
+  { key: 'joinedAt', label: 'Joined' },
+]
+const pastFounderColumns = [...founderColumns, { key: 'leftAt', label: 'Left' }]
 
 const formatDate = value => {
   if (!value) return '-'
@@ -72,7 +76,7 @@ export default function PageVentureDetail() {
             color="inherit"
             to="/admin"
           >
-            Dashboard
+            Overview
           </Link>
           <Link
             component={RouterLink}
@@ -80,10 +84,10 @@ export default function PageVentureDetail() {
             color="inherit"
             to="/admin/venture"
           >
-            Ventures
+            Startups
           </Link>
           <Typography color="text.primary">
-            {venture?.name || 'Venture Detail'}
+            {venture?.name || 'Startup'}
           </Typography>
         </Breadcrumbs>
 
@@ -95,8 +99,7 @@ export default function PageVentureDetail() {
           <Grid
             container
             spacing={2}
-            justifyContent="space-between"
-            alignItems="flex-start"
+            sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
           >
             {/* Left: Name */}
             <Grid size={{ xs: 12, sm: 7 }}>
@@ -113,10 +116,12 @@ export default function PageVentureDetail() {
             {/* Right: Stage, Campus, Industry Chips */}
             <Grid size={{ xs: 12, sm: 5 }} sx={{ textAlign: { sm: 'right' } }}>
               <Box
-                display="flex"
-                gap={1}
-                justifyContent={{ sm: 'flex-end' }}
-                flexWrap="wrap"
+                sx={{
+                  display: 'flex',
+                  gap: 1,
+                  justifyContent: { sm: 'flex-end' },
+                  flexWrap: 'wrap',
+                }}
               >
                 {venture.stage && (
                   <Chip
@@ -199,9 +204,9 @@ export default function PageVentureDetail() {
                 label="Founders"
                 sx={{ fontWeight: 'bold', fontSize: '1rem' }}
               />
-              <Tab label="KPI" sx={{ fontWeight: 'bold', fontSize: '1rem' }} />
+              <Tab label="KPIs" sx={{ fontWeight: 'bold', fontSize: '1rem' }} />
               <Tab
-                label="Biweekly"
+                label="Bi-weekly"
                 sx={{ fontWeight: 'bold', fontSize: '1rem' }}
               />
             </Tabs>
@@ -254,15 +259,10 @@ export default function PageVentureDetail() {
                 {biweekly ? (
                   <BiWeekly data={biweekly} />
                 ) : (
-                  <Box>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                      Biweekly Reports
-                    </Typography>
-                    <Typography color="text.secondary">
-                      Biweekly evaluation, progress submissions, and review logs
-                      for this venture go here.
-                    </Typography>
-                  </Box>
+                  <Alert severity="warning">
+                    Bi-weekly reports for this startup could not be loaded.
+                    Refresh the page to try again.
+                  </Alert>
                 )}
               </Box>
             )}

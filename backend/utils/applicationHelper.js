@@ -2,6 +2,8 @@ import mongoose from 'mongoose'
 import Industry from '../models/industry.js'
 import Venture from '../models/venture.js'
 import Founder from '../models/founder.js'
+import VentureProposal from '../models/ventureProposal.js'
+import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { addFounderToVenture, findVentureForUser } from './founderHelper.js'
 
 export const validateReviewPayload = (id, status, typeName) => {
@@ -198,6 +200,48 @@ export const buildJoinRequestUpdate = ({ status, reviewerId }) => ({
     reviewedAt: new Date(),
   },
 })
+
+// A student can be active in only one venture, so once an application is
+// approved their other pending ones can never be approved. Close them with a
+// note instead of leaving them in the admin queue to fail with a 409 later.
+export const closeOtherApplications = async ({
+  studentId,
+  reviewerId,
+  ventureName,
+  keepProposalId = null,
+  keepJoinRequestId = null,
+}) => {
+  const reviewedAt = new Date()
+  const remarks = `Closed automatically: you joined ${ventureName}.`
+  await Promise.all([
+    VentureProposal.updateMany(
+      {
+        submittedBy: studentId,
+        status: 'PENDING',
+        _id: { $ne: keepProposalId },
+      },
+      {
+        $set: { status: 'REJECTED' },
+        $push: {
+          reviews: {
+            reviewer: reviewerId,
+            status: 'REJECTED',
+            reviewedAt,
+            remarks,
+          },
+        },
+      }
+    ),
+    VentureJoinRequest.updateMany(
+      {
+        requestedBy: studentId,
+        status: 'PENDING',
+        _id: { $ne: keepJoinRequestId },
+      },
+      { $set: { status: 'REJECTED', reviewedBy: reviewerId, reviewedAt } }
+    ),
+  ])
+}
 
 export const rollbackJoinRequestApproval = async (
   joinRequest,

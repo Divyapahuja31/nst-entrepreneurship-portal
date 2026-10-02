@@ -31,7 +31,11 @@ function Field({ label, value, isLink }) {
 
   return (
     <Box sx={{ mb: 2 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontWeight: 600, letterSpacing: 0.5 }}
+      >
         {label}
       </Typography>
       <Typography variant="body1" sx={{ mt: 0.5 }}>
@@ -56,7 +60,15 @@ function Field({ label, value, isLink }) {
 function Section({ title, children }) {
   return (
     <Box sx={{ mt: 3, '&:first-of-type': { mt: 1 } }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <Typography
+        variant="subtitle2"
+        sx={{
+          fontWeight: 700,
+          color: 'primary.main',
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
+        }}
+      >
         {title}
       </Typography>
       <Divider sx={{ my: 1.5 }} />
@@ -103,11 +115,16 @@ export default function ProposalDrawer({
       {proposal && (
         <>
           <DialogTitle sx={{ m: 0, p: 3, pb: 2, position: 'relative' }}>
-            <Typography variant="h5" component="div" sx={{ fontWeight: 700, pr: 4 }}>
+            <Typography
+              variant="h5"
+              component="div"
+              sx={{ fontWeight: 700, pr: 4 }}
+            >
               {proposal.startupName}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Submitted by <strong>{proposal.submittedBy?.username || '-'}</strong> on{' '}
+              Submitted by{' '}
+              <strong>{proposal.submittedBy?.username || '-'}</strong> on{' '}
               {formatDate(proposal.createdAt)}
             </Typography>
             <IconButton
@@ -136,7 +153,10 @@ export default function ProposalDrawer({
             </Section>
 
             <Section title="Where It Stands">
-              <Field label="STAGE" value={proposal.stage} />
+              <Field
+                label="STAGE"
+                value={proposal.stageLabel ?? proposal.stage}
+              />
               <Field
                 label="CURRENT TRACTION"
                 value={proposal.currentTraction}
@@ -149,14 +169,22 @@ export default function ProposalDrawer({
             </Section>
 
             <Section title="Assumptions & Risks">
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 600, letterSpacing: 0.5 }}
+              >
                 ASSUMPTIONS
               </Typography>
               <Box sx={{ mb: 2, mt: 0.5 }}>
                 <ItemList items={proposal.assumptions} />
               </Box>
 
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 600, letterSpacing: 0.5 }}
+              >
                 RISKS
               </Typography>
               <Box sx={{ mb: 2, mt: 0.5 }}>
@@ -179,8 +207,15 @@ export default function ProposalDrawer({
             </Section>
           </DialogContent>
 
-          <DialogActions sx={{ p: 2.5, px: 3, justifyContent: 'space-between' }}>
-            <Button onClick={onClose} disabled={busy} variant="outlined" color="inherit">
+          <DialogActions
+            sx={{ p: 2.5, px: 3, justifyContent: 'space-between' }}
+          >
+            <Button
+              onClick={onClose}
+              disabled={busy}
+              variant="outlined"
+              color="inherit"
+            >
               Close
             </Button>
 

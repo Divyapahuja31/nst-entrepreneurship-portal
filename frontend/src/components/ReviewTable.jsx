@@ -26,6 +26,7 @@ export default function ReviewTable({
   onView,
   busyId,
   renderActions,
+  actionsLabel = 'actions',
 }) {
   return (
     <TableContainer component={Paper}>
@@ -35,7 +36,7 @@ export default function ReviewTable({
             {columns.map(column => (
               <StyledTableCell key={column.key}>{column.label}</StyledTableCell>
             ))}
-            <StyledTableCell align="right">actions</StyledTableCell>
+            <StyledTableCell align="right">{actionsLabel}</StyledTableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -59,7 +60,11 @@ export default function ReviewTable({
                 {renderActions ? (
                   renderActions(row)
                 ) : (
-                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ justifyContent: 'flex-end' }}
+                  >
                     {onView && (
                       <Button size="small" onClick={() => onView(row)}>
                         View

@@ -299,7 +299,7 @@ export default function KPIReview({
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {statCards.map(stat => (
-          <Grid item xs={12} sm={6} md={3} key={stat.label}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }} key={stat.label}>
             <Card variant="outlined" sx={{ borderRadius: 2 }}>
               <CardContent
                 sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}

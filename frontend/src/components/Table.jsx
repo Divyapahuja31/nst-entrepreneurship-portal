@@ -9,13 +9,26 @@ import TableRow from '@mui/material/TableRow'
 import Checkbox from '@mui/material/Checkbox'
 import { StyledTableCell, StyledTableRow } from './Table.style'
 
+// A column is either a data key (shown as its own header, right-aligned after
+// the first column, as before) or { key, label, align }.
+const toColumn = (column, index) =>
+  typeof column === 'string'
+    ? { key: column, label: column, align: index === 0 ? 'left' : 'right' }
+    : { align: 'left', ...column }
+
+// Rows link to `${targetRoute}/${row.id}` from the first column. Selection
+// checkboxes appear only when the page handles selection (setSelectedRows).
 export default function CustomizedTable({
   data,
   selectedRows = [],
-  setSelectedRows = () => {},
+  setSelectedRows,
   columnNames,
   targetRoute,
 }) {
+  const columns = columnNames.map(toColumn)
+  const [first, ...rest] = columns
+  const selectable = typeof setSelectedRows === 'function'
+
   const handleRowSelect = rowId => {
     if (selectedRows.includes(rowId)) {
       setSelectedRows(selectedRows.filter(i => i !== rowId))
@@ -36,25 +49,28 @@ export default function CustomizedTable({
       <Table sx={{ minWidth: 700 }} aria-label="customized table">
         <TableHead>
           <TableRow>
-            <StyledTableCell style={{ maxWidth: '160px' }}>
-              <Checkbox
-                checked={data.length > 0 && data.length === selectedRows.length}
-                indeterminate={
-                  selectedRows.length > 0 && selectedRows.length < data.length
-                }
-                data-testid="select-all-checkbox"
-                onClick={handleSelectAll}
-              />{' '}
-              <span
-                style={{
-                  visibility: selectedRows.length > 0 ? 'visible' : 'hidden',
-                }}
-              >{`${selectedRows.length} selected`}</span>
-            </StyledTableCell>
-            <StyledTableCell>{columnNames[0]}</StyledTableCell>
-            {columnNames.slice(1).map((columnName, idx) => (
-              <StyledTableCell key={idx} align="right">
-                {columnName}
+            {selectable && (
+              <StyledTableCell style={{ maxWidth: '160px' }}>
+                <Checkbox
+                  checked={
+                    data.length > 0 && data.length === selectedRows.length
+                  }
+                  indeterminate={
+                    selectedRows.length > 0 && selectedRows.length < data.length
+                  }
+                  data-testid="select-all-checkbox"
+                  onClick={handleSelectAll}
+                />{' '}
+                <span
+                  style={{
+                    visibility: selectedRows.length > 0 ? 'visible' : 'hidden',
+                  }}
+                >{`${selectedRows.length} selected`}</span>
+              </StyledTableCell>
+            )}
+            {columns.map(column => (
+              <StyledTableCell key={column.key} align={column.align}>
+                {column.label}
               </StyledTableCell>
             ))}
           </TableRow>
@@ -64,15 +80,21 @@ export default function CustomizedTable({
             data.map((row, idx) => {
               const id = row.id
               return (
-                <StyledTableRow key={id}>
-                  <StyledTableCell>
-                    <Checkbox
-                      checked={selectedRows.includes(id)}
-                      onClick={() => handleRowSelect(id)}
-                      data-testid={`select-row-checkbox-${idx}`}
-                    />
-                  </StyledTableCell>
-                  <StyledTableCell component="th" scope="row">
+                <StyledTableRow key={id ?? idx}>
+                  {selectable && (
+                    <StyledTableCell>
+                      <Checkbox
+                        checked={selectedRows.includes(id)}
+                        onClick={() => handleRowSelect(id)}
+                        data-testid={`select-row-checkbox-${idx}`}
+                      />
+                    </StyledTableCell>
+                  )}
+                  <StyledTableCell
+                    component="th"
+                    scope="row"
+                    align={first.align}
+                  >
                     <Link
                       component={RouterLink}
                       to={`${targetRoute}/${row.id}`}
@@ -83,12 +105,12 @@ export default function CustomizedTable({
                         cursor: 'pointer',
                       }}
                     >
-                      {row[columnNames[0]]}
+                      {row[first.key]}
                     </Link>
                   </StyledTableCell>
-                  {columnNames.slice(1).map(columnName => (
-                    <StyledTableCell align="right">
-                      {row[columnName]}
+                  {rest.map(column => (
+                    <StyledTableCell key={column.key} align={column.align}>
+                      {row[column.key]}
                     </StyledTableCell>
                   ))}
                 </StyledTableRow>

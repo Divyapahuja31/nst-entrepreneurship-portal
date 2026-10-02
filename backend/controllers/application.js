@@ -10,7 +10,20 @@ import {
   handleJoinRequestApproval,
   buildJoinRequestUpdate,
   rollbackJoinRequestApproval,
+  closeOtherApplications,
 } from '../utils/applicationHelper.js'
+import Venture from '../models/venture.js'
+import startupStage from '../models/enums/startupStage.js'
+
+// Best effort: the approval already succeeded, so a failure here is logged
+// rather than reported as a failed review.
+const closeOthersAfterApproval = async args => {
+  try {
+    await closeOtherApplications(args)
+  } catch (error) {
+    console.error('Could not close other applications:', error)
+  }
+}
 
 export const getPendingApplications = async (req, res) => {
   try {
@@ -18,17 +31,27 @@ export const getPendingApplications = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
+    // Oldest first, so whoever has waited longest is reviewed first.
     const [proposals, joinRequests] = await Promise.all([
       VentureProposal.find({ status: 'PENDING' })
+        .sort({ createdAt: 1 })
         .populate('submittedBy', 'username email')
         .populate('industry', 'name')
-        .populate('campus', 'name'),
+        .populate('campus', 'name')
+        .lean(),
       VentureJoinRequest.find({ status: 'PENDING' })
+        .sort({ createdAt: 1 })
         .populate('requestedBy', 'username email')
         .populate('venture', 'name'),
     ])
 
-    return res.status(200).json({ proposals, joinRequests })
+    return res.status(200).json({
+      proposals: proposals.map(proposal => ({
+        ...proposal,
+        stageLabel: startupStage[proposal.stage] ?? proposal.stage,
+      })),
+      joinRequests,
+    })
   } catch (error) {
     console.error('Error fetching pending applications:', error)
 
@@ -99,6 +122,15 @@ export const reviewProposal = async (req, res) => {
       })
     }
 
+    if (status === 'APPROVED') {
+      await closeOthersAfterApproval({
+        studentId: proposal.submittedBy,
+        reviewerId: req.user.id,
+        ventureName: proposal.startupName,
+        keepProposalId: proposal._id,
+      })
+    }
+
     return res.status(200).json({ proposal: updatedProposal })
   } catch (error) {
     await rollbackProposalApproval(
@@ -159,6 +191,16 @@ export const reviewJoinRequest = async (req, res) => {
       await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
       return res.status(409).json({
         error: 'This join request has already been reviewed',
+      })
+    }
+
+    if (status === 'APPROVED') {
+      const venture = await Venture.findById(joinRequest.venture).select('name')
+      await closeOthersAfterApproval({
+        studentId: joinRequest.requestedBy,
+        reviewerId: req.user.id,
+        ventureName: venture?.name ?? 'a venture',
+        keepJoinRequestId: joinRequest._id,
       })
     }
 

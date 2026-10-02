@@ -4,7 +4,10 @@ import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   validateCycleNumber,
-  pickStudentSubmissionFields,
+  parseStudentSubmission,
+  hasCycleStarted,
+  parseEvaluationScores,
+  parseObservation,
   resolveVentureAndContext,
   loadVentureSubmissions,
   updateOrCreateVentureSubmission,
@@ -61,6 +64,21 @@ export const getBiWeeklyData = async (req, res) => {
   }
 }
 
+// The student's venture, as long as the cycle has opened for it.
+const findVentureForCycle = async (userId, cycleNum) => {
+  const venture = await findVentureForUser(userId)
+  if (!venture) {
+    return {
+      error:
+        'You must belong to an active venture to submit bi-weekly progress.',
+    }
+  }
+  if (!hasCycleStarted(venture.createdAt, cycleNum)) {
+    return { error: `Cycle ${cycleNum} hasn't opened yet.` }
+  }
+  return { venture }
+}
+
 export const submitBiWeeklyCycle = async (req, res) => {
   try {
     if (!req.user?.id) {
@@ -73,20 +91,15 @@ export const submitBiWeeklyCycle = async (req, res) => {
         .json({ error: 'Admins cannot submit student bi-weekly progress' })
     }
 
-    const { cycle_number, isSubmit } = req.body
-    const data = pickStudentSubmissionFields(req.body)
-    const cycleNum = validateCycleNumber(cycle_number)
-
-    if (!cycleNum) {
-      return res.status(400).json({ error: 'Invalid cycle number (1-13)' })
+    const parsed = parseStudentSubmission(req.body)
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error })
     }
+    const { cycleNum, data, isSubmit } = parsed
 
-    const venture = await findVentureForUser(req.user.id)
-    if (!venture) {
-      return res.status(400).json({
-        error:
-          'You must belong to an active venture to submit bi-weekly progress.',
-      })
+    const { venture, error } = await findVentureForCycle(req.user.id, cycleNum)
+    if (error) {
+      return res.status(400).json({ error })
     }
 
     const custom_id = `venture_${venture._id}_cycle_${cycleNum}`
@@ -118,7 +131,9 @@ export const submitBiWeeklyCycle = async (req, res) => {
   }
 }
 
-const getOrCreateSubmissionForAdmin = async (req, res) => {
+// parseBody checks the rest of the request before anything is created; it
+// returns { error } or values passed back as `parsed`.
+const getOrCreateSubmissionForAdmin = async (req, res, parseBody) => {
   if (req.user?.role !== 'admin') {
     res.status(403).json({ error: 'Forbidden: Admin access required' })
     return null
@@ -129,6 +144,12 @@ const getOrCreateSubmissionForAdmin = async (req, res) => {
 
   if (!cycleNum) {
     res.status(400).json({ error: 'Valid cycle_number (1-13) is required' })
+    return null
+  }
+
+  const parsed = parseBody ? parseBody(req.body) : {}
+  if (parsed.error) {
+    res.status(400).json({ error: parsed.error })
     return null
   }
 
@@ -160,33 +181,25 @@ const getOrCreateSubmissionForAdmin = async (req, res) => {
     )
   }
 
-  return { venture, founder, submission, cycleNum }
+  return { venture, founder, submission, cycleNum, parsed }
 }
 
 export const saveBiWeeklyObservation = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(req, res)
+    const target = await getOrCreateSubmissionForAdmin(
+      req,
+      res,
+      parseObservation
+    )
     if (!target) {
       return null
     }
 
-    const { submission, cycleNum } = target
-    const {
-      observation,
-      strengths,
-      concerns,
-      action_items,
-      evidence_reviewed,
-    } = req.body
-
+    const { submission, cycleNum, parsed } = target
     const observationData = {
       cycle_number: cycleNum,
       author_id: req.user.id,
-      observation,
-      strengths,
-      concerns,
-      action_items,
-      evidence_reviewed,
+      ...parsed.fields,
     }
 
     let observationDoc
@@ -194,7 +207,7 @@ export const saveBiWeeklyObservation = async (req, res) => {
       observationDoc = await BiWeeklyObservation.findByIdAndUpdate(
         submission.biWeeklyObservationSchema,
         observationData,
-        { returnDocument: 'after' }
+        { returnDocument: 'after', runValidators: true }
       )
     } else {
       observationDoc = await BiWeeklyObservation.create(observationData)
@@ -215,23 +228,21 @@ export const saveBiWeeklyObservation = async (req, res) => {
 
 export const saveBiWeeklyEvaluation = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(req, res)
+    const target = await getOrCreateSubmissionForAdmin(
+      req,
+      res,
+      parseEvaluationScores
+    )
     if (!target) {
       return null
     }
 
-    const { submission, cycleNum } = target
-    const { execution_score, customer_score, business_score, behavior_score } =
-      req.body
-
+    const { submission, cycleNum, parsed } = target
     const evaluationData = {
       checklist_id: cycleNum,
       month_number: Math.ceil(cycleNum / 2),
       year: new Date().getFullYear(),
-      execution_score,
-      customer_score,
-      business_score,
-      behavior_score,
+      ...parsed.scores,
     }
 
     let evaluationDoc
@@ -239,7 +250,7 @@ export const saveBiWeeklyEvaluation = async (req, res) => {
       evaluationDoc = await BiWeeklyEvaluation.findByIdAndUpdate(
         submission.biWeeklyEvaluation,
         evaluationData,
-        { returnDocument: 'after' }
+        { returnDocument: 'after', runValidators: true }
       )
     } else {
       evaluationDoc = await BiWeeklyEvaluation.create(evaluationData)

@@ -78,11 +78,16 @@ export const signUp = async (req, res) => {
     }
 
     if (user) {
-      user.username = username
-      user.password = password
-      user.role = role._id
-      user.batch = batch
-      user.campus = campus
+      // The account exists but nobody has proved they own this email, so it
+      // may be someone else's (e.g. created by an admin). Leave it as it is
+      // and keep these details until the emailed code is used.
+      user.pendingSignup = {
+        username,
+        passwordHash: await bcrypt.hash(password, 10),
+        batch: batch || undefined,
+        campus: campus || undefined,
+        role: role._id,
+      }
     } else {
       user = new User({
         username,
@@ -220,8 +225,9 @@ export const googleAuthCallback = async (req, res) => {
     if (user) {
       if (!user.isEmailVerified) {
         // Nobody proved ownership of this email before Google did, so the
-        // password may have been set by someone else. Drop it.
+        // password or a pending sign-up may be someone else's. Drop them.
         user.password = undefined
+        user.pendingSignup = undefined
         clearSignupCode(user)
       }
       if (!user.googleId || !user.isEmailVerified) {
@@ -434,6 +440,27 @@ export const resetPassword = async (req, res) => {
   }
 }
 
+// Whether the password matches the sign-up that sent the code: the pending
+// one for an account that already existed, otherwise the account's own.
+const signupPasswordMatches = (user, password) =>
+  user.pendingSignup?.passwordHash
+    ? bcrypt.compare(password, user.pendingSignup.passwordHash)
+    : user.comparePassword(password)
+
+// Once the code proves the email, the pending sign-up becomes the account.
+const adoptPendingSignup = (user, password) => {
+  const pending = user.pendingSignup
+  if (!pending?.passwordHash) {
+    return
+  }
+  user.username = pending.username
+  user.password = password
+  user.role = pending.role
+  user.batch = pending.batch
+  user.campus = pending.campus
+  user.pendingSignup = undefined
+}
+
 export const verifySignupOtp = async (req, res) => {
   try {
     const { otp, password } = req.body
@@ -458,16 +485,18 @@ export const verifySignupOtp = async (req, res) => {
       return res.status(400).json({ error: validationError })
     }
 
-    // Anyone can sign up again with an unverified email and replace its
-    // password. Checked after the code so this can't be used to guess passwords.
-    if (!(await user.comparePassword(password))) {
+    // Checked after the code so this can't be used to guess passwords. A
+    // newer sign-up for the same email means these details are stale.
+    if (!(await signupPasswordMatches(user, password))) {
       return res.status(400).json({
         error: 'Your sign-up details have changed. Please sign up again.',
       })
     }
 
+    adoptPendingSignup(user, password)
     user.isEmailVerified = true
     await user.save()
+    await user.populate('role')
 
     return await startSession(res, user, {
       message: 'Email verified successfully!',

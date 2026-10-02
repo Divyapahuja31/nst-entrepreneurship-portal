@@ -17,7 +17,7 @@ export const getMyProposal = async (req, res) => {
     const proposal = await VentureProposal.findOne({
       submittedBy: req.user.id,
     })
-      .populate('reviews.reviewer', 'name email')
+      .populate('reviews.reviewer', 'username')
       .populate('industry', 'name')
       .populate('campus', 'name')
       .populate('venture')

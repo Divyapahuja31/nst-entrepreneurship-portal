@@ -110,8 +110,7 @@ export default function PageKPIs() {
       <Stack
         direction="row"
         spacing={1}
-        justifyContent="flex-end"
-        alignItems="center"
+        sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
       >
         <Button size="small" onClick={() => setEvaluating(kpi)}>
           View
@@ -185,7 +184,7 @@ export default function PageKPIs() {
         of its founders.
       </Typography>
 
-      <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap">
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mt: 2 }}>
         <Chip label={`${kpis.length} total`} />
         <Chip label={`${pendingCount} awaiting approval`} color="warning" />
         <Chip label={`${acceptedCount} accepted`} color="info" />
@@ -196,11 +195,7 @@ export default function PageKPIs() {
       </Stack>
 
       {success && (
-        <Alert
-          severity="success"
-          sx={{ mt: 2 }}
-          onClose={() => setSuccess('')}
-        >
+        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess('')}>
           {success}
         </Alert>
       )}

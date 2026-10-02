@@ -2,6 +2,7 @@ import BiWeeklyEvaluation from '../models/biWeeklyEvaluation.js'
 import BiWeeklyObservation from '../models/biWeeklyObservation.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
+import startupStage from '../models/enums/startupStage.js'
 import {
   validateCycleNumber,
   pickStudentSubmissionFields,
@@ -10,6 +11,13 @@ import {
   updateOrCreateVentureSubmission,
   resolveAdminTarget,
 } from '../utils/biweeklyHelper.js'
+
+// Adds the readable stage ("Fund Raising") next to the stored key.
+const withStageLabel = venture =>
+  venture && {
+    ...venture.toJSON(),
+    stageLabel: startupStage[venture.stage] ?? venture.stage,
+  }
 
 export const getBiWeeklyData = async (req, res) => {
   try {
@@ -47,7 +55,7 @@ export const getBiWeeklyData = async (req, res) => {
 
     return res.json({
       founder,
-      venture,
+      venture: withStageLabel(venture),
       coFounders,
       submissions,
       evaluations,

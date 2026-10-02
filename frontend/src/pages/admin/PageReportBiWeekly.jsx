@@ -219,7 +219,8 @@ function BiWeekly({ data: propData }) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="info">
-          No active venture or founder profile found. Bi-weekly progress reports are shared across co-founders of an active venture.
+          No active venture or founder profile found. Bi-weekly progress reports
+          are shared across co-founders of an active venture.
         </Alert>
       </Box>
     )
@@ -302,9 +303,11 @@ function BiWeekly({ data: propData }) {
         <Stack
           direction="row"
           spacing={2}
-          alignItems="center"
-          justifyContent="space-between"
-          flexWrap="wrap"
+          sx={{
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+          }}
         >
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
@@ -312,7 +315,7 @@ function BiWeekly({ data: propData }) {
             </Typography>
             {venture?.stage && (
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Stage: <strong>{venture.stage}</strong>
+                Stage: <strong>{venture.stageLabel ?? venture.stage}</strong>
               </Typography>
             )}
           </Box>
@@ -329,7 +332,7 @@ function BiWeekly({ data: propData }) {
             >
               Co-Founders (Shared Venture Team):
             </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
               {coFounders.map(cf => (
                 <Chip
                   key={cf._id}
@@ -345,7 +348,8 @@ function BiWeekly({ data: propData }) {
 
         {!venture && (
           <Alert severity="warning" sx={{ mt: 2 }}>
-            You are not currently linked to an active venture. Bi-weekly reports are shared across co-founders of your venture team.
+            You are not currently linked to an active venture. Bi-weekly reports
+            are shared across co-founders of your venture team.
           </Alert>
         )}
       </Box>
@@ -485,7 +489,7 @@ function MyProgress({
     <Card variant="outlined">
       <CardContent>
         <Typography variant="overline" sx={{ color: 'text.secondary' }}>
-          My progress
+          Team progress
         </Typography>
         <Box
           sx={{
@@ -506,7 +510,7 @@ function MyProgress({
               </Typography>
             }
             sub={
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <LinearProgress
                   variant="determinate"
                   value={pct}
@@ -537,8 +541,7 @@ function MyProgress({
                 <Stack
                   direction="row"
                   spacing={0.5}
-                  alignItems="center"
-                  sx={{ color: 'error.main' }}
+                  sx={{ alignItems: 'center', color: 'error.main' }}
                 >
                   <WarningAmberIcon fontSize="inherit" />
                   <span>
@@ -551,7 +554,10 @@ function MyProgress({
             }
           />
           <Box>
-            <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+            <Typography
+              variant="overline"
+              sx={{ color: 'text.secondary', display: 'block' }}
+            >
               Recent scores
             </Typography>
             {evaluations.length === 0 && (
@@ -563,8 +569,7 @@ function MyProgress({
               <Stack
                 key={e.id}
                 direction="row"
-                justifyContent="space-between"
-                sx={{ fontSize: 13 }}
+                sx={{ justifyContent: 'space-between', fontSize: 13 }}
               >
                 <Box component="span" sx={{ color: 'text.secondary' }}>
                   M{e.month_number} · {shortDate(new Date(e.created_at))}
@@ -590,9 +595,17 @@ function Stat({ label, value, sub }) {
       >
         {label}
       </Typography>
-      <Box sx={{ fontSize: 14 }}>{value}</Box>
+      <Typography component="div" variant="body2">
+        {value}
+      </Typography>
       {sub && (
-        <Box sx={{ fontSize: 12, mt: 0.5, color: 'text.secondary' }}>{sub}</Box>
+        <Typography
+          component="div"
+          variant="caption"
+          sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}
+        >
+          {sub}
+        </Typography>
       )}
     </Box>
   )
@@ -698,10 +711,12 @@ function CycleForm({
       <CardContent>
         <Stack
           direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          flexWrap="wrap"
-          gap={1}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 1,
+          }}
         >
           <Box>
             <Typography variant="h6">
@@ -726,7 +741,7 @@ function CycleForm({
                 ` (${daysToDeadline} day${daysToDeadline === 1 ? '' : 's'} left)`}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             {isAdmin && (
               <Chip
                 size="small"
@@ -770,8 +785,7 @@ function CycleForm({
             >
               <Stack
                 direction="row"
-                justifyContent="space-between"
-                alignItems="center"
+                sx={{ justifyContent: 'space-between', alignItems: 'center' }}
               >
                 <Typography variant="overline" sx={{ color: 'text.secondary' }}>
                   Required this cycle
@@ -795,8 +809,8 @@ function CycleForm({
                       key={item.key}
                       direction="row"
                       spacing={1}
-                      alignItems="flex-start"
                       sx={{
+                        alignItems: 'flex-start',
                         border: 1,
                         borderColor: done ? 'success.light' : 'divider',
                         borderRadius: 1,
@@ -949,9 +963,11 @@ function CycleForm({
           <Box>
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 1 }}
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 1,
+              }}
             >
               <Typography variant="overline" sx={{ color: 'text.secondary' }}>
                 Evidence links
@@ -975,7 +991,12 @@ function CycleForm({
             )}
             <Stack spacing={1}>
               {links.map((l, i) => (
-                <Stack key={i} direction="row" spacing={1} alignItems="center">
+                <Stack
+                  key={i}
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: 'center' }}
+                >
                   {l.check && (
                     <Chip size="small" label="req" variant="outlined" />
                   )}
@@ -1059,10 +1080,12 @@ function CycleForm({
               {!locked && (
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  flexWrap="wrap"
-                  gap={1}
+                  sx={{
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                  }}
                 >
                   <Typography variant="caption" sx={{ color: 'warning.main' }}>
                     {requiredCount > 0 &&
@@ -1176,7 +1199,7 @@ function MentorObservationSection({
                           key={i}
                           direction="row"
                           spacing={0.5}
-                          alignItems="center"
+                          sx={{ alignItems: 'center' }}
                         >
                           <OpenInNewIcon fontSize="inherit" />
                           {link.url ? (
@@ -1317,8 +1340,8 @@ function ObservationForm({ cycleNumber, existing, evidenceLinks, onSave }) {
                     key={i}
                     direction="row"
                     spacing={1}
-                    alignItems="center"
                     sx={{
+                      alignItems: 'center',
                       border: 1,
                       borderColor: isChecked ? 'primary.main' : 'divider',
                       borderRadius: 1,
@@ -1348,7 +1371,7 @@ function ObservationForm({ cycleNumber, existing, evidenceLinks, onSave }) {
 
         {error && <Alert severity="error">{error}</Alert>}
 
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
+        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
           <Button size="small" onClick={() => setOpen(false)}>
             Cancel
           </Button>
@@ -1428,10 +1451,12 @@ function EvaluationSection({ cycleNumber, evaluation, canAuthor, onSave }) {
       <CardContent>
         <Stack
           direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          gap={1}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1,
+          }}
         >
           <Box>
             <Typography variant="h6">
@@ -1441,7 +1466,7 @@ function EvaluationSection({ cycleNumber, evaluation, canAuthor, onSave }) {
               Faculty pillar assessment (0–100 per pillar)
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             {evaluation ? (
               <Chip
                 size="small"
@@ -1526,10 +1551,12 @@ function EvaluationSection({ cycleNumber, evaluation, canAuthor, onSave }) {
 
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              flexWrap="wrap"
-              gap={1}
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
             >
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 Total: {totalScore} / 400 · Status:{' '}

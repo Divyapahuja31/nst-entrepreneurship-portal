@@ -2,7 +2,11 @@ import * as React from 'react'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import Box from '@mui/material/Box'
-import { useLoaderData, useParams } from 'react-router'
+import Alert from '@mui/material/Alert'
+import Breadcrumbs from '@mui/material/Breadcrumbs'
+import Link from '@mui/material/Link'
+import Typography from '@mui/material/Typography'
+import { Link as RouterLink, useLoaderData, useParams } from 'react-router'
 
 import { useAuthStore } from '../../stores/auth'
 
@@ -23,6 +27,51 @@ function CustomTabPanel(props) {
     >
       {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
+  )
+}
+
+// Overview / Founders / <name>, plus who this is and which startup they're in.
+function ProfileHeader({ founder, venture }) {
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
+        <Link
+          component={RouterLink}
+          underline="hover"
+          color="inherit"
+          to="/admin"
+        >
+          Overview
+        </Link>
+        <Link
+          component={RouterLink}
+          underline="hover"
+          color="inherit"
+          to="/admin/founders"
+        >
+          Founders
+        </Link>
+        <Typography color="text.primary">
+          {founder?.username || 'Founder'}
+        </Typography>
+      </Breadcrumbs>
+
+      {founder && (
+        <>
+          <Typography variant="h4">{founder.username}</Typography>
+          <Typography variant="body1" color="text.secondary">
+            {founder.email} ·{' '}
+            {venture ? (
+              <Link component={RouterLink} to={`/admin/venture/${venture._id}`}>
+                {venture.name}
+              </Link>
+            ) : (
+              'Not in a startup right now'
+            )}
+          </Typography>
+        </>
+      )}
+    </Box>
   )
 }
 
@@ -54,18 +103,39 @@ export default function BasicTabs() {
     )
   }
 
+  // A wrong or stale link: say so rather than show an empty KPI dashboard
+  // whose Add KPI button belongs to nobody.
+  if (!biweeklyData?.founder) {
+    return (
+      <Box sx={{ width: '100%' }}>
+        <ProfileHeader />
+        <Alert severity="warning">
+          No founder was found for this link. Pick someone from{' '}
+          <Link component={RouterLink} to="/admin/founders">
+            Founders
+          </Link>
+          .
+        </Alert>
+      </Box>
+    )
+  }
+
   const founderId = params?.userid || biweeklyData?.founder?._id
 
   return (
     <Box sx={{ width: '100%' }}>
+      <ProfileHeader
+        founder={biweeklyData.founder}
+        venture={biweeklyData.venture}
+      />
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs
           value={value}
           onChange={handleChange}
           aria-label="founder profile evaluation tabs"
         >
-          <Tab label="KPIS" {...a11yProps(0)} />
-          <Tab label="Bi-Weekly" {...a11yProps(1)} />
+          <Tab label="KPIs" {...a11yProps(0)} />
+          <Tab label="Bi-weekly" {...a11yProps(1)} />
         </Tabs>
       </Box>
       <CustomTabPanel value={value} index={0}>

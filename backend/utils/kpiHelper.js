@@ -90,7 +90,7 @@ export const resolveEvidenceData = async (
   let fileName = currentEvidence?.fileName || ''
 
   if (file) {
-    fileUrl = await uploadToS3(file.buffer, file.originalname, file.mimetype)
+    fileUrl = await uploadToS3(file.buffer, file.originalname)
     fileName = file.originalname
   }
 
@@ -186,10 +186,27 @@ export const kpiOwnerChangeError = (user, kpi, founder) => {
   return 'Only admins can change who a KPI belongs to'
 }
 
-// A SubKPI may be changed by whoever may change its parent KPI.
+// Statuses in which members may still reshape or delete a KPI and its
+// SubKPIs. Once accepted, it is what faculty signed off on (and graded KPIs
+// carry a grade), so only an admin may change its parts or remove it.
+export const EDITABLE_KPI_STATUSES = [
+  'DRAFT',
+  'WAITING_FOR_APPROVAL',
+  'REJECTED',
+]
+
+export const isKPIOpenToMembers = (user, kpi) =>
+  user?.role === 'admin' || EDITABLE_KPI_STATUSES.includes(kpi.status)
+
+// A SubKPI may be changed by whoever may change its parent KPI, while that
+// KPI is still open to members.
 export const canUserEditSubKPI = async (user, subKPI) => {
   const parentKPI = await KPI.findById(subKPI.parentKPI)
-  return Boolean(parentKPI) && canUserAccessKPI(user, parentKPI)
+  return (
+    Boolean(parentKPI) &&
+    isKPIOpenToMembers(user, parentKPI) &&
+    canUserAccessKPI(user, parentKPI)
+  )
 }
 
 export const buildNewKPIDocument = ({

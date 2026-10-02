@@ -9,6 +9,7 @@ import {
   parseEvaluationScore,
   isValidKPIStatus,
   buildEvaluationFields,
+  evaluationError,
   buildKPIUpdateFields,
   resolveEvidenceData,
   checkKPILockStatus,
@@ -388,6 +389,20 @@ export const evaluateKPI = async (req, res) => {
         .json({ success: false, message: 'Invalid KPI status' })
     }
 
+    const kpi = await KPI.findById(kpiId).select('status score')
+    if (!kpi) {
+      return res.status(404).json({ success: false, message: 'KPI not found' })
+    }
+
+    const transitionError = evaluationError(kpi, {
+      status,
+      parsedScore,
+      feedback,
+    })
+    if (transitionError) {
+      return res.status(400).json({ success: false, message: transitionError })
+    }
+
     const updateFields = buildEvaluationFields({
       parsedScore,
       status,
@@ -395,8 +410,10 @@ export const evaluateKPI = async (req, res) => {
       evaluatorId: req.user?.id,
     })
 
-    const updatedKPI = await KPI.findByIdAndUpdate(
-      kpiId,
+    // Matching on the status read above means two admins reviewing at once
+    // can't both apply a decision.
+    const updatedKPI = await KPI.findOneAndUpdate(
+      { _id: kpiId, status: kpi.status },
       { $set: updateFields },
       { new: true, runValidators: true }
     )
@@ -407,7 +424,11 @@ export const evaluateKPI = async (req, res) => {
       .populate('subKPIs')
 
     if (!updatedKPI) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
+      return res.status(409).json({
+        success: false,
+        message:
+          'This KPI changed while you were reviewing it. Reload and try again.',
+      })
     }
 
     return res.status(200).json({

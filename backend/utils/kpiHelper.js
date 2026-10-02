@@ -18,6 +18,45 @@ export const parseEvaluationScore = score => {
 export const isValidKPIStatus = status =>
   status === undefined || Object.hasOwn(KPIStatus, status)
 
+// What an admin may change a KPI to from each status. A draft hasn't been
+// submitted, so there is nothing to review; a KPI is graded only once it has
+// been accepted. Keeping the current status lets rejection feedback or a
+// grade be revised.
+export const EVALUATION_TRANSITIONS = {
+  WAITING_FOR_APPROVAL: ['ACCEPTED', 'REJECTED'],
+  REJECTED: ['ACCEPTED', 'REJECTED'],
+  ACCEPTED: ['GRADED'],
+  GRADED: ['GRADED'],
+}
+
+const statusLabel = status => KPIStatus[status] ?? status
+
+const statusChangeError = (kpi, status) => {
+  if (!status || EVALUATION_TRANSITIONS[kpi.status]?.includes(status)) {
+    return null
+  }
+  return `A ${statusLabel(kpi.status)} KPI can't be marked ${statusLabel(status)}`
+}
+
+const scoreError = (kpi, status, parsedScore) => {
+  // The model defaults score to 0, so the first grade must send one.
+  if (status === 'GRADED' && kpi.status !== 'GRADED' && parsedScore === null) {
+    return 'A score is required to grade a KPI'
+  }
+  if (parsedScore !== null && (status ?? kpi.status) !== 'GRADED') {
+    return 'Only a graded KPI has a score'
+  }
+  return null
+}
+
+// Returns why this evaluation can't be applied to the KPI, or null.
+export const evaluationError = (kpi, { status, parsedScore, feedback }) => {
+  if (feedback !== undefined && typeof feedback !== 'string') {
+    return 'Feedback must be text'
+  }
+  return statusChangeError(kpi, status) || scoreError(kpi, status, parsedScore)
+}
+
 export const buildEvaluationFields = ({
   parsedScore,
   status,

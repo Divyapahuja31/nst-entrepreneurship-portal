@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Box, Button, TextField } from '@mui/material'
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
-import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded'
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded'
 
 function OtpVerificationForm({
   onVerify,
@@ -10,7 +9,7 @@ function OtpVerificationForm({
   submitting = false,
   error = '',
   successMessage = '',
-  submitLabel = 'Verify Code',
+  submitLabel = 'Verify',
   backLabel = 'Back',
   initialResendTimer = 60,
 }) {
@@ -51,7 +50,7 @@ function OtpVerificationForm({
         </Alert>
       )}
 
-      {successMessage && (
+      {successMessage && !error && (
         <Alert severity="info" sx={{ mb: 2 }}>
           {successMessage}
         </Alert>
@@ -59,20 +58,28 @@ function OtpVerificationForm({
 
       <TextField
         id="otp-verification-code"
-        label="6-Digit Verification Code"
+        label="Verification Code"
         type="text"
         name="otp"
         value={otp}
-        onChange={e => setOtp(e.target.value)}
+        onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
         required
         fullWidth
+        autoFocus
         autoComplete="one-time-code"
-        inputProps={{
-          maxLength: 6,
-          autoComplete: 'one-time-code',
-          style: { letterSpacing: '4px', fontWeight: 'bold' },
+        slotProps={{
+          htmlInput: {
+            maxLength: 6,
+            inputMode: 'numeric',
+            autoComplete: 'one-time-code',
+            style: {
+              fontVariantNumeric: 'tabular-nums',
+              fontSize: '1.375rem',
+              fontWeight: 600,
+              letterSpacing: '0.3em',
+            },
+          },
         }}
-        placeholder="123456"
         sx={{ mb: 3 }}
       />
 
@@ -82,26 +89,27 @@ function OtpVerificationForm({
         type="submit"
         size="large"
         disabled={submitting || otp.trim().length !== 6}
-        endIcon={<ArrowForwardRoundedIcon />}
-        sx={{ mb: 2 }}
       >
-        {submitting ? 'Verifying Code...' : submitLabel}
+        {submitting ? 'Verifying…' : submitLabel}
       </Button>
 
       <Box
         sx={{
           display: 'flex',
+          flexWrap: 'wrap',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mt: 1,
+          gap: 1,
+          mt: 2,
+          mx: -1.5,
         }}
       >
         {onBack && (
           <Button
             variant="text"
-            size="small"
             onClick={onBack}
-            startIcon={<ArrowBackRoundedIcon />}
+            startIcon={<ChevronLeftRoundedIcon />}
+            sx={{ pl: 1 }}
           >
             {backLabel}
           </Button>
@@ -110,11 +118,11 @@ function OtpVerificationForm({
         {onResend && (
           <Button
             variant="text"
-            size="small"
             onClick={handleResend}
             disabled={resendTimer > 0 || submitting}
+            sx={{ fontVariantNumeric: 'tabular-nums' }}
           >
-            {resendTimer > 0 ? `Resend Code (${resendTimer}s)` : 'Resend Code'}
+            {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend Code'}
           </Button>
         )}
       </Box>

@@ -1,27 +1,49 @@
-import { Grid, Typography } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 
-function AuthScreen({ title, subtitle, children }) {
+// One centered card holding the title, a line of context, and the form. On
+// phones the card drops its chrome so the form uses the full width.
+function AuthScreen({ title, subtitle, children, footer }) {
   return (
-    <Grid container spacing={2} sx={{ pt: 4 }}>
-      <Grid
-        size={{ xs: 10, sm: 8, md: 6, lg: 4 }}
-        offset={{ xs: 1, sm: 2, md: 3, lg: 4 }}
+    <Box sx={{ width: '100%', maxWidth: 440 }}>
+      <Box
+        sx={theme => ({
+          [theme.breakpoints.up('sm')]: {
+            bgcolor: 'background.paper',
+            borderRadius: '28px',
+            p: 5,
+            // Light mode lifts the card with a soft shadow; dark mode has no
+            // shadow to see, so a hairline edge does the job.
+            ...(theme.palette.mode === 'light'
+              ? {
+                  boxShadow:
+                    '0 2px 8px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.06)',
+                }
+              : { border: `1px solid ${theme.palette.divider}` }),
+          },
+        })}
       >
-        <Grid container>
-          <Grid size={12} sx={{ padding: 2 }}>
-            <Typography variant="h4" component="h1" gutterBottom sx={{ my: 2 }}>
-              {title}
-            </Typography>
+        <Typography variant="h1" sx={{ mb: 1 }}>
+          {title}
+        </Typography>
 
-            <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-              {subtitle}
-            </Typography>
-          </Grid>
+        {subtitle && (
+          <Typography color="text.secondary" sx={{ mb: 4 }}>
+            {subtitle}
+          </Typography>
+        )}
 
-          {children}
-        </Grid>
-      </Grid>
-    </Grid>
+        {children}
+      </Box>
+
+      {footer && (
+        <Typography
+          color="text.secondary"
+          sx={{ mt: 3, textAlign: 'center', fontSize: '0.9375rem' }}
+        >
+          {footer}
+        </Typography>
+      )}
+    </Box>
   )
 }
 

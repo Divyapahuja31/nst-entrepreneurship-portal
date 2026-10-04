@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { useNavigate, useSearchParams } from 'react-router'
 
-import { Alert, Button, Grid, MenuItem, TextField } from '@mui/material'
-
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import { Alert, Button, MenuItem, Stack, TextField } from '@mui/material'
 
 import AuthScreen from '../../components/AuthScreen'
 
@@ -51,7 +49,9 @@ function CompleteSignup() {
       } catch (error) {
         console.error('Failed to load signup options:', error)
 
-        setError('Failed to load signup options. Please try again.')
+        setError(
+          "Campus and batch options couldn't load. Refresh the page to try again."
+        )
       } finally {
         setLoadingOptions(false)
       }
@@ -73,12 +73,12 @@ function CompleteSignup() {
     event.preventDefault()
 
     if (!token) {
-      setError('Signup session is missing or expired.')
+      setError('Your sign-up session has expired. Sign in with Google again.')
       return
     }
 
     if (!form.username.trim() || !form.batch || !form.campus) {
-      setError('Please complete all required fields.')
+      setError('Enter your name, campus, and batch.')
       return
     }
 
@@ -106,52 +106,42 @@ function CompleteSignup() {
   if (!token) {
     return (
       <AuthScreen
-        title="Invalid Signup Session"
-        subtitle="Your Google signup session is missing or has expired."
+        title="Sign-Up Link Expired"
+        subtitle="Your Google sign-up session is missing or has expired. Sign in with Google again to finish creating your account."
       >
-        <Grid size={12} sx={{ padding: 2 }}>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => navigate('/signin')}
-          >
-            Back to Sign In
-          </Button>
-        </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          onClick={() => navigate('/signin')}
+        >
+          Go to Sign In
+        </Button>
       </AuthScreen>
-    )
-  }
-
-  if (loadingOptions) {
-    return (
-      <AuthScreen
-        title="Complete Your Profile"
-        subtitle="Loading profile options..."
-      />
     )
   }
 
   return (
     <AuthScreen
-      title="Complete Your Profile"
-      subtitle="Your Google account has been verified. Complete your profile to create your account."
+      title="Finish Your Profile"
+      subtitle="Your Google account is verified. Add a few details to create your account."
     >
-      <Grid size={12} sx={{ padding: 2 }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
-        <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit}>
+        <Stack spacing={2} sx={{ mb: 4 }}>
           <TextField
             fullWidth
             required
             label="Name"
             name="username"
+            autoComplete="name"
             value={form.username}
             onChange={handleChange}
-            margin="normal"
             disabled={loading}
           />
 
@@ -163,8 +153,8 @@ function CompleteSignup() {
             name="campus"
             value={form.campus}
             onChange={handleChange}
-            margin="normal"
-            disabled={loading}
+            disabled={loading || loadingOptions}
+            helperText={loadingOptions ? 'Loading campuses…' : undefined}
           >
             {options.campuses.map(campus => (
               <MenuItem key={campus._id} value={campus._id}>
@@ -181,8 +171,8 @@ function CompleteSignup() {
             name="batch"
             value={form.batch}
             onChange={handleChange}
-            margin="normal"
-            disabled={loading}
+            disabled={loading || loadingOptions}
+            helperText={loadingOptions ? 'Loading batches…' : undefined}
           >
             {options.batches.map(batch => (
               <MenuItem key={batch._id} value={batch._id}>
@@ -190,24 +180,18 @@ function CompleteSignup() {
               </MenuItem>
             ))}
           </TextField>
+        </Stack>
 
-          <Grid container sx={{ mt: 1, justifyContent: 'flex-end' }}>
-            <Grid size="auto">
-              <Button
-                fullWidth
-                variant="contained"
-                type="submit"
-                sx={{ mb: 1 }}
-                size="large"
-                disabled={loading}
-                endIcon={<ArrowForwardRoundedIcon />}
-              >
-                {loading ? 'Creating Account...' : 'Complete Signup'}
-              </Button>
-            </Grid>
-          </Grid>
-        </form>
-      </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          type="submit"
+          size="large"
+          disabled={loading || loadingOptions}
+        >
+          {loading ? 'Creating Account…' : 'Create Account'}
+        </Button>
+      </form>
     </AuthScreen>
   )
 }

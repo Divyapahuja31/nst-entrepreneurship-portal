@@ -6,32 +6,38 @@ import {
   useRevalidator,
 } from 'react-router'
 import {
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TableContainer,
-  Paper,
-  Button,
+  Alert,
   Box,
+  Button,
+  ButtonBase,
   CircularProgress,
-  IconButton,
   Collapse,
-  Chip,
-  Tooltip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Link,
   Tab,
   Tabs,
+  Typography,
 } from '@mui/material'
-import EditIcon from '@mui/icons-material/Edit'
-import DeleteIcon from '@mui/icons-material/Delete'
-import SendIcon from '@mui/icons-material/Send'
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 
 import AddKpi from '../../components/AddKpi'
+import EmptyState from '../../components/EmptyState'
+import SectionCard from '../../components/SectionCard'
+import StatTile from '../../components/StatTile'
+import StatusPill from '../../components/StatusPill'
 import UploadEvidenceDialog from '../../components/UploadEvidenceDialog'
+import {
+  CheckCircleIcon,
+  ChevronRightIcon,
+  HourglassIcon,
+  KpiIcon,
+  LockIcon,
+  PlusIcon,
+  TargetIcon,
+} from '../../components/icons'
 import { useAuthStore } from '../../stores/auth'
 import {
   createKPIWithSubKpis,
@@ -43,12 +49,12 @@ import {
   uploadKPIEvidence,
 } from '../../api/kpi'
 
-const STATUS_COLORS = {
-  DRAFT: 'default',
-  WAITING_FOR_APPROVAL: 'warning',
-  ACCEPTED: 'info',
-  GRADED: 'success',
-  REJECTED: 'error',
+const STATUS_META = {
+  DRAFT: { label: 'Draft', tint: 'gray', plain: true },
+  WAITING_FOR_APPROVAL: { label: 'Awaiting Approval', tint: 'orange' },
+  ACCEPTED: { label: 'Accepted', tint: 'blue' },
+  GRADED: { label: 'Graded', tint: 'green' },
+  REJECTED: { label: 'Rejected', tint: 'red' },
 }
 
 const formatDate = dateStr => {
@@ -62,6 +68,304 @@ const formatDate = dateStr => {
   } catch {
     return '-'
   }
+}
+
+const idOf = ref => ref?._id || ref
+
+// Why a KPI can't be changed any more, or null if it still can.
+function lockReason(kpi) {
+  if (kpi.status === 'GRADED') return 'Graded KPIs are locked.'
+  if (kpi.dueDate && new Date(kpi.dueDate) < new Date()) {
+    return 'The deadline has passed, so this KPI is closed.'
+  }
+  return null
+}
+
+// Row of the details panel: label on the left, value on the right.
+function Fact({ label, children }) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 2,
+        py: 1,
+      }}
+    >
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ textAlign: 'right' }}>
+        {children}
+      </Typography>
+    </Box>
+  )
+}
+
+function DetailGroup({ title, children }) {
+  return (
+    <Box>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        {title}
+      </Typography>
+      {children}
+    </Box>
+  )
+}
+
+function KpiDetails({ kpi, onEdit, onDelete }) {
+  const locked = lockReason(kpi)
+  const editable = !locked && kpi.status !== 'ACCEPTED'
+  const hasEvidence = kpi.evidence?.fileName || kpi.evidence?.supportingText
+
+  return (
+    <Box
+      sx={{
+        mt: 1.5,
+        p: { xs: 2, sm: 2.5 },
+        borderRadius: '14px',
+        bgcolor: 'background.default',
+        display: 'grid',
+        gap: 3,
+        gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 7fr) minmax(0, 5fr)' },
+      }}
+    >
+      <Box sx={{ display: 'grid', gap: 3, alignContent: 'start' }}>
+        <DetailGroup title="Description">
+          <Typography
+            variant="body2"
+            color={kpi.description ? 'text.primary' : 'text.secondary'}
+            sx={{ whiteSpace: 'pre-line' }}
+          >
+            {kpi.description || 'No description yet.'}
+          </Typography>
+        </DetailGroup>
+
+        <DetailGroup title="Sub-KPIs">
+          {kpi.subKPIs?.length > 0 ? (
+            <Box
+              component="ol"
+              sx={{ m: 0, pl: 2.5, display: 'grid', gap: 0.5 }}
+            >
+              {kpi.subKPIs.map((sub, i) => (
+                <Typography key={sub._id || i} component="li" variant="body2">
+                  {sub.name}
+                </Typography>
+              ))}
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              This KPI isn&apos;t broken into smaller parts.
+            </Typography>
+          )}
+        </DetailGroup>
+      </Box>
+
+      <Box sx={{ display: 'grid', gap: 3, alignContent: 'start' }}>
+        <DetailGroup title="Progress">
+          <Fact label="Achieved">
+            {kpi.actualValue || (
+              <Box component="span" sx={{ color: 'text.secondary' }}>
+                Not recorded yet
+              </Box>
+            )}
+          </Fact>
+          {kpi.evidence?.fileName && (
+            <>
+              <Divider />
+              <Fact label="Evidence">
+                <Link href={`/api/kpis/${kpi._id}/evidence/download`} download>
+                  {kpi.evidence.fileName}
+                </Link>
+              </Fact>
+            </>
+          )}
+          {kpi.evidence?.supportingText && (
+            <>
+              <Divider />
+              <Typography variant="body2" sx={{ pt: 1 }}>
+                {kpi.evidence.supportingText}
+              </Typography>
+            </>
+          )}
+          {!hasEvidence && kpi.status === 'ACCEPTED' && (
+            <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+              Add a number and evidence when you have results.
+            </Typography>
+          )}
+        </DetailGroup>
+
+        <DetailGroup title="Evaluation">
+          <Fact label="Submitted">{formatDate(kpi.submissionDate)}</Fact>
+          <Divider />
+          <Fact label="Reviewed">{formatDate(kpi.evaluationDate)}</Fact>
+          <Divider />
+          <Fact label="Score">
+            {kpi.status === 'GRADED' && kpi.score != null ? (
+              <Box component="strong" sx={{ fontWeight: 600 }}>
+                {kpi.score} pts
+              </Box>
+            ) : (
+              '-'
+            )}
+          </Fact>
+          {kpi.feedback && (
+            <>
+              <Divider />
+              <Typography variant="body2" sx={{ pt: 1 }}>
+                {kpi.feedback}
+              </Typography>
+            </>
+          )}
+        </DetailGroup>
+      </Box>
+
+      {(editable || locked) && (
+        <Box
+          sx={{
+            gridColumn: '1 / -1',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            flexWrap: 'wrap',
+          }}
+        >
+          {locked && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}
+            >
+              <LockIcon sx={{ fontSize: 16 }} />
+              {locked}
+            </Typography>
+          )}
+          {editable && (
+            <>
+              <Button variant="outlined" onClick={onEdit}>
+                Edit KPI
+              </Button>
+              <Button variant="outlined" color="error" onClick={onDelete}>
+                Delete
+              </Button>
+            </>
+          )}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+function KpiRow({
+  kpi,
+  currentUserId,
+  expanded,
+  onToggle,
+  submitting,
+  onSubmit,
+  onProgress,
+  onEdit,
+  onDelete,
+}) {
+  const status = STATUS_META[kpi.status] || STATUS_META.DRAFT
+  const locked = lockReason(kpi)
+  const isMine = idOf(kpi.founder) === currentUserId
+  const owner = !kpi.founder
+    ? 'Entire startup'
+    : isMine
+      ? 'You'
+      : kpi.founder.username || 'Member'
+
+  let action = null
+  if (!locked && (kpi.status === 'DRAFT' || kpi.status === 'REJECTED')) {
+    action = (
+      <Button variant="outlined" loading={submitting} onClick={onSubmit}>
+        {kpi.status === 'REJECTED' ? 'Resubmit' : 'Submit for Approval'}
+      </Button>
+    )
+  } else if (!locked && kpi.status === 'ACCEPTED') {
+    action = (
+      <Button variant="outlined" onClick={onProgress}>
+        {kpi.actualValue ? 'Update Progress' : 'Add Progress'}
+      </Button>
+    )
+  }
+
+  const detailsId = `kpi-details-${kpi._id}`
+
+  return (
+    <Box sx={{ py: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: { xs: 1.5, sm: 2 },
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
+        }}
+      >
+        <ButtonBase
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-controls={detailsId}
+          sx={{
+            flex: '1 1 260px',
+            minWidth: 0,
+            justifyContent: 'flex-start',
+            gap: 1.5,
+            textAlign: 'left',
+            borderRadius: '12px',
+            p: 1,
+            m: -1,
+            '&.Mui-focusVisible': { bgcolor: 'background.default' },
+          }}
+        >
+          <ChevronRightIcon
+            sx={{
+              fontSize: 14,
+              color: 'text.secondary',
+              transform: expanded ? 'rotate(90deg)' : 'none',
+              transition: 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+              '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+            }}
+          />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" component="h3" noWrap>
+              {kpi.title}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {owner} ·{' '}
+              {kpi.dueDate ? `Due ${formatDate(kpi.dueDate)}` : 'No due date'}
+              {kpi.status === 'GRADED' && kpi.score != null && (
+                <> · {kpi.score} pts</>
+              )}
+            </Typography>
+          </Box>
+        </ButtonBase>
+
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            flexWrap: 'wrap',
+            ml: { xs: 3.5, sm: 0 },
+            flexShrink: { xs: 1, sm: 0 },
+          }}
+        >
+          <StatusPill
+            label={status.label}
+            tint={status.tint}
+            plain={status.plain}
+          />
+          {action}
+        </Box>
+      </Box>
+
+      <Collapse in={expanded} timeout="auto" unmountOnExit id={detailsId}>
+        <KpiDetails kpi={kpi} onEdit={onEdit} onDelete={onDelete} />
+      </Collapse>
+    </Box>
+  )
 }
 
 export default function Kpis() {
@@ -89,23 +393,27 @@ export default function Kpis() {
   const [expandedKpiId, setExpandedKpiId] = useState(null)
   const [evidenceDialogOpen, setEvidenceDialogOpen] = useState(false)
   const [selectedKpiForEvidence, setSelectedKpiForEvidence] = useState(null)
+  const [kpiToDelete, setKpiToDelete] = useState(null)
+  const [pendingKpiId, setPendingKpiId] = useState(null)
 
   const currentUserId = userProfile?._id || userProfile?.id
-  const myKpis = kpis.filter(
-    k => (k.founder?._id || k.founder) === currentUserId
-  )
+  const myKpis = kpis.filter(k => idOf(k.founder) === currentUserId)
   const startupKpis = kpis.filter(k => !k.founder)
   const visibleKpis =
     tabIndex === 1 ? myKpis : tabIndex === 2 ? startupKpis : kpis
 
+  const countOf = status => kpis.filter(k => k.status === status).length
+  const graded = kpis.filter(k => k.status === 'GRADED' && k.score != null)
+  const averageScore = graded.length
+    ? Math.round(graded.reduce((sum, k) => sum + k.score, 0) / graded.length)
+    : null
+
   const [busy, setBusy] = useState(false)
   const [actionErrorMsg, setActionErrorMsg] = useState('')
 
-  const isLoading = navigation.state === 'loading' || busy
+  const isLoading = navigation.state === 'loading'
   const actionError = actionErrorMsg || loaderData?.error || ''
-  const displayError = !ventureId
-    ? 'No startup associated with your account.'
-    : actionError
+  const noVenture = !ventureId
 
   // Runs an API operation, surfaces its error, and refreshes the loader data —
   // what the route action used to do via its intent switch.
@@ -135,7 +443,7 @@ export default function Kpis() {
 
   const handleSaveKPI = async kpiData => {
     if (!ventureId) {
-      alert('Cannot save KPI without a valid startup ID.')
+      setActionErrorMsg('You need to be part of a startup to save a KPI.')
       return
     }
 
@@ -192,7 +500,7 @@ export default function Kpis() {
       }
     } catch (err) {
       console.error('Failed to save evidence:', err)
-      alert(err.message || 'Failed to save evidence')
+      setActionErrorMsg(err.message || 'Failed to save evidence')
     }
     setEvidenceDialogOpen(false)
     setSelectedKpiForEvidence(null)
@@ -213,14 +521,25 @@ export default function Kpis() {
       )
     } catch (err) {
       console.error('Failed to delete evidence:', err)
-      alert(err.message || 'Failed to delete evidence')
+      setActionErrorMsg(err.message || 'Failed to delete evidence')
     }
     setEvidenceDialogOpen(false)
     setSelectedKpiForEvidence(null)
   }
 
-  const handleEditClick = kpi => {
-    setEditingKpi(kpi)
+  const handleSubmit = async kpi => {
+    setPendingKpiId(kpi._id)
+    await run(() => submitKPIForApproval(kpi._id))
+    setPendingKpiId(null)
+  }
+
+  const handleConfirmDelete = async () => {
+    const ok = await run(() => deleteKPI(kpiToDelete._id))
+    if (ok) setKpiToDelete(null)
+  }
+
+  const openNewKpi = () => {
+    setEditingKpi(null)
     setOpenAddKpi(true)
   }
 
@@ -228,833 +547,216 @@ export default function Kpis() {
     setExpandedKpiId(prev => (prev === id ? null : id))
   }
 
+  const emptyCopy = {
+    0: {
+      title: 'No KPIs yet',
+      description:
+        'Add your first KPI. Once a mentor approves it, you can record progress against it.',
+    },
+    1: {
+      title: 'No personal KPIs',
+      description: 'KPIs you assign to yourself will show up here.',
+    },
+    2: {
+      title: 'No startup KPIs',
+      description: 'KPIs owned by the whole startup will show up here.',
+    },
+  }[tabIndex]
+
   return (
-    <>
-      <Typography variant="h3">Manage KPIs</Typography>
-
-      <Typography
-        variant="body1"
-        gutterBottom
-        sx={{
-          margin: '10px',
-        }}
-      >
-        Evaluation & Performance Student Startup KPIs
-      </Typography>
-
-      <hr />
-
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
       <Box
         sx={{
           display: 'flex',
-          justifyContent: 'flex-end',
-          marginTop: 3,
-          marginBottom: 6,
-          marginRight: 2,
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+          mb: { xs: 4, sm: 5 },
         }}
       >
-        <Button
-          variant="contained"
-          onClick={() => {
-            setEditingKpi(null)
-            setOpenAddKpi(true)
-          }}
-          sx={{
-            fontSize: '15px',
-            padding: '10px 20px',
-          }}
-        >
-          + Add KPI
-        </Button>
+        <Box>
+          <Typography
+            variant="h2"
+            component="h1"
+            sx={{ fontSize: { xs: '2rem', sm: '2.5rem' }, mb: 1 }}
+          >
+            KPIs
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Set goals for your startup, get them approved, then record progress.
+          </Typography>
+        </Box>
+        {!noVenture && (
+          <Button
+            variant="contained"
+            startIcon={<PlusIcon />}
+            onClick={openNewKpi}
+          >
+            Add KPI
+          </Button>
+        )}
       </Box>
 
-      {isLoading && (
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            marginTop: 5,
-          }}
-        >
-          <CircularProgress />
-        </Box>
+      {noVenture && (
+        <Alert severity="info">
+          Join or create a startup to start setting KPIs.
+        </Alert>
       )}
 
-      {displayError && (
-        <Typography
-          color="error"
-          sx={{
-            textAlign: 'center',
-            marginTop: 3,
-          }}
-        >
-          {displayError}
-        </Typography>
-      )}
+      {!noVenture && (
+        <>
+          {actionError && (
+            <Alert
+              severity="error"
+              onClose={() => setActionErrorMsg('')}
+              sx={{ mb: 3 }}
+            >
+              {actionError}
+            </Alert>
+          )}
 
-      {!isLoading && !displayError && (
-        <Box
-          sx={{
-            maxWidth: '95%',
-            margin: '0 auto 24px auto',
-            borderBottom: 1,
-            borderColor: 'divider',
-          }}
-        >
-          <Tabs
-            value={tabIndex}
-            onChange={(_, val) => setTabIndex(val)}
-            textColor="primary"
-            indicatorColor="primary"
+          <Box
+            sx={{
+              display: 'grid',
+              gap: { xs: 2, sm: 3 },
+              gridTemplateColumns: {
+                xs: 'repeat(2, minmax(0, 1fr))',
+                md: 'repeat(4, minmax(0, 1fr))',
+              },
+              mb: { xs: 2, sm: 3 },
+            }}
           >
-            <Tab label={`All KPIs (${kpis.length})`} />
-            <Tab label={`My KPIs (${myKpis.length})`} />
-            <Tab label={`Startup KPIs (${startupKpis.length})`} />
-          </Tabs>
-        </Box>
-      )}
+            <StatTile
+              icon={KpiIcon}
+              tint="blue"
+              label="Total"
+              value={kpis.length}
+              detail={`${myKpis.length} yours, ${startupKpis.length} startup-wide`}
+            />
+            <StatTile
+              icon={HourglassIcon}
+              tint="orange"
+              label="Awaiting approval"
+              value={countOf('WAITING_FOR_APPROVAL')}
+              detail="Waiting on a mentor"
+            />
+            <StatTile
+              icon={TargetIcon}
+              tint="blue"
+              label="In progress"
+              value={countOf('ACCEPTED')}
+              detail="Approved, ready for results"
+            />
+            <StatTile
+              icon={CheckCircleIcon}
+              tint="green"
+              label="Graded"
+              value={countOf('GRADED')}
+              detail={
+                averageScore != null
+                  ? `Average ${averageScore} pts`
+                  : 'No scores yet'
+              }
+            />
+          </Box>
 
-      {!isLoading && !displayError && (
-        <Table
-          sx={{
-            maxWidth: '95%',
-            border: 1,
-            margin: '0 auto',
-          }}
-          aria-label="KPI table"
-        >
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'background.default' }}>
-              <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>KPI</TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Owner
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Due Date
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Submission Date
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Status
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Score
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Evaluation Date
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Action
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Manage
-              </TableCell>
-            </TableRow>
-          </TableHead>
-
-          <TableBody>
-            {visibleKpis.map((kpi, index) => {
-              const isExpanded = expandedKpiId === kpi._id
-              const isPastDue =
-                kpi.dueDate && new Date(kpi.dueDate) < new Date()
-              const isGraded = kpi.status === 'GRADED'
-              const isAccepted = kpi.status === 'ACCEPTED'
-              const isLocked = isGraded || isPastDue
-
-              return (
+          <SectionCard
+            title="Your KPIs"
+            action={
+              <Tabs
+                value={tabIndex}
+                onChange={(_, val) => setTabIndex(val)}
+                aria-label="Filter KPIs"
+                variant="scrollable"
+                scrollButtons={false}
+                sx={{
+                  maxWidth: '100%',
+                  '& .MuiTab-root': { minWidth: 0, px: { xs: 1.25, sm: 2 } },
+                }}
+              >
+                <Tab label={`All (${kpis.length})`} />
+                <Tab label={`Mine (${myKpis.length})`} />
+                <Tab label={`Startup (${startupKpis.length})`} />
+              </Tabs>
+            }
+          >
+            {isLoading ? (
+              <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : visibleKpis.length === 0 ? (
+              <EmptyState
+                icon={KpiIcon}
+                title={emptyCopy.title}
+                description={emptyCopy.description}
+                action={
+                  tabIndex === 0 && (
+                    <Button variant="outlined" onClick={openNewKpi}>
+                      Add KPI
+                    </Button>
+                  )
+                }
+              />
+            ) : (
+              visibleKpis.map((kpi, index) => (
                 <Fragment key={kpi._id}>
-                  <TableRow
-                    sx={{
-                      '& > *': {
-                        borderBottom: isExpanded ? 'unset' : undefined,
-                      },
+                  {index > 0 && <Divider />}
+                  <KpiRow
+                    kpi={kpi}
+                    currentUserId={currentUserId}
+                    expanded={expandedKpiId === kpi._id}
+                    onToggle={() => toggleExpand(kpi._id)}
+                    submitting={pendingKpiId === kpi._id}
+                    onSubmit={() => handleSubmit(kpi)}
+                    onProgress={() => {
+                      setSelectedKpiForEvidence(kpi)
+                      setEvidenceDialogOpen(true)
                     }}
-                  >
-                    <TableCell>{index + 1}</TableCell>
-
-                    <TableCell>
-                      <Box
-                        onClick={() => toggleExpand(kpi._id)}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5,
-                          cursor: 'pointer',
-                          fontWeight: 600,
-                          '&:hover': { color: 'primary.main' },
-                        }}
-                      >
-                        <IconButton
-                          size="small"
-                          onClick={e => {
-                            e.stopPropagation()
-                            toggleExpand(kpi._id)
-                          }}
-                        >
-                          {isExpanded ? (
-                            <KeyboardArrowUpIcon fontSize="small" />
-                          ) : (
-                            <KeyboardArrowDownIcon fontSize="small" />
-                          )}
-                        </IconButton>
-                        {kpi.title}
-                      </Box>
-                    </TableCell>
-
-                    <TableCell align="center">
-                      {kpi.founder ? (
-                        <Chip
-                          label={
-                            (kpi.founder._id || kpi.founder) === currentUserId
-                              ? `Me (${kpi.founder.username || 'Member'})`
-                              : kpi.founder.username || 'Member'
-                          }
-                          size="small"
-                          color={
-                            (kpi.founder._id || kpi.founder) === currentUserId
-                              ? 'primary'
-                              : 'default'
-                          }
-                          variant="outlined"
-                        />
-                      ) : (
-                        <Chip
-                          label="Entire Startup"
-                          size="small"
-                          variant="outlined"
-                        />
-                      )}
-                    </TableCell>
-
-                    <TableCell align="center">
-                      <Typography variant="body2">
-                        {formatDate(kpi.dueDate)}
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell align="center">
-                      {kpi.submissionDate ? (
-                        <Chip
-                          label={formatDate(kpi.submissionDate)}
-                          size="small"
-                          variant="outlined"
-                          color="info"
-                        />
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">
-                          Not submitted
-                        </Typography>
-                      )}
-                    </TableCell>
-
-                    <TableCell align="center">
-                      <Chip
-                        label={kpi.status}
-                        size="small"
-                        color={STATUS_COLORS[kpi.status] || 'default'}
-                        sx={{ fontWeight: 600 }}
-                      />
-                    </TableCell>
-
-                    <TableCell align="center">
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 700,
-                          color:
-                            kpi.score > 0 ? 'success.main' : 'text.primary',
-                        }}
-                      >
-                        {kpi.score !== undefined && kpi.score !== null
-                          ? kpi.score
-                          : '-'}
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell align="center">
-                      {kpi.evaluationDate ? (
-                        <Chip
-                          label={formatDate(kpi.evaluationDate)}
-                          size="small"
-                          color="success"
-                        />
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">
-                          Pending
-                        </Typography>
-                      )}
-                    </TableCell>
-
-                    <TableCell align="center">
-                      {isGraded ? (
-                        <Tooltip title="KPI has already been graded. Submissions are locked.">
-                          <span>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              disabled
-                              sx={{ textTransform: 'none', borderRadius: 1 }}
-                            >
-                              Graded
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      ) : isPastDue ? (
-                        <Tooltip title="KPI deadline has passed. Submissions are closed.">
-                          <span>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              disabled
-                              color="error"
-                              sx={{ textTransform: 'none', borderRadius: 1 }}
-                            >
-                              Deadline Passed
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      ) : isAccepted ? (
-                        <Button
-                          variant={kpi.actualValue ? 'outlined' : 'contained'}
-                          size="small"
-                          color="primary"
-                          onClick={() => {
-                            setSelectedKpiForEvidence(kpi)
-                            setEvidenceDialogOpen(true)
-                          }}
-                          sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            borderRadius: 1,
-                          }}
-                        >
-                          {kpi.actualValue
-                            ? 'Update Progress'
-                            : 'Upload Document'}
-                        </Button>
-                      ) : (
-                        <Tooltip
-                          title={
-                            kpi.status === 'WAITING_FOR_APPROVAL'
-                              ? 'Wait for mentor to approve this KPI before inputting numbers & evidence.'
-                              : kpi.status === 'REJECTED'
-                                ? 'KPI was rejected. Revise and resubmit.'
-                                : 'Submit KPI for mentor approval first.'
-                          }
-                        >
-                          <span>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              disabled
-                              sx={{ textTransform: 'none', borderRadius: 1 }}
-                            >
-                              {kpi.status === 'WAITING_FOR_APPROVAL'
-                                ? 'Awaiting Approval'
-                                : kpi.status === 'REJECTED'
-                                  ? 'Rejected'
-                                  : 'Draft'}
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-
-                    <TableCell align="center">
-                      {(kpi.status === 'DRAFT' || kpi.status === 'REJECTED') &&
-                        !isPastDue && (
-                          <Tooltip title="Submit for Mentor Approval">
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              disabled={busy}
-                              onClick={() =>
-                                run(() => submitKPIForApproval(kpi._id))
-                              }
-                            >
-                              <SendIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      <Tooltip
-                        title={
-                          isGraded
-                            ? 'Graded KPI cannot be edited'
-                            : isPastDue
-                              ? 'Deadline passed; KPI cannot be edited'
-                              : isAccepted
-                                ? 'Accepted KPI cannot be edited'
-                                : 'Edit KPI'
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            disabled={isAccepted || isLocked}
-                            size="small"
-                            onClick={() => handleEditClick(kpi)}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip
-                        title={
-                          isGraded
-                            ? 'Graded KPI cannot be deleted'
-                            : isPastDue
-                              ? 'Deadline passed; KPI cannot be deleted'
-                              : isAccepted
-                                ? 'Accepted KPI cannot be deleted'
-                                : 'Delete KPI'
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            disabled={isAccepted || isLocked || busy}
-                            size="small"
-                            color="error"
-                            onClick={() => {
-                              if (!window.confirm('Delete this KPI?')) return
-                              run(() => deleteKPI(kpi._id))
-                            }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-
-                  <TableRow>
-                    <TableCell
-                      style={{ paddingBottom: 0, paddingTop: 0 }}
-                      colSpan={9}
-                    >
-                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                        <Box
-                          sx={{
-                            p: 2.5,
-                            m: 1.5,
-                            border: 1,
-                            borderColor: 'divider',
-                            borderRadius: 1.5,
-                            backgroundColor: 'background.default',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'flex-start',
-                              gap: 3,
-                              flexWrap: 'wrap',
-                            }}
-                          >
-                            <Box sx={{ flex: 1, minWidth: 260 }}>
-                              <Typography
-                                variant="subtitle2"
-                                color="text.secondary"
-                                sx={{ fontWeight: 600, mb: 0.75 }}
-                              >
-                                Description
-                              </Typography>
-                              <Box
-                                sx={{
-                                  p: 1.5,
-                                  mb: 2.5,
-                                  border: 1,
-                                  borderColor: 'divider',
-                                  borderRadius: 1,
-                                  backgroundColor: 'background.paper',
-                                  maxHeight: 110,
-                                  minHeight: 60,
-                                  overflowY: 'auto',
-                                }}
-                              >
-                                <Typography
-                                  variant="body2"
-                                  color={
-                                    kpi.description
-                                      ? 'text.primary'
-                                      : 'text.secondary'
-                                  }
-                                  sx={{ whitespace: 'pre-line' }}
-                                >
-                                  {kpi.description ||
-                                    'No description provided.'}
-                                </Typography>
-                              </Box>
-
-                              <Typography
-                                variant="subtitle2"
-                                color="text.secondary"
-                                sx={{ fontWeight: 600, mb: 0.75 }}
-                              >
-                                SubKPIs
-                              </Typography>
-                              {kpi.subKPIs?.length > 0 ? (
-                                <TableContainer
-                                  component={Paper}
-                                  variant="outlined"
-                                  sx={{ borderRadius: 1 }}
-                                >
-                                  <Table size="small">
-                                    <TableHead
-                                      sx={{
-                                        backgroundColor: 'background.default',
-                                      }}
-                                    >
-                                      <TableRow>
-                                        <TableCell
-                                          sx={{
-                                            fontWeight: 600,
-                                            width: 60,
-                                            py: 1,
-                                          }}
-                                        >
-                                          #
-                                        </TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>
-                                          SubKPI Name
-                                        </TableCell>
-                                      </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                      {kpi.subKPIs.map((sub, i) => (
-                                        <TableRow
-                                          key={sub._id || i}
-                                          hover
-                                          sx={{
-                                            '&:last-child td, &:last-child th':
-                                              { border: 0 },
-                                          }}
-                                        >
-                                          <TableCell
-                                            sx={{
-                                              py: 1,
-                                              color: 'text.secondary',
-                                            }}
-                                          >
-                                            {i + 1}
-                                          </TableCell>
-                                          <TableCell
-                                            sx={{ py: 1, fontWeight: 500 }}
-                                          >
-                                            {sub.name}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </TableContainer>
-                              ) : (
-                                <Box
-                                  sx={{
-                                    p: 2,
-                                    border: 1,
-                                    borderColor: 'divider',
-                                    borderRadius: 1,
-                                    backgroundColor: 'background.paper',
-                                    textAlign: 'center',
-                                  }}
-                                >
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    No sub-KPIs added.
-                                  </Typography>
-                                </Box>
-                              )}
-
-                              {kpi.evidence &&
-                                (kpi.evidence.fileName ||
-                                  kpi.evidence.supportingText) && (
-                                  <Box sx={{ mt: 2.5 }}>
-                                    <Typography
-                                      variant="subtitle2"
-                                      color="text.secondary"
-                                      sx={{ fontWeight: 600, mb: 0.75 }}
-                                    >
-                                      Uploaded Evidence
-                                    </Typography>
-                                    <Box
-                                      sx={{
-                                        p: 1.5,
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: 1,
-                                        backgroundColor: 'background.paper',
-                                      }}
-                                    >
-                                      {kpi.evidence.fileName && (
-                                        <Typography
-                                          variant="body2"
-                                          sx={{
-                                            fontWeight: 500,
-                                            mb: kpi.evidence.supportingText
-                                              ? 0.5
-                                              : 0,
-                                          }}
-                                        >
-                                          File:{' '}
-                                          {kpi.evidence.fileUrl ? (
-                                            <a
-                                              href={kpi.evidence.fileUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              style={{
-                                                color: 'primary.main',
-                                                textDecoration: 'none',
-                                              }}
-                                            >
-                                              {kpi.evidence.fileName}
-                                            </a>
-                                          ) : (
-                                            kpi.evidence.fileName
-                                          )}
-                                        </Typography>
-                                      )}
-                                      {kpi.evidence.supportingText && (
-                                        <Typography
-                                          variant="body2"
-                                          color="text.secondary"
-                                        >
-                                          Note: {kpi.evidence.supportingText}
-                                        </Typography>
-                                      )}
-                                    </Box>
-                                  </Box>
-                                )}
-                            </Box>
-
-                            <Box
-                              sx={{
-                                width: 260,
-                                backgroundColor: 'background.paper',
-                                p: 2,
-                                border: 1,
-                                borderColor: 'divider',
-                                borderRadius: 1.5,
-                              }}
-                            >
-                              <Typography
-                                variant="subtitle2"
-                                color="text.secondary"
-                                sx={{ fontWeight: 700, mb: 1 }}
-                              >
-                                Student Progress & Evidence
-                              </Typography>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  mb: 0.5,
-                                }}
-                              >
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                >
-                                  Achieved Number:
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    fontWeight: 700,
-                                    color: 'primary.main',
-                                  }}
-                                >
-                                  {kpi.actualValue || 'Not yet recorded'}
-                                </Typography>
-                              </Box>
-                              {kpi.evidence?.fileName && (
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    mb: 0.5,
-                                  }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Attached File:
-                                  </Typography>
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ fontWeight: 600 }}
-                                  >
-                                    {kpi.evidence.fileUrl ? (
-                                      <a
-                                        href={kpi.evidence.fileUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{
-                                          color: 'primary.main',
-                                          textDecoration: 'none',
-                                        }}
-                                      >
-                                        {kpi.evidence.fileName}
-                                      </a>
-                                    ) : (
-                                      kpi.evidence.fileName
-                                    )}
-                                  </Typography>
-                                </Box>
-                              )}
-                              {kpi.evidence?.supportingText && (
-                                <Box
-                                  sx={{
-                                    mt: 1,
-                                    pt: 1,
-                                    borderTop: '1px dashed',
-                                    borderTopColor: 'divider',
-                                  }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{ fontWeight: 600 }}
-                                  >
-                                    Supporting Notes:
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                                    {kpi.evidence.supportingText}
-                                  </Typography>
-                                </Box>
-                              )}
-                            </Box>
-
-                            {/* Evaluation Overview */}
-                            <Box
-                              sx={{
-                                width: 260,
-                                backgroundColor: 'background.paper',
-                                p: 2,
-                                border: 1,
-                                borderColor: 'divider',
-                                borderRadius: 1.5,
-                              }}
-                            >
-                              <Typography
-                                variant="subtitle2"
-                                color="text.secondary"
-                                sx={{ fontWeight: 700, mb: 1 }}
-                              >
-                                Evaluation Overview
-                              </Typography>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  mb: 0.5,
-                                }}
-                              >
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                >
-                                  Submitted:
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{ fontWeight: 600 }}
-                                >
-                                  {formatDate(kpi.submissionDate)}
-                                </Typography>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  mb: 0.5,
-                                }}
-                              >
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                >
-                                  Graded Date:
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{ fontWeight: 600 }}
-                                >
-                                  {formatDate(kpi.evaluationDate)}
-                                </Typography>
-                              </Box>
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  mb: 0.5,
-                                }}
-                              >
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                >
-                                  Score:
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    fontWeight: 700,
-                                    color: 'success.main',
-                                  }}
-                                >
-                                  {kpi.status === 'GRADED' &&
-                                  kpi.score !== undefined &&
-                                  kpi.score !== null
-                                    ? `${kpi.score} pts`
-                                    : '-'}
-                                </Typography>
-                              </Box>
-                              {kpi.feedback && (
-                                <Box
-                                  sx={{
-                                    mt: 1,
-                                    pt: 1,
-                                    borderTop: '1px dashed',
-                                    borderTopColor: 'divider',
-                                  }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{ fontWeight: 600 }}
-                                  >
-                                    Evaluator Feedback:
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                                    {kpi.feedback}
-                                  </Typography>
-                                </Box>
-                              )}
-                            </Box>
-                          </Box>
-                        </Box>
-                      </Collapse>
-                    </TableCell>
-                  </TableRow>
+                    onEdit={() => {
+                      setEditingKpi(kpi)
+                      setOpenAddKpi(true)
+                    }}
+                    onDelete={() => setKpiToDelete(kpi)}
+                  />
                 </Fragment>
-              )
-            })}
-
-            {visibleKpis.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={10} align="center">
-                  No KPIs found
-                </TableCell>
-              </TableRow>
+              ))
             )}
-          </TableBody>
-        </Table>
+          </SectionCard>
+        </>
       )}
+
+      <Dialog
+        open={Boolean(kpiToDelete)}
+        onClose={() => !busy && setKpiToDelete(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete this KPI?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            “{kpiToDelete?.title}” and its sub-KPIs will be removed for your
+            whole team. This can&apos;t be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="outlined"
+            disabled={busy}
+            onClick={() => setKpiToDelete(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            loading={busy}
+            onClick={handleConfirmDelete}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <AddKpi
         key={editingKpi?._id || (openAddKpi ? 'open' : 'closed')}
@@ -1082,6 +784,6 @@ export default function Kpis() {
         onSave={handleSaveEvidence}
         onDelete={handleDeleteEvidence}
       />
-    </>
+    </Box>
   )
 }

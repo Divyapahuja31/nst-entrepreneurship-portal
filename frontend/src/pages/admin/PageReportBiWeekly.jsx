@@ -49,6 +49,7 @@ import {
 import EmptyState from '../../components/EmptyState'
 import SectionCard from '../../components/SectionCard'
 import StatTile from '../../components/StatTile'
+import StatusPill from '../../components/StatusPill'
 import { tints, tokens } from '../../theme'
 
 const CYCLES = 13 // 26 weeks = 13 bi-weekly cycles
@@ -612,39 +613,9 @@ function AllCycles({ cycles, rows, active, onSelect }) {
   )
 }
 
-function StatusPill({ status }) {
+function CycleStatusPill({ status }) {
   const { label, tint } = STATUS_META[status]
-  const { bg, fg } = tints[tint]
-  const plain = status === 'upcoming'
-
-  return (
-    <Box
-      component="span"
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 1,
-        px: plain ? 0 : 1.25,
-        py: 0.5,
-        borderRadius: 1.5,
-        bgcolor: plain ? 'transparent' : bg,
-        color: plain ? 'text.secondary' : fg,
-        fontSize: '0.875rem',
-        fontWeight: 500,
-      }}
-    >
-      <Box
-        component="span"
-        sx={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          bgcolor: plain ? 'text.disabled' : fg,
-        }}
-      />
-      {label}
-    </Box>
-  )
+  return <StatusPill label={label} tint={tint} plain={status === 'upcoming'} />
 }
 
 function ProgressRing({ value, status }) {
@@ -734,7 +705,7 @@ function CycleCard({ cycle, row, status, selected, onClick }) {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
           {dateRange(cycle.start, cycle.end)}
         </Typography>
-        <StatusPill status={status} />
+        <CycleStatusPill status={status} />
       </Box>
 
       <Box
@@ -1344,7 +1315,7 @@ function CycleForm({
           sx={{ alignItems: 'center', flexWrap: 'wrap' }}
         >
           {isAdmin && <Chip size="small" label="Admin view (read-only)" />}
-          <StatusPill status={status} />
+          <CycleStatusPill status={status} />
           {isAdmin && (submitted || pastDeadline) && existing && (
             <Button
               size="small"

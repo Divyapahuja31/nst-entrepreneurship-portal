@@ -112,7 +112,7 @@ export const reviewProposal = async (req, res) => {
     const updatedProposal = await VentureProposal.findOneAndUpdate(
       { _id: proposalId, status: 'PENDING' },
       updateQuery,
-      { new: true }
+      { returnDocument: 'after' }
     )
 
     if (!updatedProposal) {
@@ -184,7 +184,7 @@ export const reviewJoinRequest = async (req, res) => {
     const updatedJoinRequest = await VentureJoinRequest.findOneAndUpdate(
       { _id: requestId, status: 'PENDING' },
       buildJoinRequestUpdate({ status, reviewerId: req.user.id }),
-      { new: true }
+      { returnDocument: 'after' }
     )
 
     if (!updatedJoinRequest) {

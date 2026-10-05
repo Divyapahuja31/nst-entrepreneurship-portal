@@ -272,7 +272,12 @@ export const updateOrCreateVentureSubmission = async ({
   const submission = await BiWeeklySubmission.findOneAndUpdate(
     { custom_id },
     updateQuery,
-    { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+    {
+      upsert: true,
+      returnDocument: 'after',
+      setDefaultsOnInsert: true,
+      runValidators: true,
+    }
   )
 
   return submission

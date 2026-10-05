@@ -1,6 +1,7 @@
 import Venture from '../models/venture.js'
 import KpiModel from '../models/kpi.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
+import startupStage from '../models/enums/startupStage.js'
 
 const SCORE_ON_TRACK = 70
 const SCORE_WATCH = 40
@@ -64,7 +65,8 @@ export const getFounderPortfolioData = async () => {
       founder: founder.username,
       startup: venture.name,
       campus: venture.campus?.name ?? null,
-      stage: venture.stage,
+      // The label ("Fund Raising"), which is what the stage filter offers.
+      stage: startupStage[venture.stage] ?? venture.stage,
       team: founders.length,
       score,
       status: deriveStatus(score),

@@ -1,6 +1,17 @@
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 
+const pendingSignupSchema = new mongoose.Schema(
+  {
+    username: String,
+    passwordHash: String,
+    batch: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch' },
+    campus: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus' },
+    role: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
+  },
+  { _id: false }
+)
+
 const userSchema = new mongoose.Schema(
   {
     username: {
@@ -89,6 +100,13 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Sign-up details for an account whose email isn't verified yet. They
+    // are applied only once the code emailed to that address is used, so
+    // signing up with someone else's email can't rename or change them.
+    pendingSignup: {
+      type: pendingSignupSchema,
+      default: undefined,
+    },
   },
   {
     timestamps: true,
@@ -121,6 +139,7 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.set('toJSON', {
   transform: (_, ret) => {
     delete ret.password
+    delete ret.pendingSignup
     // A 6-digit code's hash is cracked in under a second, so these never
     // leave the server.
     for (const prefix of ['signup', 'resetPassword']) {

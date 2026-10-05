@@ -9,15 +9,12 @@ import {
   Alert,
   Box,
   Button,
-  ButtonBase,
   CircularProgress,
-  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  Link,
   Tab,
   Tabs,
   Typography,
@@ -27,11 +24,11 @@ import AddKpi from '../../components/AddKpi'
 import EmptyState from '../../components/EmptyState'
 import SectionCard from '../../components/SectionCard'
 import StatTile from '../../components/StatTile'
-import StatusPill from '../../components/StatusPill'
+import { KpiDetails, KpiRow } from '../../components/KpiList'
+import { lockReason } from '../../components/kpiStatus'
 import UploadEvidenceDialog from '../../components/UploadEvidenceDialog'
 import {
   CheckCircleIcon,
-  ChevronRightIcon,
   HourglassIcon,
   KpiIcon,
   LockIcon,
@@ -49,214 +46,11 @@ import {
   uploadKPIEvidence,
 } from '../../api/kpi'
 
-const STATUS_META = {
-  DRAFT: { label: 'Draft', tint: 'gray', plain: true },
-  WAITING_FOR_APPROVAL: { label: 'Awaiting Approval', tint: 'orange' },
-  ACCEPTED: { label: 'Accepted', tint: 'blue' },
-  GRADED: { label: 'Graded', tint: 'green' },
-  REJECTED: { label: 'Rejected', tint: 'red' },
-}
-
-const formatDate = dateStr => {
-  if (!dateStr) return '-'
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return '-'
-  }
-}
-
 const idOf = ref => ref?._id || ref
 
-// Why a KPI can't be changed any more, or null if it still can.
-function lockReason(kpi) {
-  if (kpi.status === 'GRADED') return 'Graded KPIs are locked.'
-  if (kpi.dueDate && new Date(kpi.dueDate) < new Date()) {
-    return 'The deadline has passed, so this KPI is closed.'
-  }
-  return null
-}
-
-// Row of the details panel: label on the left, value on the right.
-function Fact({ label, children }) {
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        gap: 2,
-        py: 1,
-      }}
-    >
-      <Typography variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ textAlign: 'right' }}>
-        {children}
-      </Typography>
-    </Box>
-  )
-}
-
-function DetailGroup({ title, children }) {
-  return (
-    <Box>
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        {title}
-      </Typography>
-      {children}
-    </Box>
-  )
-}
-
-function KpiDetails({ kpi, onEdit, onDelete }) {
-  const locked = lockReason(kpi)
-  const editable = !locked && kpi.status !== 'ACCEPTED'
-  const hasEvidence = kpi.evidence?.fileName || kpi.evidence?.supportingText
-
-  return (
-    <Box
-      sx={{
-        mt: 1.5,
-        p: { xs: 2, sm: 2.5 },
-        borderRadius: '14px',
-        bgcolor: 'background.default',
-        display: 'grid',
-        gap: 3,
-        gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 7fr) minmax(0, 5fr)' },
-      }}
-    >
-      <Box sx={{ display: 'grid', gap: 3, alignContent: 'start' }}>
-        <DetailGroup title="Description">
-          <Typography
-            variant="body2"
-            color={kpi.description ? 'text.primary' : 'text.secondary'}
-            sx={{ whiteSpace: 'pre-line' }}
-          >
-            {kpi.description || 'No description yet.'}
-          </Typography>
-        </DetailGroup>
-
-        <DetailGroup title="Sub-KPIs">
-          {kpi.subKPIs?.length > 0 ? (
-            <Box
-              component="ol"
-              sx={{ m: 0, pl: 2.5, display: 'grid', gap: 0.5 }}
-            >
-              {kpi.subKPIs.map((sub, i) => (
-                <Typography key={sub._id || i} component="li" variant="body2">
-                  {sub.name}
-                </Typography>
-              ))}
-            </Box>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              This KPI isn&apos;t broken into smaller parts.
-            </Typography>
-          )}
-        </DetailGroup>
-      </Box>
-
-      <Box sx={{ display: 'grid', gap: 3, alignContent: 'start' }}>
-        <DetailGroup title="Progress">
-          <Fact label="Achieved">
-            {kpi.actualValue || (
-              <Box component="span" sx={{ color: 'text.secondary' }}>
-                Not recorded yet
-              </Box>
-            )}
-          </Fact>
-          {kpi.evidence?.fileName && (
-            <>
-              <Divider />
-              <Fact label="Evidence">
-                <Link href={`/api/kpis/${kpi._id}/evidence/download`} download>
-                  {kpi.evidence.fileName}
-                </Link>
-              </Fact>
-            </>
-          )}
-          {kpi.evidence?.supportingText && (
-            <>
-              <Divider />
-              <Typography variant="body2" sx={{ pt: 1 }}>
-                {kpi.evidence.supportingText}
-              </Typography>
-            </>
-          )}
-          {!hasEvidence && kpi.status === 'ACCEPTED' && (
-            <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
-              Add a number and evidence when you have results.
-            </Typography>
-          )}
-        </DetailGroup>
-
-        <DetailGroup title="Evaluation">
-          <Fact label="Submitted">{formatDate(kpi.submissionDate)}</Fact>
-          <Divider />
-          <Fact label="Reviewed">{formatDate(kpi.evaluationDate)}</Fact>
-          <Divider />
-          <Fact label="Score">
-            {kpi.status === 'GRADED' && kpi.score != null ? (
-              <Box component="strong" sx={{ fontWeight: 600 }}>
-                {kpi.score} pts
-              </Box>
-            ) : (
-              '-'
-            )}
-          </Fact>
-          {kpi.feedback && (
-            <>
-              <Divider />
-              <Typography variant="body2" sx={{ pt: 1 }}>
-                {kpi.feedback}
-              </Typography>
-            </>
-          )}
-        </DetailGroup>
-      </Box>
-
-      {(editable || locked) && (
-        <Box
-          sx={{
-            gridColumn: '1 / -1',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            flexWrap: 'wrap',
-          }}
-        >
-          {locked && (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}
-            >
-              <LockIcon sx={{ fontSize: 16 }} />
-              {locked}
-            </Typography>
-          )}
-          {editable && (
-            <>
-              <Button variant="outlined" onClick={onEdit}>
-                Edit KPI
-              </Button>
-              <Button variant="outlined" color="error" onClick={onDelete}>
-                Delete
-              </Button>
-            </>
-          )}
-        </Box>
-      )}
-    </Box>
-  )
-}
-
-function KpiRow({
+// A founder's KPI row: the action that applies to its status, and Edit/Delete
+// (or why it's locked) under the details.
+function StudentKpiRow({
   kpi,
   currentUserId,
   expanded,
@@ -267,12 +61,11 @@ function KpiRow({
   onEdit,
   onDelete,
 }) {
-  const status = STATUS_META[kpi.status] || STATUS_META.DRAFT
   const locked = lockReason(kpi)
-  const isMine = idOf(kpi.founder) === currentUserId
+  const editable = !locked && kpi.status !== 'ACCEPTED'
   const owner = !kpi.founder
     ? 'Entire startup'
-    : isMine
+    : idOf(kpi.founder) === currentUserId
       ? 'You'
       : kpi.founder.username || 'Member'
 
@@ -291,80 +84,46 @@ function KpiRow({
     )
   }
 
-  const detailsId = `kpi-details-${kpi._id}`
+  const footer =
+    locked || editable ? (
+      <>
+        {locked && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}
+          >
+            <LockIcon sx={{ fontSize: 16 }} />
+            {locked}
+          </Typography>
+        )}
+        {editable && (
+          <>
+            <Button variant="outlined" onClick={onEdit}>
+              Edit KPI
+            </Button>
+            <Button variant="outlined" color="error" onClick={onDelete}>
+              Delete
+            </Button>
+          </>
+        )}
+      </>
+    ) : null
 
   return (
-    <Box sx={{ py: 2 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: { xs: 1.5, sm: 2 },
-          flexWrap: { xs: 'wrap', sm: 'nowrap' },
-        }}
-      >
-        <ButtonBase
-          onClick={onToggle}
-          aria-expanded={expanded}
-          aria-controls={detailsId}
-          sx={{
-            flex: '1 1 260px',
-            minWidth: 0,
-            justifyContent: 'flex-start',
-            gap: 1.5,
-            textAlign: 'left',
-            borderRadius: '12px',
-            p: 1,
-            m: -1,
-            '&.Mui-focusVisible': { bgcolor: 'background.default' },
-          }}
-        >
-          <ChevronRightIcon
-            sx={{
-              fontSize: 14,
-              color: 'text.secondary',
-              transform: expanded ? 'rotate(90deg)' : 'none',
-              transition: 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-              '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
-            }}
-          />
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" component="h3" noWrap>
-              {kpi.title}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {owner} ·{' '}
-              {kpi.dueDate ? `Due ${formatDate(kpi.dueDate)}` : 'No due date'}
-              {kpi.status === 'GRADED' && kpi.score != null && (
-                <> · {kpi.score} pts</>
-              )}
-            </Typography>
-          </Box>
-        </ButtonBase>
-
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            flexWrap: 'wrap',
-            ml: { xs: 3.5, sm: 0 },
-            flexShrink: { xs: 1, sm: 0 },
-          }}
-        >
-          <StatusPill
-            label={status.label}
-            tint={status.tint}
-            plain={status.plain}
-          />
-          {action}
-        </Box>
-      </Box>
-
-      <Collapse in={expanded} timeout="auto" unmountOnExit id={detailsId}>
-        <KpiDetails kpi={kpi} onEdit={onEdit} onDelete={onDelete} />
-      </Collapse>
-    </Box>
+    <KpiRow
+      kpi={kpi}
+      owner={owner}
+      expanded={expanded}
+      onToggle={onToggle}
+      action={action}
+    >
+      <KpiDetails
+        kpi={kpi}
+        footer={footer}
+        progressHint="Add a number and evidence when you have results."
+      />
+    </KpiRow>
   )
 }
 
@@ -702,7 +461,7 @@ export default function Kpis() {
               visibleKpis.map((kpi, index) => (
                 <Fragment key={kpi._id}>
                   {index > 0 && <Divider />}
-                  <KpiRow
+                  <StudentKpiRow
                     kpi={kpi}
                     currentUserId={currentUserId}
                     expanded={expandedKpiId === kpi._id}

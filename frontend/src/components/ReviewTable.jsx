@@ -1,22 +1,14 @@
 import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
-import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
-import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 
+import StatusPill from './StatusPill'
 import { StyledTableCell, StyledTableRow } from './Table.style'
-
-const STATUS_CHIP_COLORS = {
-  ACCEPTED: 'info',
-  GRADED: 'success',
-  REJECTED: 'error',
-  WAITING_FOR_APPROVAL: 'warning',
-  DRAFT: 'default',
-}
+import TableCard from './TableCard'
+import { kpiStatus } from './kpiStatus'
 
 export default function ReviewTable({
   columns,
@@ -29,8 +21,8 @@ export default function ReviewTable({
   actionsLabel = 'actions',
 }) {
   return (
-    <TableContainer component={Paper}>
-      <Table sx={{ minWidth: 700 }} aria-label="review table">
+    <TableCard>
+      <Table sx={{ minWidth: 700 }}>
         <TableHead>
           <TableRow>
             {columns.map(column => (
@@ -45,18 +37,17 @@ export default function ReviewTable({
               {columns.map(column => (
                 <StyledTableCell key={column.key}>
                   {column.key === 'status' && row.rawStatus ? (
-                    <Chip
-                      label={row.status}
-                      size="small"
-                      color={STATUS_CHIP_COLORS[row.rawStatus] || 'default'}
-                      sx={{ fontWeight: 600 }}
+                    <StatusPill
+                      label={kpiStatus(row.rawStatus).label}
+                      tint={kpiStatus(row.rawStatus).tint}
+                      plain={kpiStatus(row.rawStatus).plain}
                     />
                   ) : (
                     row[column.key] || '-'
                   )}
                 </StyledTableCell>
               ))}
-              <StyledTableCell align="right">
+              <StyledTableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                 {renderActions ? (
                   renderActions(row)
                 ) : (
@@ -66,14 +57,14 @@ export default function ReviewTable({
                     sx={{ justifyContent: 'flex-end' }}
                   >
                     {onView && (
-                      <Button size="small" onClick={() => onView(row)}>
+                      <Button variant="text" onClick={() => onView(row)}>
                         View
                       </Button>
                     )}
                     {onApprove && (
                       <Button
-                        size="small"
-                        variant="contained"
+                        variant="outlined"
+                        color="success"
                         disabled={Boolean(busyId)}
                         onClick={() => onApprove(row)}
                       >
@@ -82,8 +73,8 @@ export default function ReviewTable({
                     )}
                     {onReject && (
                       <Button
-                        size="small"
                         variant="outlined"
+                        color="error"
                         disabled={Boolean(busyId)}
                         onClick={() => onReject(row)}
                       >
@@ -97,6 +88,6 @@ export default function ReviewTable({
           ))}
         </TableBody>
       </Table>
-    </TableContainer>
+    </TableCard>
   )
 }

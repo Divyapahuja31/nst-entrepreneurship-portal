@@ -131,6 +131,7 @@ export default function UploadEvidenceDialog({
             Achieved Metric / Number
           </Typography>
           <TextField
+            hiddenLabel
             fullWidth
             size="small"
             value={actualValue}
@@ -145,6 +146,7 @@ export default function UploadEvidenceDialog({
             Supporting Notes / Evidence Description
           </Typography>
           <TextField
+            hiddenLabel
             multiline
             rows={3}
             fullWidth
@@ -172,16 +174,21 @@ export default function UploadEvidenceDialog({
           <Box
             onClick={() => !isLocked && fileInputRef.current?.click()}
             sx={{
-              border: '2px dashed #cbd5e1',
+              border: '2px dashed',
+              borderColor: 'divider',
               borderRadius: 2,
               p: 3,
               textAlign: 'center',
               cursor: isLocked ? 'not-allowed' : 'pointer',
-              backgroundColor: isLocked ? '#f1f5f9' : '#f8fafc',
+              backgroundColor: isLocked
+                ? 'action.disabledBackground'
+                : 'background.default',
               opacity: isLocked ? 0.7 : 1,
               '&:hover': {
-                borderColor: isLocked ? '#cbd5e1' : 'primary.main',
-                backgroundColor: isLocked ? '#f1f5f9' : '#f1f5f9',
+                borderColor: isLocked ? 'divider' : 'primary.main',
+                backgroundColor: isLocked
+                  ? 'action.disabledBackground'
+                  : 'action.hover',
               },
             }}
           >

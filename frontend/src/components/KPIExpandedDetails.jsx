@@ -33,9 +33,10 @@ export default function KPIExpandedDetails({ kpi }) {
       sx={{
         p: 2.5,
         m: 1.5,
-        border: '1px solid #e2e8f0',
+        border: 1,
+        borderColor: 'divider',
         borderRadius: 2,
-        backgroundColor: '#f8fafc',
+        backgroundColor: 'background.default',
       }}
     >
       <Grid container spacing={3}>
@@ -49,7 +50,7 @@ export default function KPIExpandedDetails({ kpi }) {
           </Typography>
           <Paper
             variant="outlined"
-            sx={{ p: 1.5, mb: 2, backgroundColor: '#ffffff' }}
+            sx={{ p: 1.5, mb: 2, backgroundColor: 'background.paper' }}
           >
             <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
               {kpi.description || 'No description provided.'}
@@ -64,9 +65,12 @@ export default function KPIExpandedDetails({ kpi }) {
             SubKPIs ({kpi.subKPIs?.length || 0})
           </Typography>
           {kpi.subKPIs?.length > 0 ? (
-            <Paper variant="outlined" sx={{ backgroundColor: '#ffffff' }}>
+            <Paper
+              variant="outlined"
+              sx={{ backgroundColor: 'background.paper' }}
+            >
               <Table size="small">
-                <TableHead sx={{ backgroundColor: '#f1f5f9' }}>
+                <TableHead sx={{ backgroundColor: 'background.default' }}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600, width: 40 }}>#</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>SubKPI Name</TableCell>
@@ -105,7 +109,7 @@ export default function KPIExpandedDetails({ kpi }) {
           </Typography>
           <Paper
             variant="outlined"
-            sx={{ p: 2, mb: 2, backgroundColor: '#ffffff' }}
+            sx={{ p: 2, mb: 2, backgroundColor: 'background.paper' }}
           >
             <Box
               sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}
@@ -155,7 +159,14 @@ export default function KPIExpandedDetails({ kpi }) {
               </Typography>
             </Box>
 
-            <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0' }}>
+            <Box
+              sx={{
+                mt: 1.5,
+                pt: 1.5,
+                borderTop: '1px dashed',
+                borderTopColor: 'divider',
+              }}
+            >
               <Typography
                 variant="caption"
                 color="text.secondary"
@@ -184,7 +195,10 @@ export default function KPIExpandedDetails({ kpi }) {
           >
             Student Progress & Attached Evidence
           </Typography>
-          <Paper variant="outlined" sx={{ p: 2, backgroundColor: '#ffffff' }}>
+          <Paper
+            variant="outlined"
+            sx={{ p: 2, backgroundColor: 'background.paper' }}
+          >
             <Box
               sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}
             >
@@ -232,7 +246,14 @@ export default function KPIExpandedDetails({ kpi }) {
               </Box>
             )}
             {kpi.evidence?.supportingText && (
-              <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed #e2e8f0' }}>
+              <Box
+                sx={{
+                  mt: 1,
+                  pt: 1,
+                  borderTop: '1px dashed',
+                  borderTopColor: 'divider',
+                }}
+              >
                 <Typography
                   variant="caption"
                   color="text.secondary"

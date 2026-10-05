@@ -94,7 +94,13 @@ export default function PageVentureDetail() {
         {/* Top Profile Header Section */}
         <Paper
           elevation={0}
-          sx={{ p: 4, mb: 3, borderRadius: 2, border: '1px solid #e0e0e0' }}
+          sx={{
+            p: 4,
+            mb: 3,
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'divider',
+          }}
         >
           <Grid
             container
@@ -190,7 +196,7 @@ export default function PageVentureDetail() {
         {/* Tab Navigation & Content Section */}
         <Paper
           elevation={0}
-          sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}
+          sx={{ borderRadius: 2, border: 1, borderColor: 'divider' }}
         >
           <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3, pt: 1 }}>
             <Tabs

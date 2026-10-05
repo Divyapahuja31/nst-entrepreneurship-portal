@@ -10,16 +10,16 @@ import {
 } from '@mui/material'
 
 import {
-  Menu as MenuIcon,
-  ChevronLeft as ChevronLeftIcon,
-  Logout as LogoutIcon,
-  People as PeopleIcon,
-  Dashboard as DashboardIcon,
-  MilitaryTech as MilitaryTechIcon,
-  DateRange as DateRangeIcon,
-  AutoAwesome as AutoAwesomeIcon,
-  AutoStories as AutoStoriesIcon,
-} from '@mui/icons-material'
+  BookIcon,
+  BriefcaseIcon,
+  CalendarIcon,
+  ChevronLeftIcon,
+  KpiIcon,
+  OverviewIcon,
+  PeopleIcon,
+  SidebarIcon,
+  SignOutIcon,
+} from '../components/icons'
 
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 
@@ -33,12 +33,12 @@ import { signOut } from '../api/auth'
 const studentMenuItems = [
   {
     menu: 'Overview',
-    icon: DashboardIcon,
+    icon: OverviewIcon,
     path: '/',
   },
   {
     menu: 'KPIs',
-    icon: MilitaryTechIcon,
+    icon: KpiIcon,
     path: '/kpis',
   },
 ]
@@ -46,12 +46,12 @@ const studentMenuItems = [
 const adminMenuItems = [
   {
     menu: 'Overview',
-    icon: DashboardIcon,
+    icon: OverviewIcon,
     path: '/admin',
   },
   {
     menu: 'Startups',
-    icon: AutoAwesomeIcon,
+    icon: BriefcaseIcon,
     path: '/admin/venture',
   },
   // {
@@ -66,7 +66,7 @@ const adminMenuItems = [
   },
   {
     menu: 'KPIs',
-    icon: MilitaryTechIcon,
+    icon: KpiIcon,
     path: '/admin/kpis',
   },
 ]
@@ -74,7 +74,7 @@ const adminMenuItems = [
 const commonMenuItems = [
   {
     menu: 'Methodology',
-    icon: AutoStoriesIcon,
+    icon: BookIcon,
     path: '/methodology',
   },
 ]
@@ -97,7 +97,7 @@ export default function MiniDrawer() {
           ...studentMenuItems,
           {
             menu: 'Bi-Weekly',
-            icon: DateRangeIcon,
+            icon: CalendarIcon,
             path: `/profile/${loggedInUserData._id}`,
           },
           ...commonMenuItems,
@@ -148,13 +148,19 @@ export default function MiniDrawer() {
             edge="start"
             sx={[
               {
-                marginRight: 5,
+                marginRight: 2,
               },
               isDrawerOpen && { display: 'none' },
             ]}
           >
-            <MenuIcon />
+            <SidebarIcon />
           </IconButton>
+          <Typography
+            component="div"
+            sx={{ fontSize: '0.9375rem', fontWeight: 600, letterSpacing: '-0.01em' }}
+          >
+            NST Entrepreneurship Portal
+          </Typography>
         </Toolbar>
       </AppBar>
 
@@ -184,7 +190,7 @@ export default function MiniDrawer() {
           <List>
             <DrawerItem
               open={isDrawerOpen}
-              icon={LogoutIcon}
+              icon={SignOutIcon}
               label={signingOut ? 'Signing out...' : 'Sign Out'}
               onClick={handleSignOut}
               disabled={signingOut}

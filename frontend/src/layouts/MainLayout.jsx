@@ -21,14 +21,14 @@ import {
   SignOutIcon,
 } from '../components/icons'
 
-import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 
 import { AppBar, Drawer, DrawerHeader } from '../components/Sidebar.style'
 
 import DrawerItem from '../components/DrawerItem'
+import useSignOut from '../components/useSignOut'
 
 import { useAuthStore } from '../stores/auth'
-import { signOut } from '../api/auth'
 
 const studentMenuItems = [
   {
@@ -83,10 +83,8 @@ export default function MiniDrawer() {
   const [drawerItems, setDrawerItems] = useState([])
 
   const loggedInUserData = useAuthStore(state => state.user)
-  const logout = useAuthStore(state => state.logout)
 
   const location = useLocation()
-  const navigate = useNavigate()
 
   useEffect(() => {
     function getDrawerItems() {
@@ -110,20 +108,7 @@ export default function MiniDrawer() {
     getDrawerItems()
   }, [loggedInUserData])
 
-  const [signingOut, setSigningOut] = useState(false)
-  const [signOutError, setSignOutError] = useState(null)
-  const handleSignOut = async () => {
-    setSigningOut(true)
-    setSignOutError(null)
-    const result = await signOut()
-    setSigningOut(false)
-    if (result.error) {
-      setSignOutError(result.error)
-      return
-    }
-    logout()
-    navigate('/signin')
-  }
+  const { signingOut, signOutError, handleSignOut } = useSignOut()
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const openDrawer = () => setIsDrawerOpen(true)
@@ -157,7 +142,11 @@ export default function MiniDrawer() {
           </IconButton>
           <Typography
             component="div"
-            sx={{ fontSize: '0.9375rem', fontWeight: 600, letterSpacing: '-0.01em' }}
+            sx={{
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              letterSpacing: '-0.01em',
+            }}
           >
             NST Entrepreneurship Portal
           </Typography>

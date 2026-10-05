@@ -1,12 +1,9 @@
-import { useState } from 'react'
 import { Link as RouterLink } from 'react-router'
 
 import {
-  Alert,
   Avatar,
   Box,
   CircularProgress,
-  Dialog,
   Grid,
   List,
   ListItem,
@@ -16,21 +13,13 @@ import {
 } from '@mui/material'
 
 import ActionCard from '../../components/ActionCard.jsx'
-import CreateVentureStep from '../../components/CreateVentureStep.jsx'
 import EmptyState from '../../components/EmptyState.jsx'
-import IconBadge from '../../components/IconBadge.jsx'
-import JoinVentureStep from '../../components/JoinVentureStep.jsx'
 import SectionCard from '../../components/SectionCard.jsx'
 import {
   CalendarIcon,
   ChartIcon,
-  CheckCircleIcon,
-  CircleIcon,
-  HourglassIcon,
   KpiIcon,
-  LightbulbIcon,
   PeopleIcon,
-  PersonAddIcon,
 } from '../../components/icons.jsx'
 
 import { useAuthStore } from '../../stores/auth'
@@ -57,207 +46,6 @@ function PageHeader({ title, subtitle }) {
   )
 }
 
-// No startup yet ------------------------------------------------------------
-
-const ventureOptions = [
-  {
-    step: 'create',
-    icon: LightbulbIcon,
-    tint: 'blue',
-    title: 'Create a startup',
-    description:
-      'Have an idea? Describe it in a proposal and invite your co-founders.',
-    cta: 'Write a proposal',
-  },
-  {
-    step: 'join',
-    icon: PersonAddIcon,
-    tint: 'green',
-    title: 'Join a startup',
-    description:
-      'Your team already applied? Ask to join their startup as a founder.',
-    cta: 'Find your team',
-  },
-]
-
-const howItWorks = [
-  { icon: LightbulbIcon, title: 'Apply', text: 'Create or join a startup.' },
-  {
-    icon: HourglassIcon,
-    title: 'Get approved',
-    text: 'An admin reviews your request.',
-  },
-  {
-    icon: ChartIcon,
-    title: 'Track progress',
-    text: 'Set KPIs and check in every two weeks.',
-  },
-]
-
-function GetStarted({ user, rejectedApplication, onApplied }) {
-  const [step, setStep] = useState(null)
-  const close = () => setStep(null)
-
-  return (
-    <Box sx={{ maxWidth: 880 }}>
-      <PageHeader
-        title={`Welcome, ${firstName(user)}`}
-        subtitle="You're not part of a startup yet. Pick how you'd like to start."
-      />
-
-      {rejectedApplication && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          {rejectedApplication.type === 'PROPOSAL'
-            ? `Your proposal for ${rejectedApplication.ventureName} wasn't approved. You can submit a new one.`
-            : `Your request to join ${rejectedApplication.ventureName} wasn't approved. You can apply again.`}
-        </Alert>
-      )}
-
-      <Grid container spacing={2}>
-        {ventureOptions.map(option => (
-          <Grid key={option.step} size={{ xs: 12, sm: 6 }}>
-            <ActionCard
-              icon={option.icon}
-              tint={option.tint}
-              title={option.title}
-              description={option.description}
-              cta={option.cta}
-              onClick={() => setStep(option.step)}
-            />
-          </Grid>
-        ))}
-      </Grid>
-
-      <Typography
-        variant="subtitle2"
-        component="h2"
-        color="text.secondary"
-        sx={{ mt: 6, mb: 2 }}
-      >
-        How it works
-      </Typography>
-
-      <Grid
-        container
-        spacing={3}
-        component="ol"
-        sx={{ listStyle: 'none', p: 0, m: 0 }}
-      >
-        {howItWorks.map(item => (
-          <Grid
-            key={item.title}
-            component="li"
-            size={{ xs: 12, sm: 4 }}
-            sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
-          >
-            <IconBadge icon={item.icon} tint="gray" size={36} />
-            <Box>
-              <Typography variant="subtitle2">{item.title}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {item.text}
-              </Typography>
-            </Box>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Dialog open={step === 'create'} onClose={close} maxWidth="md" fullWidth>
-        <CreateVentureStep onBack={close} onSubmitted={onApplied} />
-      </Dialog>
-
-      <Dialog open={step === 'join'} onClose={close} maxWidth="sm" fullWidth>
-        <JoinVentureStep onBack={close} onSubmitted={onApplied} />
-      </Dialog>
-    </Box>
-  )
-}
-
-// Waiting for approval ------------------------------------------------------
-
-function ProgressStep({ state, title, text, last }) {
-  const icon = {
-    done: <CheckCircleIcon sx={{ color: 'success.main' }} />,
-    current: <HourglassIcon sx={{ color: 'warning.main' }} />,
-    upcoming: <CircleIcon sx={{ color: 'text.disabled' }} />,
-  }[state]
-
-  return (
-    <Box component="li" sx={{ display: 'flex', gap: 2 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        {icon}
-        {!last && (
-          <Box
-            sx={{ width: '1px', flexGrow: 1, my: 0.5, bgcolor: 'divider' }}
-          />
-        )}
-      </Box>
-      <Box sx={{ pb: last ? 0 : 3 }}>
-        <Typography
-          variant="subtitle2"
-          color={state === 'upcoming' ? 'text.secondary' : 'text.primary'}
-        >
-          {title}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {text}
-        </Typography>
-      </Box>
-    </Box>
-  )
-}
-
-function PendingApplication({ user, application }) {
-  const isProposal = application.type === 'PROPOSAL'
-
-  return (
-    <Box sx={{ maxWidth: 640 }}>
-      <PageHeader
-        title={`Welcome, ${firstName(user)}`}
-        subtitle="Your application is being reviewed."
-      />
-
-      <SectionCard>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
-          <IconBadge icon={HourglassIcon} tint="orange" />
-          <Box>
-            <Typography variant="h6" component="h2">
-              {application.ventureName}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {isProposal ? 'New startup proposal' : 'Request to join'}
-            </Typography>
-          </Box>
-        </Box>
-
-        <Box component="ol" sx={{ listStyle: 'none', p: 0, m: 0 }}>
-          <ProgressStep
-            state="done"
-            title={isProposal ? 'Proposal submitted' : 'Request sent'}
-            text="We've received your application."
-          />
-          <ProgressStep
-            state="current"
-            title="Admin review"
-            text="An admin is looking at it now. There's nothing you need to do."
-          />
-          <ProgressStep
-            state="upcoming"
-            title="Startup dashboard"
-            text="Once approved, your KPIs and check-ins appear here."
-            last
-          />
-        </Box>
-      </SectionCard>
-    </Box>
-  )
-}
-
 // Founder dashboard ---------------------------------------------------------
 
 function initials(name = '') {
@@ -273,7 +61,7 @@ function VentureDashboard({ user, venture }) {
   const founders = venture.founders || []
 
   return (
-    <Box sx={{ maxWidth: 1080 }}>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
       <PageHeader
         title={`Welcome back, ${firstName(user)}`}
         subtitle={
@@ -363,7 +151,6 @@ function VentureDashboard({ user, venture }) {
 export default function Dashboard() {
   const loggedInUserData = useAuthStore(state => state.user)
   const isLoading = useAuthStore(state => state.isLoading)
-  const fetchUser = useAuthStore(state => state.fetchUser)
 
   if (isLoading || !loggedInUserData) {
     return (
@@ -373,26 +160,21 @@ export default function Dashboard() {
     )
   }
 
-  const venture = loggedInUserData.venture
-  const application = loggedInUserData.application
-
-  if (venture) {
-    return <VentureDashboard user={loggedInUserData} venture={venture} />
-  }
-
-  if (application?.status === 'PENDING') {
+  // Students without a startup never get here: RequireOnboarded sends them
+  // to /onboarding. Anyone else without one just gets a greeting.
+  if (!loggedInUserData.venture) {
     return (
-      <PendingApplication user={loggedInUserData} application={application} />
+      <PageHeader
+        title={`Welcome, ${firstName(loggedInUserData)}`}
+        subtitle="Use the menu to find your way around."
+      />
     )
   }
 
   return (
-    <GetStarted
+    <VentureDashboard
       user={loggedInUserData}
-      rejectedApplication={
-        application?.status === 'REJECTED' ? application : null
-      }
-      onApplied={fetchUser}
+      venture={loggedInUserData.venture}
     />
   )
 }

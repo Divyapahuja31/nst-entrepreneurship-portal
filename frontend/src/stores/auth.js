@@ -55,3 +55,7 @@ export const useAuthStore = create(
     }
   )
 )
+
+// A student isn't part of the portal until they belong to a startup.
+export const needsOnboarding = user =>
+  user?.role?.name === 'student' && !user.venture

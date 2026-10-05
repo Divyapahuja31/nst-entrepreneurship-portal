@@ -6,7 +6,9 @@ import MainLayout from '../layouts/MainLayout.jsx'
 // Student pages
 
 import PageStudentOverview from '../pages/student/PageOverview.jsx'
-import PageOnboarding from '../pages/student/PageOnboarding.jsx'
+import PageOnboarding, {
+  OnboardingSignOut,
+} from '../pages/student/PageOnboarding.jsx'
 import PageKPIs from '../pages/student/PageKPIs.jsx'
 
 // Admin pages
@@ -27,6 +29,7 @@ import PageMethodology from '../pages/common/PageMethodology.jsx'
 
 import PageError, { PageNotFound } from '../pages/common/PageError.jsx'
 import RequireAuth from '../components/RequireAuth.jsx'
+import RequireOnboarded from '../components/RequireOnboarded.jsx'
 import RequireRole from '../components/RequireRole.jsx'
 
 // TODO: make this a pop up modal instead of a page
@@ -77,31 +80,42 @@ export const router = createBrowserRouter([
     ErrorBoundary: PageError,
     Component: RequireAuth,
     children: [
+      // Full page, no sidebar: a student has to finish this first.
       {
-        Component: MainLayout,
+        element: <EmptyLayout action={<OnboardingSignOut />} />,
         children: [
-          {
-            path: '/',
-            index: true,
-            Component: PageStudentOverview,
-          },
           {
             path: '/onboarding',
             Component: PageOnboarding,
           },
+        ],
+      },
+      {
+        Component: RequireOnboarded,
+        children: [
           {
-            path: '/kpis',
-            Component: PageKPIs,
-            loader: kpisLoader,
-          },
-          {
-            path: '/methodology',
-            Component: PageMethodology,
-          },
-          {
-            path: '/profile/:userid',
-            Component: PageReportBiWeekly,
-            loader: biWeeklyLoader,
+            Component: MainLayout,
+            children: [
+              {
+                path: '/',
+                index: true,
+                Component: PageStudentOverview,
+              },
+              {
+                path: '/kpis',
+                Component: PageKPIs,
+                loader: kpisLoader,
+              },
+              {
+                path: '/methodology',
+                Component: PageMethodology,
+              },
+              {
+                path: '/profile/:userid',
+                Component: PageReportBiWeekly,
+                loader: biWeeklyLoader,
+              },
+            ],
           },
         ],
       },

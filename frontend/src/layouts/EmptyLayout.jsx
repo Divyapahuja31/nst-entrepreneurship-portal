@@ -4,7 +4,8 @@ import { Box, Typography } from '@mui/material'
 
 import { chromeMaterial } from '../theme'
 
-export default function App() {
+// `action` sits at the right of the header, e.g. Sign out during onboarding.
+export default function App({ action }) {
   return (
     <Box
       sx={{
@@ -24,6 +25,7 @@ export default function App() {
           px: { xs: 2, sm: 3 },
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           ...chromeMaterial,
         }}
       >
@@ -37,6 +39,7 @@ export default function App() {
         >
           NST Entrepreneurship Portal
         </Typography>
+        {action}
       </Box>
 
       <Outlet />

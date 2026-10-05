@@ -1,34 +1,21 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
-import {
-  Alert,
-  Box,
-  Button,
-  Grid,
-  IconButton,
-  InputAdornment,
-  TextField,
-  Typography,
-} from '@mui/material'
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
-import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded'
-import LockResetRoundedIcon from '@mui/icons-material/LockResetRounded'
-import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded'
-import Visibility from '@mui/icons-material/Visibility'
-import VisibilityOff from '@mui/icons-material/VisibilityOff'
+import { Link as RouterLink } from 'react-router'
+import { Alert, Box, Button, Link, TextField, Typography } from '@mui/material'
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
 
 import AuthScreen from '../../components/AuthScreen'
+import useAuthStep from '../../components/useAuthStep'
+import { PasswordField } from '../../components/AuthFields'
 import OtpVerificationForm from '../../components/OtpVerificationForm'
 import { forgotPassword, verifyOtp, resetPassword } from '../../api/auth'
 
 function PageForgotPassword() {
-  const [step, setStep] = useState(1) // 1: Email, 2: OTP, 3: New Password, 4: Complete
+  const [step, setStep, direction] = useAuthStep(1) // 1: Email, 2: OTP, 3: New Password, 4: Complete
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
 
   const handleSendOtp = async event => {
     event.preventDefault()
@@ -106,13 +93,13 @@ function PageForgotPassword() {
     const confirmPassword = formData.get('confirmPassword')
 
     if (!password || password.length < 8) {
-      setError('Password must be at least 8 characters long.')
+      setError('Choose a password with at least 8 characters.')
       setSubmitting(false)
       return
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.')
+      setError('The passwords you entered don’t match.')
       setSubmitting(false)
       return
     }
@@ -133,176 +120,148 @@ function PageForgotPassword() {
   const renderStepSubtitle = () => {
     switch (step) {
       case 1:
-        return 'Enter your registered email address to receive a 6-digit verification code.'
+        return 'Enter the email you use for the portal and we’ll send you a verification code.'
       case 2:
         return `Enter the 6-digit code sent to ${email}.`
       case 3:
-        return 'Code verified! Enter your new password below.'
+        return 'Choose a new password for your account.'
       case 4:
-        return 'Your password has been reset successfully.'
+        return 'You can now sign in with your new password.'
       default:
         return ''
     }
   }
 
+  const titles = {
+    1: 'Forgot Password?',
+    2: 'Check Your Email',
+    3: 'New Password',
+    4: 'Password Updated',
+  }
+
   return (
     <AuthScreen
-      title={step === 3 || step === 4 ? 'Reset Password' : 'Forgot Password?'}
+      title={titles[step]}
       subtitle={renderStepSubtitle()}
+      stepKey={step}
+      direction={direction}
+      shakeOn={error}
     >
-      <Grid size={12} sx={{ padding: 2 }}>
-        {step === 4 ? (
-          <Box sx={{ mt: 1 }}>
-            <Alert severity="success" sx={{ mb: 3 }}>
-              {successMessage}
+      {step === 4 ? (
+        <Box sx={{ textAlign: 'center' }}>
+          <CheckCircleRoundedIcon
+            color="success"
+            sx={{ fontSize: 64, mb: 3 }}
+            aria-hidden="true"
+          />
+          <Button
+            component={RouterLink}
+            to="/signin"
+            variant="contained"
+            fullWidth
+            size="large"
+          >
+            Sign In
+          </Button>
+        </Box>
+      ) : step === 1 ? (
+        <form onSubmit={handleSendOtp} autoComplete="off">
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
             </Alert>
-            <Button
-              component={Link}
-              to="/signin"
-              variant="contained"
-              fullWidth
-              size="large"
-              startIcon={<ArrowBackRoundedIcon />}
-            >
-              Sign In with New Password
+          )}
+
+          <TextField
+            label="Email"
+            type="email"
+            name="email"
+            defaultValue={email}
+            autoComplete="email"
+            autoFocus
+            required
+            fullWidth
+            sx={{ mb: 4 }}
+          />
+
+          <Button
+            fullWidth
+            variant="contained"
+            type="submit"
+            size="large"
+            loading={submitting}
+          >
+            Continue
+          </Button>
+
+          <Typography
+            variant="body2"
+            color="textSecondary"
+            sx={{ mt: 4, textAlign: 'center' }}
+          >
+            Remembered it?{' '}
+            <Link component={RouterLink} to="/signin">
+              Sign in
+            </Link>
+          </Typography>
+        </form>
+      ) : step === 2 ? (
+        <OtpVerificationForm
+          onVerify={handleVerifyOtp}
+          onResend={handleResendOtp}
+          onBack={() => {
+            setStep(1)
+            setError('')
+            setSuccessMessage('')
+          }}
+          submitting={submitting}
+          error={error}
+          successMessage={successMessage}
+          submitLabel="Continue"
+          backLabel="Change email"
+        />
+      ) : (
+        <form onSubmit={handleResetPassword} autoComplete="off">
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <PasswordField
+            label="New password"
+            autoComplete="new-password"
+            autoFocus
+            required
+            helperText="At least 8 characters"
+            sx={{ mb: 1.5 }}
+          />
+
+          <PasswordField
+            label="Confirm password"
+            name="confirmPassword"
+            autoComplete="new-password"
+            required
+            sx={{ mb: 4 }}
+          />
+
+          <Button
+            fullWidth
+            variant="contained"
+            type="submit"
+            size="large"
+            loading={submitting}
+          >
+            Update Password
+          </Button>
+
+          <Box sx={{ textAlign: 'center', mt: 2 }}>
+            <Button variant="text" size="small" onClick={() => setStep(2)}>
+              Back
             </Button>
           </Box>
-        ) : step === 1 ? (
-          <form onSubmit={handleSendOtp} autoComplete="off">
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-
-            <TextField
-              label="Email Address"
-              type="email"
-              name="email"
-              defaultValue={email}
-              required
-              fullWidth
-              sx={{ mb: 3 }}
-            />
-
-            <Button
-              fullWidth
-              variant="contained"
-              type="submit"
-              size="large"
-              disabled={submitting}
-              endIcon={<ArrowForwardRoundedIcon />}
-              sx={{ mb: 2 }}
-            >
-              {submitting ? 'Sending Code...' : 'Send Verification Code'}
-            </Button>
-
-            <Typography textAlign="center" color="textSecondary">
-              Remember your password?{' '}
-              <Link to="/signin" style={{ color: '#1976d2', textDecoration: 'none' }}>
-                Sign In
-              </Link>
-            </Typography>
-          </form>
-        ) : step === 2 ? (
-          <OtpVerificationForm
-            onVerify={handleVerifyOtp}
-            onResend={handleResendOtp}
-            onBack={() => {
-              setStep(1)
-              setError('')
-              setSuccessMessage('')
-            }}
-            submitting={submitting}
-            error={error}
-            successMessage={successMessage}
-            submitLabel="Verify Code"
-            backLabel="Change Email"
-          />
-        ) : (
-          <form onSubmit={handleResetPassword} autoComplete="off">
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-
-            <Alert severity="info" icon={<CheckCircleOutlineRoundedIcon />} sx={{ mb: 2 }}>
-              Verification code verified successfully. Set your new password below.
-            </Alert>
-
-            <TextField
-              label="New Password"
-              type={showPassword ? 'text' : 'password'}
-              name="password"
-              required
-              fullWidth
-              helperText="Must be at least 8 characters long"
-              sx={{ mb: 2 }}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle password visibility"
-                        onClick={() => setShowPassword(prev => !prev)}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <TextField
-              label="Confirm New Password"
-              type={showPassword ? 'text' : 'password'}
-              name="confirmPassword"
-              required
-              fullWidth
-              sx={{ mb: 3 }}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle confirm password visibility"
-                        onClick={() => setShowPassword(prev => !prev)}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <Button
-              fullWidth
-              variant="contained"
-              type="submit"
-              size="large"
-              disabled={submitting}
-              startIcon={<LockResetRoundedIcon />}
-              sx={{ mb: 2 }}
-            >
-              {submitting ? 'Resetting Password...' : 'Reset Password'}
-            </Button>
-
-            <Button
-              variant="text"
-              size="small"
-              onClick={() => setStep(2)}
-              startIcon={<ArrowBackRoundedIcon />}
-            >
-              Back to Code Verification
-            </Button>
-          </form>
-        )}
-      </Grid>
+        </form>
+      )}
     </AuthScreen>
   )
 }

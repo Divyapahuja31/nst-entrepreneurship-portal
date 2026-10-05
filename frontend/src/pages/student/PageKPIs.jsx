@@ -324,7 +324,7 @@ export default function Kpis() {
           aria-label="KPI table"
         >
           <TableHead>
-            <TableRow sx={{ backgroundColor: '#f8fafc' }}>
+            <TableRow sx={{ backgroundColor: 'background.default' }}>
               <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>KPI</TableCell>
               <TableCell sx={{ fontWeight: 700 }} align="center">
@@ -563,8 +563,7 @@ export default function Kpis() {
                     </TableCell>
 
                     <TableCell align="center">
-                      {(kpi.status === 'DRAFT' ||
-                        kpi.status === 'REJECTED') &&
+                      {(kpi.status === 'DRAFT' || kpi.status === 'REJECTED') &&
                         !isPastDue && (
                           <Tooltip title="Submit for Mentor Approval">
                             <IconButton
@@ -638,9 +637,10 @@ export default function Kpis() {
                           sx={{
                             p: 2.5,
                             m: 1.5,
-                            border: '1px solid #e0e0e0',
+                            border: 1,
+                            borderColor: 'divider',
                             borderRadius: 1.5,
-                            backgroundColor: '#fafafa',
+                            backgroundColor: 'background.default',
                           }}
                         >
                           <Box
@@ -664,9 +664,10 @@ export default function Kpis() {
                                 sx={{
                                   p: 1.5,
                                   mb: 2.5,
-                                  border: '1px solid #d0d0d0',
+                                  border: 1,
+                                  borderColor: 'divider',
                                   borderRadius: 1,
-                                  backgroundColor: '#ffffff',
+                                  backgroundColor: 'background.paper',
                                   maxHeight: 110,
                                   minHeight: 60,
                                   overflowY: 'auto',
@@ -701,7 +702,9 @@ export default function Kpis() {
                                 >
                                   <Table size="small">
                                     <TableHead
-                                      sx={{ backgroundColor: '#f5f5f5' }}
+                                      sx={{
+                                        backgroundColor: 'background.default',
+                                      }}
                                     >
                                       <TableRow>
                                         <TableCell
@@ -750,9 +753,10 @@ export default function Kpis() {
                                 <Box
                                   sx={{
                                     p: 2,
-                                    border: '1px solid #d0d0d0',
+                                    border: 1,
+                                    borderColor: 'divider',
                                     borderRadius: 1,
-                                    backgroundColor: '#ffffff',
+                                    backgroundColor: 'background.paper',
                                     textAlign: 'center',
                                   }}
                                 >
@@ -779,9 +783,10 @@ export default function Kpis() {
                                     <Box
                                       sx={{
                                         p: 1.5,
-                                        border: '1px solid #d0d0d0',
+                                        border: 1,
+                                        borderColor: 'divider',
                                         borderRadius: 1,
-                                        backgroundColor: '#ffffff',
+                                        backgroundColor: 'background.paper',
                                       }}
                                     >
                                       {kpi.evidence.fileName && (
@@ -801,7 +806,7 @@ export default function Kpis() {
                                               target="_blank"
                                               rel="noopener noreferrer"
                                               style={{
-                                                color: '#1976d2',
+                                                color: 'primary.main',
                                                 textDecoration: 'none',
                                               }}
                                             >
@@ -828,9 +833,10 @@ export default function Kpis() {
                             <Box
                               sx={{
                                 width: 260,
-                                backgroundColor: '#ffffff',
+                                backgroundColor: 'background.paper',
                                 p: 2,
-                                border: '1px solid #d0d0d0',
+                                border: 1,
+                                borderColor: 'divider',
                                 borderRadius: 1.5,
                               }}
                             >
@@ -888,7 +894,7 @@ export default function Kpis() {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         style={{
-                                          color: '#1976d2',
+                                          color: 'primary.main',
                                           textDecoration: 'none',
                                         }}
                                       >
@@ -905,7 +911,8 @@ export default function Kpis() {
                                   sx={{
                                     mt: 1,
                                     pt: 1,
-                                    borderTop: '1px dashed #e0e0e0',
+                                    borderTop: '1px dashed',
+                                    borderTopColor: 'divider',
                                   }}
                                 >
                                   <Typography
@@ -926,9 +933,10 @@ export default function Kpis() {
                             <Box
                               sx={{
                                 width: 260,
-                                backgroundColor: '#ffffff',
+                                backgroundColor: 'background.paper',
                                 p: 2,
-                                border: '1px solid #d0d0d0',
+                                border: 1,
+                                borderColor: 'divider',
                                 borderRadius: 1.5,
                               }}
                             >
@@ -1011,7 +1019,8 @@ export default function Kpis() {
                                   sx={{
                                     mt: 1,
                                     pt: 1,
-                                    borderTop: '1px dashed #e0e0e0',
+                                    borderTop: '1px dashed',
+                                    borderTopColor: 'divider',
                                   }}
                                 >
                                   <Typography

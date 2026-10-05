@@ -58,10 +58,7 @@ export default function AddKpi({
       name: '',
     }
 
-    setSubKpis(prev => [
-      ...prev,
-      newSubKpi,
-    ])
+    setSubKpis(prev => [...prev, newSubKpi])
   }
 
   const handleSubKpiChange = (id, value) => {
@@ -78,11 +75,7 @@ export default function AddKpi({
   }
 
   const handleDeleteSubKpi = id => {
-    setSubKpis(prev =>
-      prev.filter(
-        subKpi => subKpi.id !== id
-      )
-    )
+    setSubKpis(prev => prev.filter(subKpi => subKpi.id !== id))
   }
 
   const handleSave = async status => {
@@ -91,9 +84,7 @@ export default function AddKpi({
       return
     }
 
-    const validSubKpis = subKpis.filter(
-      subKpi => subKpi.name.trim()
-    )
+    const validSubKpis = subKpis.filter(subKpi => subKpi.name.trim())
 
     try {
       await onSave({
@@ -127,19 +118,7 @@ export default function AddKpi({
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          backgroundColor: '#fff',
-          color: '#222',
-          borderRadius: '8px',
-        },
-      }}
-    >
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <IconButton
         onClick={onClose}
         aria-label="close"
@@ -147,7 +126,6 @@ export default function AddKpi({
           position: 'absolute',
           top: 12,
           right: 12,
-          color: '#000',
           zIndex: 1,
         }}
       >
@@ -170,20 +148,14 @@ export default function AddKpi({
         </Typography>
 
         <TextField
+          hiddenLabel
           fullWidth
           size="small"
           placeholder="Enter KPI / Metric Name"
           value={kpiName}
-          onChange={e =>
-            setKpiName(e.target.value)
-          }
+          onChange={e => setKpiName(e.target.value)}
           sx={{
             mb: 3,
-
-            '& .MuiInputBase-root': {
-              backgroundColor: '#ffffff',
-              color: '#000000',
-            },
           }}
         />
 
@@ -197,22 +169,16 @@ export default function AddKpi({
         </Typography>
 
         <TextField
+          hiddenLabel
           fullWidth
           multiline
           rows={2}
           size="small"
           placeholder="Enter KPI description"
           value={description}
-          onChange={e =>
-            setDescription(e.target.value)
-          }
+          onChange={e => setDescription(e.target.value)}
           sx={{
             mb: 3,
-
-            '& .MuiInputBase-root': {
-              backgroundColor: '#ffffff',
-              color: '#000000',
-            },
           }}
         />
 
@@ -226,6 +192,7 @@ export default function AddKpi({
         </Typography>
 
         <TextField
+          hiddenLabel
           select
           fullWidth
           size="small"
@@ -233,11 +200,6 @@ export default function AddKpi({
           onChange={e => setFounderId(e.target.value)}
           sx={{
             mb: 3,
-
-            '& .MuiInputBase-root': {
-              backgroundColor: '#ffffff',
-              color: '#000000',
-            },
           }}
         >
           <MenuItem value="">
@@ -271,35 +233,17 @@ export default function AddKpi({
           }}
         >
           <TextField
+            hiddenLabel
             type="date"
             size="small"
             value={dueDate}
-            onChange={e =>
-              setDueDate(e.target.value)
-            }
+            onChange={e => setDueDate(e.target.value)}
             sx={{
               width: 145,
-              backgroundColor: '#ffffff',
-
-              '& input': {
-                color: '#000000',
-              },
             }}
           />
 
-          <Button
-            variant="contained"
-            onClick={handleAddSubKpi}
-            sx={{
-              backgroundColor: '#f4f4f4',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="outlined" onClick={handleAddSubKpi}>
             Add SubKpi
           </Button>
         </Box>
@@ -318,12 +262,11 @@ export default function AddKpi({
             sx={{
               fontSize: '13px',
               fontStyle: 'italic',
-              color: '#000000',
+              color: 'text.secondary',
               marginBottom: 2,
             }}
           >
-            No subgrades added. Click above
-            to break this KPI into granular
+            No subgrades added. Click above to break this KPI into granular
             metrics.
           </Typography>
         )}
@@ -339,32 +282,16 @@ export default function AddKpi({
             }}
           >
             <TextField
+              hiddenLabel
               fullWidth
               size="small"
               placeholder={`SubKPI ${index + 1}`}
               value={subKpi.name}
-              onChange={e =>
-                handleSubKpiChange(
-                  subKpi.id,
-                  e.target.value
-                )
-              }
-              sx={{
-                '& .MuiInputBase-root': {
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                },
-              }}
+              onChange={e => handleSubKpiChange(subKpi.id, e.target.value)}
+              sx={{}}
             />
 
-            <IconButton
-              onClick={() =>
-                handleDeleteSubKpi(subKpi.id)
-              }
-              sx={{
-                color: '#000000',
-              }}
-            >
+            <IconButton onClick={() => handleDeleteSubKpi(subKpi.id)}>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -378,55 +305,15 @@ export default function AddKpi({
             marginTop: 4,
           }}
         >
-          <Button
-            variant="contained"
-            onClick={handleCancel}
-            sx={{
-              backgroundColor: '#f1f1f1',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="outlined" onClick={handleCancel}>
             Cancel
           </Button>
 
-          <Button
-            variant="contained"
-            onClick={() =>
-              handleSave('DRAFT')
-            }
-            sx={{
-              backgroundColor: '#f1f1f1',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="outlined" onClick={() => handleSave('DRAFT')}>
             Save As Draft
           </Button>
 
-          <Button
-            variant="contained"
-            onClick={() =>
-              handleSave('SUBMIT')
-            }
-            sx={{
-              backgroundColor: '#f1f1f1',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="contained" onClick={() => handleSave('SUBMIT')}>
             Save KPI
           </Button>
         </Box>

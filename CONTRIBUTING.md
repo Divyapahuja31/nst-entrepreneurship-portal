@@ -32,6 +32,8 @@ Follow these steps to submit your contributions successfully:
 
 Write your backend logic ensuring your server spins up locally without throwing database connection or Mongoose initialization crashes.
 
+For any frontend change, follow [DESIGN.md](DESIGN.md): use the shared theme instead of custom colors and fonts, and check its PR checklist before opening a PR.
+
 ### 2. Run Quality Gates Before Committing
 
 Staging your files and attempting a commit will automatically trigger our quality tools (ESLint, Prettier, and Code Spell Checker):

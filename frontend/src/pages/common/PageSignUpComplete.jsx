@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { useNavigate, useSearchParams } from 'react-router'
 
-import { Alert, Button, Grid, MenuItem, TextField } from '@mui/material'
-
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import { Alert, Button, MenuItem, TextField, Typography } from '@mui/material'
 
 import AuthScreen from '../../components/AuthScreen'
 
@@ -106,108 +104,104 @@ function CompleteSignup() {
   if (!token) {
     return (
       <AuthScreen
-        title="Invalid Signup Session"
-        subtitle="Your Google signup session is missing or has expired."
+        title="Session Expired"
+        subtitle="Your Google sign-up link is missing or has expired. Start again from the sign-in page."
       >
-        <Grid size={12} sx={{ padding: 2 }}>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => navigate('/signin')}
-          >
-            Back to Sign In
-          </Button>
-        </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          onClick={() => navigate('/signin')}
+        >
+          Back to Sign In
+        </Button>
       </AuthScreen>
     )
   }
 
   if (loadingOptions) {
     return (
-      <AuthScreen
-        title="Complete Your Profile"
-        subtitle="Loading profile options..."
-      />
+      <AuthScreen title="Complete Your Profile">
+        <Typography color="textSecondary">
+          Loading profile options...
+        </Typography>
+      </AuthScreen>
     )
   }
 
   return (
     <AuthScreen
       title="Complete Your Profile"
-      subtitle="Your Google account has been verified. Complete your profile to create your account."
+      subtitle="Your Google account is verified. Add a few details to finish setting up."
+      shakeOn={error}
     >
-      <Grid size={12} sx={{ padding: 2 }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
-        <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            required
-            label="Name"
-            name="username"
-            value={form.username}
-            onChange={handleChange}
-            margin="normal"
-            disabled={loading}
-          />
+      <form onSubmit={handleSubmit}>
+        <TextField
+          fullWidth
+          required
+          label="Name"
+          name="username"
+          autoComplete="name"
+          autoFocus
+          value={form.username}
+          onChange={handleChange}
+          sx={{ mb: 1.5 }}
+          disabled={loading}
+        />
 
-          <TextField
-            fullWidth
-            required
-            select
-            label="Campus"
-            name="campus"
-            value={form.campus}
-            onChange={handleChange}
-            margin="normal"
-            disabled={loading}
-          >
-            {options.campuses.map(campus => (
-              <MenuItem key={campus._id} value={campus._id}>
-                {campus.name}
-              </MenuItem>
-            ))}
-          </TextField>
+        <TextField
+          fullWidth
+          required
+          select
+          label="Campus"
+          name="campus"
+          value={form.campus}
+          onChange={handleChange}
+          sx={{ mb: 1.5 }}
+          disabled={loading}
+        >
+          {options.campuses.map(campus => (
+            <MenuItem key={campus._id} value={campus._id}>
+              {campus.name}
+            </MenuItem>
+          ))}
+        </TextField>
 
-          <TextField
-            fullWidth
-            required
-            select
-            label="Batch"
-            name="batch"
-            value={form.batch}
-            onChange={handleChange}
-            margin="normal"
-            disabled={loading}
-          >
-            {options.batches.map(batch => (
-              <MenuItem key={batch._id} value={batch._id}>
-                {batch.name}
-              </MenuItem>
-            ))}
-          </TextField>
+        <TextField
+          fullWidth
+          required
+          select
+          label="Batch"
+          name="batch"
+          value={form.batch}
+          onChange={handleChange}
+          sx={{ mb: 1.5 }}
+          disabled={loading}
+        >
+          {options.batches.map(batch => (
+            <MenuItem key={batch._id} value={batch._id}>
+              {batch.name}
+            </MenuItem>
+          ))}
+        </TextField>
 
-          <Grid container sx={{ mt: 1, justifyContent: 'flex-end' }}>
-            <Grid size="auto">
-              <Button
-                fullWidth
-                variant="contained"
-                type="submit"
-                sx={{ mb: 1 }}
-                size="large"
-                disabled={loading}
-                endIcon={<ArrowForwardRoundedIcon />}
-              >
-                {loading ? 'Creating Account...' : 'Complete Signup'}
-              </Button>
-            </Grid>
-          </Grid>
-        </form>
-      </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          type="submit"
+          sx={{ mt: 4 }}
+          size="large"
+          loading={loading}
+        >
+          Create Account
+        </Button>
+      </form>
     </AuthScreen>
   )
 }

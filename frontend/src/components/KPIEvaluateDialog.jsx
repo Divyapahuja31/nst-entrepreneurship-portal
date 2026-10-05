@@ -92,9 +92,10 @@ export default function KPIEvaluateDialog({
           sx={{
             mb: 2.5,
             p: 2,
-            backgroundColor: '#f8fafc',
+            backgroundColor: 'background.default',
             borderRadius: 2,
-            border: '1px solid #e2e8f0',
+            border: 1,
+            borderColor: 'divider',
           }}
         >
           <Box sx={{ mb: 1.5 }}>
@@ -116,8 +117,8 @@ export default function KPIEvaluateDialog({
               color="text.secondary"
               display="block"
             >
-              Due Date: <strong>{formatDate(kpi?.dueDate)}</strong> |
-              Submission Date:{' '}
+              Due Date: <strong>{formatDate(kpi?.dueDate)}</strong> | Submission
+              Date:{' '}
               <strong>
                 {formatDate(kpi?.submissionDate || kpi?.evidence?.submittedAt)}
               </strong>
@@ -217,7 +218,8 @@ export default function KPIEvaluateDialog({
                 sx={{
                   mt: 1,
                   pt: 1,
-                  borderTop: '1px dashed #cbd5e1',
+                  borderTop: '1px dashed',
+                  borderTopColor: 'divider',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',

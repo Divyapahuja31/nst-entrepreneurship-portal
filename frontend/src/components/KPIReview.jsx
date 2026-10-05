@@ -481,7 +481,7 @@ export default function KPIReview({
               sx={{ borderRadius: 2 }}
             >
               <Table aria-label="KPI Review Table">
-                <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                <TableHead sx={{ backgroundColor: 'background.default' }}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>KPI Title</TableCell>

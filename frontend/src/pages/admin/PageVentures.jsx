@@ -4,7 +4,6 @@ import { useLoaderData, useRevalidator } from 'react-router'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -13,18 +12,33 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
 import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
 
+import EmptyState from '../../components/EmptyState'
+import PageHeader from '../../components/PageHeader'
+import SectionCard from '../../components/SectionCard'
 import CustomizedTable from '../../components/Table'
 import ReviewTable from '../../components/ReviewTable'
 import ProposalDrawer from '../../components/ProposalDrawer'
 import { reviewJoinRequest, reviewProposal } from '../../api/venture'
+import {
+  BriefcaseIcon,
+  LightbulbIcon,
+  PersonAddIcon,
+} from '../../components/icons'
 
 function TabPanel({ children, value, index }) {
   return (
-    <div role="tabpanel" hidden={value !== index} tabIndex={0}>
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    <div role="tabpanel" hidden={value !== index}>
+      {value === index && children}
     </div>
+  )
+}
+
+function Empty({ icon, title, description }) {
+  return (
+    <SectionCard>
+      <EmptyState icon={icon} title={title} description={description} />
+    </SectionCard>
   )
 }
 
@@ -59,13 +73,12 @@ const studentCell = (name, otherApplication) => (
   <>
     {name || '-'}
     {otherApplication && (
-      <Chip
-        size="small"
-        color="warning"
-        variant="outlined"
-        label={otherApplication}
-        sx={{ ml: 1 }}
-      />
+      <Box
+        component="span"
+        sx={{ display: 'block', color: 'warning.main', fontSize: '0.8125rem' }}
+      >
+        {otherApplication}
+      </Box>
     )}
   </>
 )
@@ -249,36 +262,35 @@ export default function PageVentures() {
   }
 
   return (
-    <>
-      <Typography variant="h4" gutterBottom>
-        Startups
-      </Typography>
-      <Typography variant="body1" color="text.secondary">
-        Approved startups, and everything waiting on your decision.
-      </Typography>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <PageHeader
+        title="Startups"
+        subtitle="Approved startups, and everything waiting on your decision."
+      />
 
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
       {notice && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setNotice('')}>
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setNotice('')}>
           {notice}
         </Alert>
       )}
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 3 }}>
-        <Tabs
-          value={tab}
-          onChange={(event, newValue) => setTab(newValue)}
-          aria-label="startup tabs"
-        >
-          <Tab label={`Startups (${ventures.length})`} />
-          <Tab label={`Pending proposals (${proposalRows.length})`} />
-          <Tab label={`Join requests (${joinRequestRows.length})`} />
-        </Tabs>
-      </Box>
+      <Tabs
+        value={tab}
+        onChange={(event, newValue) => setTab(newValue)}
+        aria-label="Startup lists"
+        variant="scrollable"
+        scrollButtons={false}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab label={`Startups (${ventures.length})`} />
+        <Tab label={`Proposals (${proposalRows.length})`} />
+        <Tab label={`Join Requests (${joinRequestRows.length})`} />
+      </Tabs>
 
       <TabPanel value={tab} index={0}>
         {ventures.length ? (
@@ -288,7 +300,11 @@ export default function PageVentures() {
             targetRoute="/admin/venture"
           />
         ) : (
-          <Alert severity="info">No startups have been approved yet.</Alert>
+          <Empty
+            icon={BriefcaseIcon}
+            title="No startups yet"
+            description="Startups appear here once you approve a proposal."
+          />
         )}
       </TabPanel>
 
@@ -304,7 +320,11 @@ export default function PageVentures() {
             onView={row => setViewing(row.proposal)}
           />
         ) : (
-          <Alert severity="info">No proposals are waiting for approval.</Alert>
+          <Empty
+            icon={LightbulbIcon}
+            title="No proposals to review"
+            description="New startup proposals from students will appear here."
+          />
         )}
       </TabPanel>
 
@@ -319,9 +339,11 @@ export default function PageVentures() {
             onReject={handleRejectJoinRequest}
           />
         ) : (
-          <Alert severity="info">
-            No join requests are waiting for approval.
-          </Alert>
+          <Empty
+            icon={PersonAddIcon}
+            title="No join requests"
+            description="Requests from students to join an existing startup will appear here."
+          />
         )}
       </TabPanel>
 
@@ -356,8 +378,14 @@ export default function PageVentures() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRejecting(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirmRejectProposal}>
+          <Button variant="outlined" onClick={() => setRejecting(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmRejectProposal}
+          >
             Reject
           </Button>
         </DialogActions>
@@ -374,7 +402,9 @@ export default function PageVentures() {
           <DialogContentText>{confirming?.body}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirming(null)}>Cancel</Button>
+          <Button variant="outlined" onClick={() => setConfirming(null)}>
+            Cancel
+          </Button>
           <Button
             variant="contained"
             color={confirming?.confirmLabel === 'Reject' ? 'error' : 'primary'}
@@ -387,6 +417,6 @@ export default function PageVentures() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </Box>
   )
 }

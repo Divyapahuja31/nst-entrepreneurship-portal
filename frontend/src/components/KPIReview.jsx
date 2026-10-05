@@ -317,7 +317,16 @@ export default function KPIReview({
       <SectionCard
         title="KPIs"
         action={
-          <>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexWrap: 'wrap',
+              justifyContent: { xs: 'space-between', sm: 'flex-end' },
+              width: { xs: '100%', sm: 'auto' },
+            }}
+          >
             <Tabs
               value={tabIndex}
               onChange={(_, value) => {
@@ -341,11 +350,12 @@ export default function KPIReview({
                 variant="contained"
                 startIcon={<PlusIcon />}
                 onClick={() => setAddKpiOpen(true)}
+                sx={{ whiteSpace: 'nowrap' }}
               >
                 Add KPI
               </Button>
             )}
-          </>
+          </Box>
         }
       >
         {!founder && tabIndex === 2 && availableMembers.length > 1 && (

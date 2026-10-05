@@ -136,6 +136,13 @@ To make an icon stand out (on cards, empty states or status), put it on a tinted
 - `<EmptyState icon title description>` goes inside a section that has no content yet. Always say what will appear and when (for example, "Your mentor's notes will appear here after they review your report.").
 - `<StatTile icon tint label value detail progress>` shows one number with context. Use 2 per row on phones and 4 on desktop.
 
+### Page headers, tables and KPI lists
+
+- `<PageHeader title subtitle action breadcrumbs>` opens every page: optional breadcrumbs, the `h2` title, one line of subtitle and the page's one contained button on the right.
+- Tables use `StyledTableCell` / `StyledTableRow` from `Table.style` (page-gray header in secondary text, hairline rows, no zebra stripes) inside a `TableCard`, which scrolls wide tables sideways inside the card so the page never does. Show statuses in a column with `StatusPill`.
+- A grid whose children hold a wide table needs `gridTemplateColumns: 'minmax(0, 1fr)'`, or the table's minimum width stretches the page.
+- KPIs are always a list of `KpiRow`s (title, owner and due date, status pill, the one action that applies) that expand into `KpiDetails`. Status labels and tints come from `kpiStatus.js`.
+
 ### Action cards
 
 When the whole card is clickable (a choice between paths, or a shortcut to a section), use `<ActionCard>`. It shows an icon badge, a title, one line of description and a blue call to action with a chevron. It lifts slightly on hover and presses in on click. Pass `onClick`, or `component={RouterLink}` with `to`.
@@ -182,6 +189,11 @@ When the whole card is clickable (a choice between paths, or a shortcut to a sec
 | [`components/EmptyState.jsx`](frontend/src/components/EmptyState.jsx) | Icon + heading + sentence for empty sections |
 | [`components/StatTile.jsx`](frontend/src/components/StatTile.jsx) | One number with label, context and optional progress bar |
 | [`components/ActionCard.jsx`](frontend/src/components/ActionCard.jsx) | Whole-card button with badge, title and call to action |
+| [`components/PageHeader.jsx`](frontend/src/components/PageHeader.jsx) | Breadcrumbs, page title, subtitle and action |
+| [`components/StatusPill.jsx`](frontend/src/components/StatusPill.jsx) | Tinted status label with a dot |
+| [`components/TableCard.jsx`](frontend/src/components/TableCard.jsx) | Rounded card that scrolls a wide table inside itself |
+| [`components/KpiList.jsx`](frontend/src/components/KpiList.jsx) | Expandable KPI row and its details, for founders and admins |
+| [`components/kpiStatus.js`](frontend/src/components/kpiStatus.js) | KPI status labels and tints, date format, lock reasons |
 | [`pages/student/PageOverview.jsx`](frontend/src/pages/student/PageOverview.jsx) | Reference page: page header, action cards, status timeline, empty state |
 
 ## PR checklist for UI changes

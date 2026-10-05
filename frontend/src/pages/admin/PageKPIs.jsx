@@ -4,13 +4,22 @@ import { useLoaderData, useRevalidator } from 'react-router'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
 import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
 
+import EmptyState from '../../components/EmptyState'
+import PageHeader from '../../components/PageHeader'
 import ReviewTable from '../../components/ReviewTable'
+import SectionCard from '../../components/SectionCard'
+import StatTile from '../../components/StatTile'
+import {
+  CheckCircleIcon,
+  HourglassIcon,
+  KpiIcon,
+  TargetIcon,
+} from '../../components/icons'
+import { KPI_STATUS, formatDate } from '../../components/kpiStatus'
 import KPIEvaluateDialog from '../../components/KPIEvaluateDialog'
 import { evaluateKPI } from '../../api/kpi'
 
@@ -22,25 +31,7 @@ const columns = [
   { key: 'dueDate', label: 'Due' },
 ]
 
-const STATUS_LABELS = {
-  DRAFT: 'Draft',
-  WAITING_FOR_APPROVAL: 'Waiting for Approval',
-  ACCEPTED: 'Accepted',
-  REJECTED: 'Rejected',
-  GRADED: 'Graded',
-}
-
-const STATUSES = Object.keys(STATUS_LABELS)
-
-const formatDate = value => {
-  if (!value) return '-'
-
-  return new Date(value).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
+const STATUSES = Object.keys(KPI_STATUS)
 
 export default function PageKPIs() {
   const { kpis } = useLoaderData()
@@ -75,7 +66,6 @@ export default function PageKPIs() {
       kpi.founder?.username || (kpi.founder ? 'Founder' : 'Entire startup'),
     venture: kpi.venture?.name || '-',
     rawStatus: kpi.status,
-    status: STATUS_LABELS[kpi.status] || kpi.status,
     dueDate: formatDate(kpi.dueDate),
   }))
 
@@ -87,13 +77,11 @@ export default function PageKPIs() {
     try {
       await evaluateKPI({ kpiId, ...payload })
       setSuccess(
-        payload.status === 'ACCEPTED'
-          ? 'KPI approved successfully'
-          : payload.status === 'REJECTED'
-            ? 'KPI rejected'
-            : payload.status === 'GRADED'
-              ? 'KPI graded successfully'
-              : 'KPI updated successfully'
+        {
+          ACCEPTED: 'KPI approved.',
+          REJECTED: 'KPI rejected.',
+          GRADED: 'KPI graded.',
+        }[payload.status] || 'KPI updated.'
       )
       revalidator.revalidate()
     } catch (err) {
@@ -120,25 +108,24 @@ export default function PageKPIs() {
         spacing={1}
         sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
       >
-        <Button size="small" onClick={() => openReview(kpi)}>
+        <Button variant="text" onClick={() => openReview(kpi)}>
           View
         </Button>
         {kpi.status === 'WAITING_FOR_APPROVAL' && (
           <>
             <Button
-              size="small"
-              variant="contained"
+              variant="outlined"
               color="success"
-              disabled={isBusy}
+              loading={isBusy}
+              disabled={Boolean(busyId) && !isBusy}
               onClick={() => review(row.id, { status: 'ACCEPTED' })}
             >
               Approve
             </Button>
             <Button
-              size="small"
               variant="outlined"
               color="error"
-              disabled={isBusy}
+              disabled={Boolean(busyId)}
               onClick={() => openReview(kpi, 'REJECTED')}
             >
               Reject
@@ -147,80 +134,97 @@ export default function PageKPIs() {
         )}
         {kpi.status === 'ACCEPTED' && (
           <Button
-            size="small"
-            variant="contained"
-            color="primary"
-            disabled={isBusy}
-            onClick={() => openReview(kpi)}
-          >
-            Grade KPI
-          </Button>
-        )}
-        {kpi.status === 'GRADED' && (
-          <Button
-            size="small"
             variant="outlined"
-            color="primary"
             disabled={isBusy}
-            onClick={() => openReview(kpi)}
+            onClick={() => openReview(kpi, 'GRADED')}
           >
-            Update Grade
+            Grade
           </Button>
         )}
         {kpi.status === 'REJECTED' && (
           <Button
-            size="small"
             variant="outlined"
-            color="warning"
             disabled={isBusy}
-            onClick={() => openReview(kpi)}
+            onClick={() => openReview(kpi, 'ACCEPTED')}
           >
-            Review / Accept
+            Review
           </Button>
         )}
       </Stack>
     )
   }
 
-  return (
-    <>
-      <Typography variant="h4" gutterBottom>
-        KPIs
-      </Typography>
-      <Typography variant="body1" color="text.secondary">
-        Every KPI across all startups, whether it belongs to a startup or to one
-        of its founders.
-      </Typography>
+  const graded = kpis.filter(
+    kpi => kpi.status === 'GRADED' && typeof kpi.score === 'number'
+  )
+  const averageScore = graded.length
+    ? Math.round(
+        graded.reduce((sum, kpi) => sum + kpi.score, 0) / graded.length
+      )
+    : null
 
-      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mt: 2 }}>
-        <Chip label={`${kpis.length} total`} />
-        <Chip label={`${pendingCount} awaiting approval`} color="warning" />
-        <Chip label={`${acceptedCount} accepted`} color="info" />
-        <Chip label={`${gradedCount} graded`} color="success" />
-        {rejectedCount > 0 && (
-          <Chip label={`${rejectedCount} rejected`} color="error" />
-        )}
-      </Stack>
+  return (
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <PageHeader
+        title="KPIs"
+        subtitle="Every KPI across all startups, whether it belongs to a startup or one of its founders."
+      />
 
       {success && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess('')}>
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess('')}>
           {success}
         </Alert>
       )}
-
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ my: 3 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: { xs: 2, sm: 3 },
+          gridTemplateColumns: {
+            xs: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(4, minmax(0, 1fr))',
+          },
+          mb: 3,
+        }}
+      >
+        <StatTile
+          icon={KpiIcon}
+          label="Total"
+          value={kpis.length}
+          detail={rejectedCount ? `${rejectedCount} rejected` : null}
+        />
+        <StatTile
+          icon={HourglassIcon}
+          tint="orange"
+          label="Awaiting approval"
+          value={pendingCount}
+        />
+        <StatTile icon={TargetIcon} label="To grade" value={acceptedCount} />
+        <StatTile
+          icon={CheckCircleIcon}
+          tint="green"
+          label="Graded"
+          value={gradedCount}
+          detail={averageScore != null ? `Average ${averageScore} pts` : null}
+        />
+      </Box>
+
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
         <TextField
           select
           label="Owner"
           value={ownerFilter}
           onChange={event => setOwnerFilter(event.target.value)}
-          sx={{ minWidth: 180 }}
+          slotProps={{
+            select: { displayEmpty: true },
+            inputLabel: { shrink: true },
+          }}
+          sx={{ flex: '0 1 200px', minWidth: 160 }}
         >
           <MenuItem value="">All owners</MenuItem>
           <MenuItem value="STARTUP">Entire startup</MenuItem>
@@ -232,30 +236,42 @@ export default function PageKPIs() {
           label="Status"
           value={status}
           onChange={event => setStatus(event.target.value)}
-          sx={{ minWidth: 220 }}
+          slotProps={{
+            select: { displayEmpty: true },
+            inputLabel: { shrink: true },
+          }}
+          sx={{ flex: '0 1 220px', minWidth: 180 }}
         >
           <MenuItem value="">All statuses</MenuItem>
           {STATUSES.map(value => (
             <MenuItem key={value} value={value}>
-              {STATUS_LABELS[value] || value}
+              {KPI_STATUS[value].label}
             </MenuItem>
           ))}
         </TextField>
-      </Stack>
-
-      <Box>
-        {rows.length ? (
-          <ReviewTable
-            actionsLabel="Actions"
-            columns={columns}
-            rows={rows}
-            busyId={busyId}
-            renderActions={renderRowActions}
-          />
-        ) : (
-          <Alert severity="info">No KPIs match these filters.</Alert>
-        )}
       </Box>
+
+      {rows.length ? (
+        <ReviewTable
+          actionsLabel="Actions"
+          columns={columns}
+          rows={rows}
+          busyId={busyId}
+          renderActions={renderRowActions}
+        />
+      ) : (
+        <SectionCard>
+          <EmptyState
+            icon={KpiIcon}
+            title={kpis.length ? 'No matches' : 'No KPIs yet'}
+            description={
+              kpis.length
+                ? 'No KPIs match these filters.'
+                : 'KPIs appear here once founders create them.'
+            }
+          />
+        </SectionCard>
+      )}
 
       <KPIEvaluateDialog
         open={Boolean(evaluating)}
@@ -274,6 +290,6 @@ export default function PageKPIs() {
           })
         }}
       />
-    </>
+    </Box>
   )
 }

@@ -67,7 +67,13 @@ function Index() {
         subtitle={`${ventureCount} startups · ${overview?.founders ?? 0} founders`}
       />
 
-      <Box sx={{ display: 'grid', gap: { xs: 2, sm: 3 } }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: { xs: 2, sm: 3 },
+          gridTemplateColumns: 'minmax(0, 1fr)',
+        }}
+      >
         <ActionQueue actions={actions} />
 
         <Box

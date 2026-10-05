@@ -6,11 +6,14 @@ import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
+import Box from '@mui/material/Box'
 
 import React from 'react'
 import { useLoaderData } from 'react-router'
 
 import { createFounder } from '../api/admin'
+import PageHeader from './PageHeader'
+import SectionCard from './SectionCard'
 
 const textFields = {
   founder: { label: 'Founder name', type: 'text' },
@@ -55,8 +58,15 @@ function AddFounder() {
   }
 
   return (
-    <div style={{ maxWidth: '480px' }}>
-      <h2>Add founder</h2>
+    <Box sx={{ maxWidth: 560, mx: 'auto' }}>
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Founders', to: '/admin/founders' },
+          { label: 'Add Founder' },
+        ]}
+        title="Add Founder"
+        subtitle="Create a founder and their startup in one step."
+      />
 
       {formError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -70,65 +80,68 @@ function AddFounder() {
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit}>
-        {Object.keys(textFields).map(key => (
-          <TextField
-            key={key}
-            fullWidth
-            required
-            margin="normal"
-            name={key}
-            type={textFields[key].type}
-            label={textFields[key].label}
-            disabled={saving}
-            error={Boolean(fieldErrors[key])}
-            helperText={fieldErrors[key] ?? ''}
-          />
-        ))}
-
-        {Object.keys(selectLabels).map(key => (
-          <FormControl
-            key={key}
-            fullWidth
-            required
-            margin="normal"
-            disabled={saving}
-            error={Boolean(fieldErrors[key])}
-          >
-            <InputLabel id={`${labelId}-${key}`}>
-              {selectLabels[key]}
-            </InputLabel>
-
-            <Select
-              labelId={`${labelId}-${key}`}
-              label={selectLabels[key]}
+      <SectionCard>
+        <form onSubmit={handleSubmit}>
+          {Object.keys(textFields).map(key => (
+            <TextField
+              key={key}
+              fullWidth
+              required
+              margin="normal"
               name={key}
-              defaultValue=""
+              type={textFields[key].type}
+              label={textFields[key].label}
+              disabled={saving}
+              error={Boolean(fieldErrors[key])}
+              helperText={fieldErrors[key] ?? ''}
+            />
+          ))}
+
+          {Object.keys(selectLabels).map(key => (
+            <FormControl
+              key={key}
+              fullWidth
+              required
+              margin="normal"
+              disabled={saving}
+              error={Boolean(fieldErrors[key])}
             >
-              {options[key].map(option => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
+              <InputLabel id={`${labelId}-${key}`}>
+                {selectLabels[key]}
+              </InputLabel>
 
-            {fieldErrors[key] && (
-              <FormHelperText>{fieldErrors[key]}</FormHelperText>
-            )}
-          </FormControl>
-        ))}
+              <Select
+                labelId={`${labelId}-${key}`}
+                label={selectLabels[key]}
+                name={key}
+                defaultValue=""
+              >
+                {options[key].map(option => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
 
-        <Button
-          fullWidth
-          variant="contained"
-          type="submit"
-          disabled={saving}
-          sx={{ mt: 2 }}
-        >
-          {saving ? 'Creating...' : 'Create'}
-        </Button>
-      </form>
-    </div>
+              {fieldErrors[key] && (
+                <FormHelperText>{fieldErrors[key]}</FormHelperText>
+              )}
+            </FormControl>
+          ))}
+
+          <Button
+            fullWidth
+            size="large"
+            variant="contained"
+            type="submit"
+            loading={saving}
+            sx={{ mt: 2 }}
+          >
+            Create Founder
+          </Button>
+        </form>
+      </SectionCard>
+    </Box>
   )
 }
 

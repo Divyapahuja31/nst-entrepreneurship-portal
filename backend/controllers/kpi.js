@@ -22,8 +22,13 @@ import {
   applyKPIProgress,
   buildEvidencePayload,
   streamS3ToResponse,
+  isKPIOpenToMembers,
 } from '../utils/kpiHelper.js'
 import { downloadFromS3, evidenceKeyFromUrl } from '../config/s3.js'
+import {
+  isAllowedEvidenceFile,
+  safeEvidenceFileName,
+} from '../utils/evidenceFile.js'
 
 const STUDENT_SETTABLE_STATUSES = ['DRAFT', 'SUBMIT', 'WAITING_FOR_APPROVAL']
 
@@ -517,12 +522,16 @@ export const submitKPIEvidence = async (req, res) => {
 
 // Limits on what non-admins may change. Accepting, rejecting and grading go
 // through the admin-only evaluate route.
+// Accepting, rejecting and grading go only through the evaluate route, for
+// admins too, so its review checks can't be skipped by a plain update.
 const memberUpdateError = (user, kpi, { status, founder }) => {
+  if (status !== undefined && !STUDENT_SETTABLE_STATUSES.includes(status)) {
+    return user.role === 'admin'
+      ? 'Accept, reject or grade a KPI from the review dialog'
+      : 'You can only save a KPI as draft or submit it for approval'
+  }
   if (user.role === 'admin') {
     return null
-  }
-  if (status !== undefined && !STUDENT_SETTABLE_STATUSES.includes(status)) {
-    return 'You can only save a KPI as draft or submit it for approval'
   }
   return kpiOwnerChangeError(user, kpi, founder)
 }
@@ -599,6 +608,14 @@ export const deleteKPI = async (req, res) => {
       })
     }
 
+    // An accepted or graded KPI (and its grade) can't be erased by students.
+    if (!isKPIOpenToMembers(req.user, kpi)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only an admin can delete a KPI once it has been accepted',
+      })
+    }
+
     await kpi.deleteOne()
 
     await SubKPI.deleteMany({ parentKPI: kpiId })
@@ -637,6 +654,14 @@ export const uploadKPIEvidence = async (req, res) => {
       return res.status(400).json({ success: false, message: lockError })
     }
 
+    if (req.file && !isAllowedEvidenceFile(req.file.originalname)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Upload a PDF, Office document, CSV, text file, image, MP4/MOV video or ZIP',
+      })
+    }
+
     kpi.evidence = await resolveEvidenceData(
       req.file,
       kpi.evidence,
@@ -654,14 +679,11 @@ export const uploadKPIEvidence = async (req, res) => {
       data: kpi,
     })
   } catch (error) {
+    // Storage details (bucket names, AWS errors) stay in the server log.
     console.error('Upload KPI evidence error:', error)
-    let message = 'Failed to upload evidence'
-    if (error.name === 'NoSuchBucket' || error.Code === 'NoSuchBucket') {
-      message = `AWS S3 Bucket "${process.env.AWS_S3_BUCKET_NAME || 'nst-evidence-uploads'}" does not exist in your AWS account. Please create the bucket in AWS S3 console or update AWS_S3_BUCKET_NAME in backend/.env`
-    }
     return res.status(500).json({
       success: false,
-      message,
+      message: 'Failed to upload evidence',
     })
   }
 }
@@ -749,9 +771,10 @@ export const downloadKPIEvidence = async (req, res) => {
     }
 
     const downloadName = kpi.evidence.fileName || 'evidence_file'
+    // filename* keeps non-ASCII names readable instead of percent-encoded.
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${encodeURIComponent(downloadName)}"`
+      `attachment; filename="${safeEvidenceFileName(downloadName)}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`
     )
 
     return await sendEvidenceFile(fileUrl, res)

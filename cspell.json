@@ -68,7 +68,15 @@
     "buildx",
     "Buildx",
     "ghcr",
-    "v1deployed"
+    "v1deployed",
+
+    "msword",
+    "openxmlformats",
+    "officedocument",
+    "wordprocessingml",
+    "spreadsheetml",
+    "presentationml",
+    "quicktime"
   ],
   "ignorePaths": [
     "node_modules/**",

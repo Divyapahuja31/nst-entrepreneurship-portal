@@ -2,7 +2,11 @@ import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
 import { validateSubKPIRequest } from '../utils/kpiValidator.js'
-import { canUserAccessKPI, canUserEditSubKPI } from '../utils/kpiHelper.js'
+import {
+  canUserAccessKPI,
+  canUserEditSubKPI,
+  isKPIOpenToMembers,
+} from '../utils/kpiHelper.js'
 
 // Only a KPI's creator adds SubKPIs, and only while they may still access it
 // (a personal KPI is its owner's alone).
@@ -39,10 +43,10 @@ export const createSubKPI = async (req, res) => {
       })
     }
 
-    if (kpi.status !== 'DRAFT' && kpi.status !== 'WAITING_FOR_APPROVAL') {
+    if (!isKPIOpenToMembers(req.user, kpi)) {
       return res.status(400).json({
         success: false,
-        message: 'SubKPIs can only be added to draft or pending KPIs',
+        message: 'SubKPIs can only be added to draft, pending or rejected KPIs',
       })
     }
 
@@ -67,6 +71,23 @@ export const createSubKPI = async (req, res) => {
   }
 }
 
+// The fields to change, or null when one isn't text.
+const parseSubKPIUpdate = ({ name, description }) => {
+  const isTextOrMissing = value =>
+    value === undefined || typeof value === 'string'
+  if (!isTextOrMissing(name) || !isTextOrMissing(description)) {
+    return null
+  }
+  const fields = {}
+  if (name !== undefined) {
+    fields.name = name.trim()
+  }
+  if (description !== undefined) {
+    fields.description = description.trim()
+  }
+  return fields
+}
+
 export const updateSubKPI = async (req, res) => {
   try {
     const { id } = req.params
@@ -78,12 +99,11 @@ export const updateSubKPI = async (req, res) => {
         .json({ success: false, message: 'Invalid SubKPI ID' })
     }
 
-    const updateFields = {}
-    if (name !== undefined) {
-      updateFields.name = name.trim()
-    }
-    if (description !== undefined) {
-      updateFields.description = description.trim()
+    const updateFields = parseSubKPIUpdate({ name, description })
+    if (!updateFields) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Name and description must be text' })
     }
 
     const subKPI = await SubKPI.findById(id)
@@ -96,7 +116,8 @@ export const updateSubKPI = async (req, res) => {
     if (!(await canUserEditSubKPI(req.user, subKPI))) {
       return res.status(403).json({
         success: false,
-        message: 'You are not allowed to modify this SubKPI',
+        message:
+          'You can change SubKPIs only while the KPI is a draft, pending or rejected',
       })
     }
 
@@ -134,7 +155,8 @@ export const deleteSubKPI = async (req, res) => {
     if (!(await canUserEditSubKPI(req.user, subKPI))) {
       return res.status(403).json({
         success: false,
-        message: 'You are not allowed to delete this SubKPI',
+        message:
+          'You can delete SubKPIs only while the KPI is a draft, pending or rejected',
       })
     }
 

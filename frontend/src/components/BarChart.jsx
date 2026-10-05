@@ -1,37 +1,62 @@
 import { BarChart } from '@mui/x-charts/BarChart'
 
+import { quietChart } from './chartStyles'
 import { tints } from '../theme'
 
+// Average graded score per month, January to this month. Months with nothing
+// graded stay empty rather than reading as 0.
 export default function BarGraph({ kpiDistribution }) {
-  const kpiData = Object.entries(kpiDistribution ?? {}).map(
-    ([month, value]) => {
-      // null means nothing was graded that month; keep it empty, not 0.
-      const score = typeof value === 'number' ? value : null
-      return {
-        month: month.charAt(0).toUpperCase() + month.slice(1, 3),
-        score,
-      }
-    }
+  const months = Object.entries(kpiDistribution ?? {}).slice(
+    0,
+    new Date().getMonth() + 1
   )
+  const kpiData = months.map(([month, value]) => ({
+    month: month.charAt(0).toUpperCase() + month.slice(1, 3),
+    score: typeof value === 'number' ? Math.round(value) : null,
+  }))
 
   return (
     <BarChart
       dataset={kpiData}
-      xAxis={[{ dataKey: 'month', scaleType: 'band' }]}
-      yAxis={[{ min: 0, max: 100, width: 32 }]}
+      xAxis={[
+        {
+          dataKey: 'month',
+          scaleType: 'band',
+          disableLine: true,
+          disableTicks: true,
+          categoryGapRatio: 0.55,
+        },
+      ]}
+      yAxis={[
+        {
+          min: 0,
+          max: 100,
+          width: 32,
+          tickNumber: 3,
+          disableLine: true,
+          disableTicks: true,
+        },
+      ]}
       series={[
         {
           dataKey: 'score',
           label: 'Average score',
           color: tints.blue.fg,
-
-          valueFormatter: value =>
-            value == null ? 'No grades' : `${value}/100`,
+          barLabel: item => (item.value == null ? null : String(item.value)),
+          barLabelPlacement: 'outside',
+          valueFormatter: (value, { dataIndex }) =>
+            value == null
+              ? null
+              : `${kpiData[dataIndex]?.month}: ${value} / 100`,
         },
       ]}
-      height={260}
+      grid={{ horizontal: true }}
+      axisHighlight={{ x: 'none' }}
+      slotProps={{ tooltip: { trigger: 'item' } }}
+      height={340}
       borderRadius={4}
       hideLegend
+      sx={quietChart}
     />
   )
 }

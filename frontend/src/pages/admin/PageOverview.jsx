@@ -59,6 +59,16 @@ function Index() {
   } = useLoaderData()
   const ventureCount = overview?.ventures ?? 0
   const hasScores = Object.values(kpi ?? {}).some(score => score != null)
+  // The most recent month with a graded KPI, for the chart's subtitle.
+  const latest = Object.entries(kpi ?? {})
+    .filter(([, score]) => typeof score === 'number')
+    .at(-1)
+  const year = new Date().getFullYear()
+  const scoreSubtitle = latest
+    ? `Out of 100, by month in ${year}. Latest: ${Math.round(latest[1])} in ${
+        latest[0].charAt(0).toUpperCase() + latest[0].slice(1)
+      }.`
+    : `Out of 100, by month in ${year}.`
 
   return (
     <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
@@ -114,7 +124,7 @@ function Index() {
         >
           <ChartCard
             title="Average KPI Score"
-            subtitle={`By month for graded KPIs in ${new Date().getFullYear()}, out of 100`}
+            subtitle={scoreSubtitle}
             empty={!hasScores}
             emptyMessage="Monthly scores appear here once KPIs are graded."
           >

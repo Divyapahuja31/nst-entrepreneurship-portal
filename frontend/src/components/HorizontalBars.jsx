@@ -1,5 +1,7 @@
 import { BarChart } from '@mui/x-charts/BarChart'
 
+import { tints } from '../theme'
+
 // One labelled bar per category, in the order given. `data` is
 // [{ label, count }].
 export default function HorizontalBars({ data, label }) {
@@ -16,11 +18,12 @@ export default function HorizontalBars({ data, label }) {
         {
           dataKey: 'count',
           label,
+          color: tints.blue.fg,
           barLabel: 'value',
           barLabelPlacement: 'outside',
         },
       ]}
-      height={Math.max(160, data.length * 34)}
+      height={Math.max(120, data.length * 40 + 40)}
       borderRadius={4}
       hideLegend
     />

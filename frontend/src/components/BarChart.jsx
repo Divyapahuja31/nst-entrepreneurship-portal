@@ -1,5 +1,7 @@
 import { BarChart } from '@mui/x-charts/BarChart'
 
+import { tints } from '../theme'
+
 export default function BarGraph({ kpiDistribution }) {
   const kpiData = Object.entries(kpiDistribution ?? {}).map(
     ([month, value]) => {
@@ -21,6 +23,8 @@ export default function BarGraph({ kpiDistribution }) {
         {
           dataKey: 'score',
           label: 'Average score',
+          color: tints.blue.fg,
+
           valueFormatter: value =>
             value == null ? 'No grades' : `${value}/100`,
         },

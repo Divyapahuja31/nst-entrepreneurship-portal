@@ -1,17 +1,17 @@
-import Button from '@mui/material/Button'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Chip from '@mui/material/Chip'
-import List from '@mui/material/List'
-import ListItem from '@mui/material/ListItem'
-import ListItemText from '@mui/material/ListItemText'
-import Typography from '@mui/material/Typography'
+import { Fragment } from 'react'
 import { Link } from 'react-router'
+
+import { Box, Button, Divider, Typography } from '@mui/material'
+
+import EmptyState from './EmptyState'
+import SectionCard from './SectionCard'
+import { CheckCircleIcon, HourglassIcon } from './icons'
+import { tints } from '../theme'
 
 const ITEMS = [
   {
     key: 'proposals',
-    label: 'Venture proposals to review',
+    label: 'Startup proposals to review',
     to: '/admin/venture',
     age: 'waiting',
   },
@@ -49,52 +49,78 @@ const describeAge = (date, kind) => {
   return days < 1 ? 'Oldest arrived today' : `Oldest has waited ${span}`
 }
 
+function Count({ value, tint }) {
+  const { bg, fg } = tints[tint]
+  return (
+    <Box
+      sx={{
+        minWidth: 36,
+        height: 28,
+        px: 1,
+        borderRadius: 1.5,
+        display: 'grid',
+        placeItems: 'center',
+        bgcolor: bg,
+        color: fg,
+        fontWeight: 600,
+        fontSize: '0.875rem',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {value}
+    </Box>
+  )
+}
+
 // Work waiting on admins, with a link to where it gets done. Only items
 // that need action are listed.
 export default function ActionQueue({ actions }) {
   const pending = ITEMS.filter(item => actions?.[item.key]?.count > 0)
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="subtitle1" component="h2" fontWeight={600}>
-          Needs your attention
-        </Typography>
-        {pending.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Nothing is waiting on you: no applications to review, no KPIs to
-            grade and no missed deadlines.
-          </Typography>
-        ) : (
-          <List disablePadding>
-            {pending.map(item => {
-              const { count, oldestAt } = actions[item.key]
-              return (
-                <ListItem
-                  key={item.key}
-                  disableGutters
-                  secondaryAction={
-                    <Button component={Link} to={item.to} size="small">
-                      Open
-                    </Button>
-                  }
-                >
-                  <Chip
-                    label={count}
-                    color={item.age === 'overdue' ? 'error' : 'warning'}
-                    size="small"
-                    sx={{ mr: 2, minWidth: 40 }}
-                  />
-                  <ListItemText
-                    primary={item.label}
-                    secondary={describeAge(oldestAt, item.age)}
-                  />
-                </ListItem>
-              )
-            })}
-          </List>
-        )}
-      </CardContent>
-    </Card>
+    <SectionCard
+      icon={HourglassIcon}
+      tint="orange"
+      title="Needs Your Attention"
+    >
+      {pending.length === 0 ? (
+        <EmptyState
+          icon={CheckCircleIcon}
+          title="You're all caught up"
+          description="No applications to review, no KPIs to grade and no missed deadlines."
+        />
+      ) : (
+        pending.map((item, index) => {
+          const { count, oldestAt } = actions[item.key]
+          return (
+            <Fragment key={item.key}>
+              {index > 0 && <Divider />}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  py: 1.5,
+                }}
+              >
+                <Count
+                  value={count}
+                  tint={item.age === 'overdue' ? 'red' : 'orange'}
+                />
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                  <Typography variant="body1">{item.label}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {describeAge(oldestAt, item.age)}
+                  </Typography>
+                </Box>
+                <Button variant="outlined" component={Link} to={item.to}>
+                  Open
+                </Button>
+              </Box>
+            </Fragment>
+          )
+        })
+      )}
+    </SectionCard>
   )
 }

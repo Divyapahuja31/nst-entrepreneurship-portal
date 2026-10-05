@@ -1,16 +1,19 @@
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Chip from '@mui/material/Chip'
-import Link from '@mui/material/Link'
-import Stack from '@mui/material/Stack'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Typography from '@mui/material/Typography'
 import { Link as RouterLink } from 'react-router'
+
+import {
+  Box,
+  Link,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@mui/material'
+
+import EmptyState from './EmptyState'
+import SectionCard from './SectionCard'
+import StatusPill from './StatusPill'
+import { CheckCircleIcon, PeopleIcon } from './icons'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -29,15 +32,12 @@ const countReason = (checkIns, reason) =>
   checkIns.filter(v => v.reasons.includes(reason)).length
 
 const summarize = (checkIns, ventureCount, inactiveDays) => {
-  if (checkIns.length === 0) {
-    return `Every venture has KPI activity in the last ${inactiveDays} days and more than one founder.`
-  }
   const notStarted = countReason(checkIns, 'NO_KPIS')
   const idle = countReason(checkIns, 'INACTIVE')
   const solo = countReason(checkIns, 'SOLO_FOUNDER')
   return [
     notStarted &&
-      `${notStarted} of ${ventureCount} ventures haven't set a KPI yet.`,
+      `${notStarted} of ${ventureCount} startups haven't set a KPI yet.`,
     idle && `${idle} had no KPI activity in the last ${inactiveDays} days.`,
     solo && `${solo} ${solo === 1 ? 'has' : 'have'} a solo founder.`,
   ]
@@ -45,81 +45,77 @@ const summarize = (checkIns, ventureCount, inactiveDays) => {
     .join(' ')
 }
 
-// Ventures to check in on, each with the reasons it is listed.
+// Startups to check in on, each with the reasons it is listed.
 export default function VentureCheckIns({
   checkIns = [],
   ventureCount,
   inactiveDays,
 }) {
   const reasonLabels = {
-    NO_KPIS: { label: 'No KPIs yet', color: 'default' },
-    INACTIVE: {
-      label: `No KPI activity in ${inactiveDays}+ days`,
-      color: 'warning',
-    },
-    SOLO_FOUNDER: { label: 'Solo founder', color: 'info' },
+    NO_KPIS: { label: 'No KPIs yet', tint: 'gray' },
+    INACTIVE: { label: `Quiet ${inactiveDays}+ days`, tint: 'orange' },
+    SOLO_FOUNDER: { label: 'Solo founder', tint: 'blue' },
   }
+
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="subtitle1" component="h2" fontWeight={600}>
-          Ventures to check in on
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {summarize(checkIns, ventureCount, inactiveDays)}
-        </Typography>
-        {checkIns.length > 0 && (
-          <TableContainer sx={{ mt: 1 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Venture</TableCell>
-                  <TableCell>Stage</TableCell>
-                  <TableCell align="right">Team</TableCell>
-                  <TableCell>Last KPI activity</TableCell>
-                  <TableCell>Why</TableCell>
+    <SectionCard
+      icon={PeopleIcon}
+      title="Startups to Check In On"
+      subtitle={
+        checkIns.length > 0
+          ? summarize(checkIns, ventureCount, inactiveDays)
+          : null
+      }
+    >
+      {checkIns.length === 0 ? (
+        <EmptyState
+          icon={CheckCircleIcon}
+          title="Every startup is active"
+          description={`All startups have KPI activity in the last ${inactiveDays} days and more than one founder.`}
+        />
+      ) : (
+        <Box sx={{ overflowX: 'auto', mx: { xs: -2.5, sm: -3 } }}>
+          <Table sx={{ minWidth: 640 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ pl: { xs: 2.5, sm: 3 } }}>Startup</TableCell>
+                <TableCell>Stage</TableCell>
+                <TableCell align="right">Team</TableCell>
+                <TableCell>Last KPI activity</TableCell>
+                <TableCell sx={{ pr: { xs: 2.5, sm: 3 } }}>Why</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {checkIns.map(venture => (
+                <TableRow
+                  key={venture.id}
+                  sx={{ '&:last-child td': { border: 0 } }}
+                >
+                  <TableCell sx={{ pl: { xs: 2.5, sm: 3 } }}>
+                    <Link
+                      component={RouterLink}
+                      to={`/admin/venture/${venture.id}`}
+                      sx={{ fontWeight: 500 }}
+                    >
+                      {venture.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>{venture.stage ?? '-'}</TableCell>
+                  <TableCell align="right">{venture.team}</TableCell>
+                  <TableCell>{lastActivity(venture.lastActivityAt)}</TableCell>
+                  <TableCell sx={{ pr: { xs: 2.5, sm: 3 } }}>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {venture.reasons.map(reason => (
+                        <StatusPill key={reason} {...reasonLabels[reason]} />
+                      ))}
+                    </Box>
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {checkIns.map(venture => (
-                  <TableRow key={venture.id}>
-                    <TableCell>
-                      <Link
-                        component={RouterLink}
-                        to={`/admin/venture/${venture.id}`}
-                      >
-                        {venture.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{venture.stage ?? '-'}</TableCell>
-                    <TableCell align="right">{venture.team}</TableCell>
-                    <TableCell>
-                      {lastActivity(venture.lastActivityAt)}
-                    </TableCell>
-                    <TableCell>
-                      <Stack
-                        direction="row"
-                        spacing={0.5}
-                        useFlexGap
-                        sx={{ flexWrap: 'wrap' }}
-                      >
-                        {venture.reasons.map(reason => (
-                          <Chip
-                            key={reason}
-                            size="small"
-                            variant="outlined"
-                            {...reasonLabels[reason]}
-                          />
-                        ))}
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </CardContent>
-    </Card>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+      )}
+    </SectionCard>
   )
 }

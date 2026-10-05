@@ -61,7 +61,7 @@ function VentureDashboard({ user, venture }) {
   const founders = venture.founders || []
 
   return (
-    <Box sx={{ maxWidth: 1080 }}>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
       <PageHeader
         title={`Welcome back, ${firstName(user)}`}
         subtitle={

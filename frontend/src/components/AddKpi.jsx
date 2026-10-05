@@ -198,6 +198,9 @@ export default function AddKpi({
           size="small"
           value={founderId}
           onChange={e => setFounderId(e.target.value)}
+          // "Entire Startup" is the empty value; without this the field
+          // looks blank when it's chosen.
+          slotProps={{ select: { displayEmpty: true } }}
           sx={{
             mb: 3,
           }}

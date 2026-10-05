@@ -1,13 +1,12 @@
 import { Link as RouterLink } from 'react-router'
 import Link from '@mui/material/Link'
-import Paper from '@mui/material/Paper'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
-import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Checkbox from '@mui/material/Checkbox'
 import { StyledTableCell, StyledTableRow } from './Table.style'
+import TableCard from './TableCard'
 
 // A column is either a data key (shown as its own header, right-aligned after
 // the first column, as before) or { key, label, align }.
@@ -45,12 +44,12 @@ export default function CustomizedTable({
     }
   }
   return (
-    <TableContainer component={Paper}>
-      <Table sx={{ minWidth: 700 }} aria-label="customized table">
+    <TableCard>
+      <Table sx={{ minWidth: 640 }}>
         <TableHead>
           <TableRow>
             {selectable && (
-              <StyledTableCell style={{ maxWidth: '160px' }}>
+              <StyledTableCell padding="checkbox">
                 <Checkbox
                   checked={
                     data.length > 0 && data.length === selectedRows.length
@@ -60,12 +59,8 @@ export default function CustomizedTable({
                   }
                   data-testid="select-all-checkbox"
                   onClick={handleSelectAll}
-                />{' '}
-                <span
-                  style={{
-                    visibility: selectedRows.length > 0 ? 'visible' : 'hidden',
-                  }}
-                >{`${selectedRows.length} selected`}</span>
+                  slotProps={{ input: { 'aria-label': 'Select all rows' } }}
+                />
               </StyledTableCell>
             )}
             {columns.map(column => (
@@ -82,7 +77,7 @@ export default function CustomizedTable({
               return (
                 <StyledTableRow key={id ?? idx}>
                   {selectable && (
-                    <StyledTableCell>
+                    <StyledTableCell padding="checkbox">
                       <Checkbox
                         checked={selectedRows.includes(id)}
                         onClick={() => handleRowSelect(id)}
@@ -98,12 +93,7 @@ export default function CustomizedTable({
                     <Link
                       component={RouterLink}
                       to={`${targetRoute}/${row.id}`}
-                      underline="hover"
-                      sx={{
-                        color: 'primary.main',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      sx={{ fontWeight: 500 }}
                     >
                       {row[first.key]}
                     </Link>
@@ -118,6 +108,6 @@ export default function CustomizedTable({
             })}
         </TableBody>
       </Table>
-    </TableContainer>
+    </TableCard>
   )
 }

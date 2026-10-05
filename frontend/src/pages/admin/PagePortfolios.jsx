@@ -5,21 +5,25 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Box from '@mui/material/Box'
 import MenuItem from '@mui/material/MenuItem'
-import FormControl from '@mui/material/FormControl'
-import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 
 import React from 'react'
 import { Link, useLoaderData, useRevalidator } from 'react-router'
 
+import EmptyState from '../../components/EmptyState'
+import PageHeader from '../../components/PageHeader'
+import SectionCard from '../../components/SectionCard'
 import CustomizedTable from '../../components/Table'
+import StatusPill from '../../components/StatusPill'
+import { PeopleIcon, PlusIcon } from '../../components/icons'
 import { deleteFounders } from '../../api/admin'
 
 const FILTER_LABELS = {
-  campus: 'All campuses',
-  stage: 'All stages',
-  status: 'All statuses',
+  campus: 'Campus',
+  stage: 'Stage',
+  status: 'Status',
 }
 
 const columnNames = [
@@ -34,8 +38,27 @@ const columnNames = [
 
 const REMOVED = 'Founder removed successfully'
 
+const HEALTH_TINTS = {
+  'on track': 'green',
+  watch: 'orange',
+  'at risk': 'red',
+}
+
+// The status column as a pill; filtering still uses the plain string.
+const withStatusPill = student => ({
+  ...student,
+  status: student.status ? (
+    <StatusPill
+      label={student.status}
+      tint={HEALTH_TINTS[String(student.status).toLowerCase()] || 'gray'}
+      plain={!HEALTH_TINTS[String(student.status).toLowerCase()]}
+    />
+  ) : (
+    '-'
+  ),
+})
+
 function Portfolio() {
-  const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
   const revalidator = useRevalidator()
   const [isDeleting, setIsDeleting] = React.useState(false)
@@ -114,89 +137,108 @@ function Portfolio() {
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Button component={Link} to="/admin/founders/new" variant="contained">
-          Add founder
-        </Button>
-      </div>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <PageHeader
+        title="Founders"
+        subtitle="Everyone in a startup, with their latest score and status."
+        action={
+          <Button
+            component={Link}
+            to="/admin/founders/new"
+            variant="contained"
+            startIcon={<PlusIcon />}
+          >
+            Add Founder
+          </Button>
+        }
+      />
 
       {error && (
-        <Alert severity="error" sx={{ my: 1 }} onClose={() => setError('')}>
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
       {notice && (
-        <Alert severity="success" sx={{ my: 1 }} onClose={() => setNotice('')}>
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setNotice('')}>
           {notice}
         </Alert>
       )}
 
-      <div
-        className="container"
-        style={{
+      <Box
+        sx={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'stretch',
-          width: '100%',
-          height: '100px',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+          mb: 3,
         }}
       >
-        <div className="input">
+        <TextField
+          label="Search founders"
+          type="search"
+          value={filters.founder ?? ''}
+          onChange={event =>
+            setFilters(prev => ({ ...prev, founder: event.target.value }))
+          }
+          sx={{ flex: '1 1 220px', maxWidth: { sm: 320 } }}
+        />
+        {Object.keys(filterData).map(key => (
           <TextField
-            id="outlined-basic"
-            label="Founder"
-            variant="outlined"
-            value={filters.founder ?? ''}
+            key={key}
+            select
+            label={FILTER_LABELS[key] ?? key}
+            value={filters[key] ?? ''}
             onChange={event =>
-              setFilters(prev => ({ ...prev, founder: event.target.value }))
+              setFilters(prev => ({ ...prev, [key]: event.target.value }))
+            }
+            slotProps={{
+              select: { displayEmpty: true },
+              inputLabel: { shrink: true },
+            }}
+            sx={{ flex: '0 1 160px', minWidth: 140 }}
+          >
+            <MenuItem value="">All</MenuItem>
+            {filterData[key].map(data => (
+              <MenuItem key={data} value={data}>
+                {data}
+              </MenuItem>
+            ))}
+          </TextField>
+        ))}
+        {selectedVisible.length > 0 && (
+          <Button
+            variant="outlined"
+            color="error"
+            loading={isDeleting}
+            onClick={() => setConfirming(true)}
+            sx={{ ml: { sm: 'auto' } }}
+          >
+            Remove from Startup ({selectedVisible.length})
+          </Button>
+        )}
+      </Box>
+
+      {visibleStudents.length ? (
+        <CustomizedTable
+          data={visibleStudents.map(withStatusPill)}
+          selectedRows={selectedVisible}
+          setSelectedRows={setSelectedRows}
+          columnNames={columnNames}
+          targetRoute="/admin/profile"
+        />
+      ) : (
+        <SectionCard>
+          <EmptyState
+            icon={PeopleIcon}
+            title={students.length ? 'No matches' : 'No founders yet'}
+            description={
+              students.length
+                ? 'No founders match these filters.'
+                : 'Founders appear here once they join or create a startup.'
             }
           />
-          <Button
-            onClick={() => setConfirming(true)}
-            disabled={selectedVisible.length === 0 || isDeleting}
-            variant="contained"
-            color="error"
-            style={{ marginTop: '2%', marginLeft: '10px' }}
-          >
-            {isDeleting
-              ? 'Removing...'
-              : `Remove from startup${selectedVisible.length ? ` (${selectedVisible.length})` : ''}`}
-          </Button>
-        </div>
-        <div>
-          {Object.keys(filterData).map(key => (
-            <FormControl key={key} sx={{ m: 1, minWidth: 120 }}>
-              <Select
-                aria-describedby={`${noLabelId}-helper-text`}
-                displayEmpty
-                inputProps={{ 'aria-label': key }}
-                value={filters[key] ?? ''}
-                onChange={event =>
-                  setFilters(prev => ({ ...prev, [key]: event.target.value }))
-                }
-              >
-                <MenuItem value="">
-                  <em>{FILTER_LABELS[key] ?? `All ${key}`}</em>
-                </MenuItem>
-                {filterData[key].map(data => (
-                  <MenuItem key={data} value={data}>
-                    {data}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          ))}
-        </div>
-      </div>
-
-      <CustomizedTable
-        data={visibleStudents}
-        selectedRows={selectedVisible}
-        setSelectedRows={setSelectedRows}
-        columnNames={columnNames}
-        targetRoute="/admin/profile"
-      />
+        </SectionCard>
+      )}
 
       <Dialog
         open={confirming}
@@ -224,7 +266,9 @@ function Portfolio() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirming(false)}>Cancel</Button>
+          <Button variant="outlined" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
           <Button
             variant="contained"
             color="error"
@@ -234,7 +278,7 @@ function Portfolio() {
           </Button>
         </DialogActions>
       </Dialog>
-    </div>
+    </Box>
   )
 }
 

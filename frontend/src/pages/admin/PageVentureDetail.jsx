@@ -1,22 +1,17 @@
 import { useState } from 'react'
-import { Link as RouterLink, useLoaderData } from 'react-router'
+import { useLoaderData } from 'react-router'
 
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Breadcrumbs from '@mui/material/Breadcrumbs'
-import Chip from '@mui/material/Chip'
-import Container from '@mui/material/Container'
-import Grid from '@mui/material/Grid'
-import Link from '@mui/material/Link'
-import Paper from '@mui/material/Paper'
-import Tab from '@mui/material/Tab'
-import Tabs from '@mui/material/Tabs'
-import Typography from '@mui/material/Typography'
+import { Alert, Box, Link, Tab, Tabs, Typography } from '@mui/material'
 
-import CustomizedTable from '../../components/Table'
-import BiWeekly from './PageReportBiWeekly'
+import EmptyState from '../../components/EmptyState'
 import KPIReview from '../../components/KPIReview'
+import PageHeader from '../../components/PageHeader'
+import SectionCard from '../../components/SectionCard'
+import CustomizedTable from '../../components/Table'
+import { PeopleIcon } from '../../components/icons'
 import { normalizeWebsite } from '../../components/proposalFormConfig.js'
+import { formatDate } from '../../components/kpiStatus'
+import BiWeekly from './PageReportBiWeekly'
 
 const founderColumns = [
   { key: 'username', label: 'Founder' },
@@ -25,24 +20,14 @@ const founderColumns = [
 ]
 const pastFounderColumns = [...founderColumns, { key: 'leftAt', label: 'Left' }]
 
-const formatDate = value => {
-  if (!value) return '-'
-
-  return new Date(value).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-function DetailItem({ label, value }) {
+function Fact({ label, children }) {
   return (
-    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-      <Typography variant="caption" color="text.secondary">
+    <Box>
+      <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body1">{value || '-'}</Typography>
-    </Grid>
+      <Typography variant="body1">{children || '-'}</Typography>
+    </Box>
   )
 }
 
@@ -56,10 +41,6 @@ export default function PageVentureDetail() {
     kpis = [],
   } = useLoaderData()
 
-  const handleTabChange = (event, newValue) => {
-    setTabIndex(newValue)
-  }
-
   const toRow = founder => ({
     ...founder,
     joinedAt: formatDate(founder.joinedAt),
@@ -67,214 +48,111 @@ export default function PageVentureDetail() {
   })
 
   return (
-    <Box sx={{ minHeight: '100vh', py: 2 }}>
-      <Container maxWidth="lg">
-        <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
-          <Link
-            component={RouterLink}
-            underline="hover"
-            color="inherit"
-            to="/admin"
-          >
-            Overview
-          </Link>
-          <Link
-            component={RouterLink}
-            underline="hover"
-            color="inherit"
-            to="/admin/venture"
-          >
-            Startups
-          </Link>
-          <Typography color="text.primary">
-            {venture?.name || 'Startup'}
-          </Typography>
-        </Breadcrumbs>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Overview', to: '/admin' },
+          { label: 'Startups', to: '/admin/venture' },
+          { label: venture?.name || 'Startup' },
+        ]}
+        title={venture.name}
+        subtitle={venture.description}
+      />
 
-        {/* Top Profile Header Section */}
-        <Paper
-          elevation={0}
+      <SectionCard sx={{ mb: { xs: 2, sm: 3 } }}>
+        <Box
           sx={{
-            p: 4,
-            mb: 3,
-            borderRadius: 2,
-            border: 1,
-            borderColor: 'divider',
+            display: 'grid',
+            gap: 3,
+            gridTemplateColumns: {
+              xs: 'repeat(2, minmax(0, 1fr))',
+              md: 'repeat(6, minmax(0, 1fr))',
+            },
           }}
         >
-          <Grid
-            container
-            spacing={2}
-            sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
-          >
-            {/* Left: Name */}
-            <Grid size={{ xs: 12, sm: 7 }}>
-              <Typography
-                variant="h4"
-                component="h1"
-                fontWeight="bold"
-                gutterBottom
+          <Fact label="Stage">{venture.stage}</Fact>
+          <Fact label="Campus">{venture.campus}</Fact>
+          <Fact label="Industry">{venture.industry}</Fact>
+          <Fact label="Team">{founders.length}</Fact>
+          <Fact label="Created">{formatDate(venture.createdAt)}</Fact>
+          <Fact label="Website">
+            {venture.website && (
+              <Link
+                href={normalizeWebsite(venture.website)}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ wordBreak: 'break-all' }}
               >
-                {venture.name}
-              </Typography>
-            </Grid>
-
-            {/* Right: Stage, Campus, Industry Chips */}
-            <Grid size={{ xs: 12, sm: 5 }} sx={{ textAlign: { sm: 'right' } }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: 1,
-                  justifyContent: { sm: 'flex-end' },
-                  flexWrap: 'wrap',
-                }}
-              >
-                {venture.stage && (
-                  <Chip
-                    label={`Stage: ${venture.stage}`}
-                    color="primary"
-                    variant="outlined"
-                  />
-                )}
-                {venture.campus && (
-                  <Chip
-                    label={`Campus: ${venture.campus}`}
-                    color="secondary"
-                    variant="outlined"
-                  />
-                )}
-                {venture.industry && (
-                  <Chip
-                    label={`Industry: ${venture.industry}`}
-                    variant="outlined"
-                  />
-                )}
-              </Box>
-            </Grid>
-
-            {/* Description */}
-            {venture.description && (
-              <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
-                <Typography
-                  variant="body1"
-                  color="text.secondary"
-                  sx={{ maxWidth: '900px', lineHeight: 1.6 }}
-                >
-                  {venture.description}
-                </Typography>
-              </Grid>
+                {venture.website}
+              </Link>
             )}
+          </Fact>
+        </Box>
+      </SectionCard>
 
-            {/* Details row */}
-            <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
-              <Grid container spacing={2}>
-                <DetailItem
-                  label="WEBSITE"
-                  value={
-                    venture.website ? (
-                      <Link
-                        href={normalizeWebsite(venture.website)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        underline="hover"
-                      >
-                        {venture.website}
-                      </Link>
-                    ) : null
-                  }
-                />
-                <DetailItem label="TEAM SIZE" value={founders.length} />
-                <DetailItem
-                  label="CREATED"
-                  value={formatDate(venture.createdAt)}
-                />
-              </Grid>
-            </Grid>
-          </Grid>
-        </Paper>
+      <Tabs
+        value={tabIndex}
+        onChange={(_, value) => setTabIndex(value)}
+        aria-label="Startup sections"
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab label={`Founders (${founders.length})`} />
+        <Tab label={`KPIs (${kpis.length})`} />
+        <Tab label="Bi-weekly" />
+      </Tabs>
 
-        {/* Tab Navigation & Content Section */}
-        <Paper
-          elevation={0}
-          sx={{ borderRadius: 2, border: 1, borderColor: 'divider' }}
+      {tabIndex === 0 && (
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 3,
+            gridTemplateColumns: 'minmax(0, 1fr)',
+          }}
         >
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3, pt: 1 }}>
-            <Tabs
-              value={tabIndex}
-              onChange={handleTabChange}
-              aria-label="venture detail navigation tabs"
-              textColor="primary"
-              indicatorColor="primary"
-            >
-              <Tab
-                label="Founders"
-                sx={{ fontWeight: 'bold', fontSize: '1rem' }}
+          {founders.length ? (
+            <CustomizedTable
+              columnNames={founderColumns}
+              data={founders.map(toRow)}
+              targetRoute="/admin/profile"
+            />
+          ) : (
+            <SectionCard>
+              <EmptyState
+                icon={PeopleIcon}
+                title="No active founders"
+                description="Founders appear here when a proposal is approved or a join request is accepted."
               />
-              <Tab label="KPIs" sx={{ fontWeight: 'bold', fontSize: '1rem' }} />
-              <Tab
-                label="Bi-weekly"
-                sx={{ fontWeight: 'bold', fontSize: '1rem' }}
+            </SectionCard>
+          )}
+
+          {pastFounders.length > 0 && (
+            <Box>
+              <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
+                Past Founders
+              </Typography>
+              <CustomizedTable
+                columnNames={pastFounderColumns}
+                data={pastFounders.map(toRow)}
+                targetRoute="/admin/profile"
               />
-            </Tabs>
-          </Box>
+            </Box>
+          )}
+        </Box>
+      )}
 
-          {/* Tab Panel Content */}
-          <Box sx={{ p: 4 }}>
-            {tabIndex === 0 && (
-              <Box>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  Founders
-                </Typography>
+      {tabIndex === 1 && (
+        <KPIReview kpis={kpis} venture={venture} founders={founders} />
+      )}
 
-                {founders.length ? (
-                  <CustomizedTable
-                    columnNames={founderColumns}
-                    data={founders.map(toRow)}
-                    targetRoute="/admin/profile"
-                  />
-                ) : (
-                  <Alert severity="info">
-                    This venture has no active founders right now.
-                  </Alert>
-                )}
-
-                {pastFounders.length > 0 && (
-                  <Box sx={{ mt: 4 }}>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                      Past founders
-                    </Typography>
-
-                    <CustomizedTable
-                      columnNames={pastFounderColumns}
-                      data={pastFounders.map(toRow)}
-                      targetRoute="/admin/profile"
-                    />
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            {tabIndex === 1 && (
-              <Box>
-                <KPIReview kpis={kpis} venture={venture} founders={founders} />
-              </Box>
-            )}
-
-            {tabIndex === 2 && (
-              <Box>
-                {biweekly ? (
-                  <BiWeekly data={biweekly} />
-                ) : (
-                  <Alert severity="warning">
-                    Bi-weekly reports for this startup could not be loaded.
-                    Refresh the page to try again.
-                  </Alert>
-                )}
-              </Box>
-            )}
-          </Box>
-        </Paper>
-      </Container>
+      {tabIndex === 2 &&
+        (biweekly ? (
+          <BiWeekly data={biweekly} />
+        ) : (
+          <Alert severity="warning">
+            Bi-weekly reports for this startup could not be loaded. Refresh the
+            page to try again.
+          </Alert>
+        ))}
     </Box>
   )
 }

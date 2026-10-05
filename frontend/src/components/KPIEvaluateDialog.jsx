@@ -1,34 +1,20 @@
 import { useState } from 'react'
 import {
+  Alert,
   Box,
-  Typography,
   Button,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
-  TextField,
-  MenuItem,
-  CircularProgress,
-  Chip,
+  DialogContent,
+  DialogTitle,
   Divider,
-  Alert,
+  Link,
+  MenuItem,
+  TextField,
+  Typography,
 } from '@mui/material'
-import RateReviewIcon from '@mui/icons-material/RateReview'
-import DownloadIcon from '@mui/icons-material/Download'
 
-const formatDate = dateStr => {
-  if (!dateStr) return '-'
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return '-'
-  }
-}
+import { formatDate } from './kpiStatus'
 
 // What a KPI can become from each status; mirrors EVALUATION_TRANSITIONS on
 // the server. A draft hasn't been submitted, so it has no decisions.
@@ -47,8 +33,23 @@ const DECISION_LABELS = {
 
 const SUBMIT_LABELS = {
   ACCEPTED: 'Approve KPI',
-  GRADED: 'Submit grade',
+  GRADED: 'Submit Grade',
   REJECTED: 'Reject KPI',
+}
+
+function Row({ label, children }) {
+  return (
+    <Box
+      sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 1 }}
+    >
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ textAlign: 'right' }}>
+        {children}
+      </Typography>
+    </Box>
+  )
 }
 
 const isValidScore = value =>
@@ -104,236 +105,133 @@ export default function KPIEvaluateDialog({
     })
   }
 
+  const owner = founder?.username || kpi?.founder?.username || 'Entire startup'
+  const ventureName = venture?.name || kpi?.venture?.name
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700 }}>
-        {evalStatus === 'GRADED' ? 'Grade KPI' : 'Review KPI'}: {kpi?.title}
+      <DialogTitle>
+        {evalStatus === 'GRADED' ? 'Grade' : 'Review'} “{kpi?.title}”
       </DialogTitle>
-      <DialogContent dividers>
-        {/* KPI Overview & Submission Details */}
+      <DialogContent>
         <Box
           sx={{
-            mb: 2.5,
+            mb: 3,
             p: 2,
-            backgroundColor: 'background.default',
-            borderRadius: 2,
-            border: 1,
-            borderColor: 'divider',
+            borderRadius: '14px',
+            bgcolor: 'background.default',
           }}
         >
-          <Box sx={{ mb: 1.5 }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block' }}
-            >
-              Owner:{' '}
-              <strong>
-                {founder?.username ||
-                  kpi?.founder?.username ||
-                  'Entire startup'}
-              </strong>{' '}
-              {venture?.name || kpi?.venture?.name
-                ? `(${venture?.name || kpi?.venture?.name})`
-                : ''}
-            </Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block' }}
-            >
-              Due Date: <strong>{formatDate(kpi?.dueDate)}</strong> | Submission
-              Date:{' '}
-              <strong>
-                {formatDate(kpi?.submissionDate || kpi?.evidence?.submittedAt)}
-              </strong>
-            </Typography>
-          </Box>
+          <Row label="Owner">
+            {owner}
+            {ventureName ? ` · ${ventureName}` : ''}
+          </Row>
+          <Divider />
+          <Row label="Due">{formatDate(kpi?.dueDate)}</Row>
+          <Divider />
+          <Row label="Submitted">
+            {formatDate(kpi?.submissionDate || kpi?.evidence?.submittedAt)}
+          </Row>
+          <Divider />
+          <Row label="Achieved">
+            {kpi?.actualValue || (
+              <Box component="span" sx={{ color: 'text.secondary' }}>
+                Not recorded
+              </Box>
+            )}
+          </Row>
+          {hasEvidenceFile && (
+            <>
+              <Divider />
+              <Row label="Evidence">
+                <Link href={`/api/kpis/${kpi?._id}/evidence/download`} download>
+                  {kpi?.evidence?.fileName || 'Download file'}
+                </Link>
+              </Row>
+            </>
+          )}
 
           {kpi?.description && (
-            <Box sx={{ mb: 1.5 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600 }}
-              >
-                Description:
+            <>
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5 }}>
+                Description
               </Typography>
-              <Typography
-                variant="body2"
-                sx={{ whiteSpace: 'pre-line', color: 'text.primary' }}
-              >
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
                 {kpi.description}
               </Typography>
-            </Box>
+            </>
           )}
 
           {kpi?.subKPIs?.length > 0 && (
-            <Box sx={{ mb: 1.5 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}
-              >
-                SubKPIs:
+            <>
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5 }}>
+                Sub-KPIs
               </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              <Box component="ol" sx={{ m: 0, pl: 2.5 }}>
                 {kpi.subKPIs.map((sub, i) => (
-                  <Chip
-                    key={sub._id || i}
-                    label={sub.name}
-                    size="small"
-                    variant="outlined"
-                  />
+                  <Typography key={sub._id || i} component="li" variant="body2">
+                    {sub.name}
+                  </Typography>
                 ))}
               </Box>
-            </Box>
+            </>
           )}
 
-          <Divider sx={{ my: 1.5 }} />
-
-          <Typography
-            variant="subtitle2"
-            sx={{ fontWeight: 700, mb: 1, color: 'primary.dark' }}
-          >
-            Student Submission & Evidence
-          </Typography>
-
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                Achieved Metric / Number:
+          {kpi?.evidence?.supportingText && (
+            <>
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5 }}>
+                Founder&apos;s notes
               </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  fontWeight: 700,
-                  color: kpi?.actualValue ? 'success.dark' : 'text.secondary',
-                }}
-              >
-                {kpi?.actualValue || 'Not recorded'}
+              <Typography variant="body2">
+                {kpi.evidence.supportingText}
               </Typography>
-            </Box>
-
-            {kpi?.evidence?.supportingText && (
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontWeight: 600 }}
-                >
-                  Student Notes:
-                </Typography>
-                <Typography variant="body2" color="text.primary">
-                  {kpi.evidence.supportingText}
-                </Typography>
-              </Box>
-            )}
-
-            {hasEvidenceFile && (
-              <Box
-                sx={{
-                  mt: 1,
-                  pt: 1,
-                  borderTop: '1px dashed',
-                  borderTopColor: 'divider',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 1.5,
-                }}
-              >
-                <Box>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block' }}
-                  >
-                    Attached Evidence File:
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {kpi?.evidence?.fileName || 'Evidence File'}
-                  </Typography>
-                </Box>
-                <Button
-                  component="a"
-                  href={`/api/kpis/${kpi?._id}/evidence/download`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  size="small"
-                  variant="contained"
-                  color="success"
-                  startIcon={<DownloadIcon fontSize="small" />}
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Download Submission File
-                </Button>
-              </Box>
-            )}
-          </Box>
+            </>
+          )}
         </Box>
 
         {decisions.length === 0 ? (
           <Alert severity="info">
-            This KPI is still a draft. You can review it once the student
+            This KPI is still a draft. You can review it once the founder
             submits it for approval.
           </Alert>
         ) : (
-          <>
-            <Box
-              sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2.5 }}
+          <Box sx={{ display: 'grid', gap: 2 }}>
+            <TextField
+              select
+              label="Decision"
+              fullWidth
+              value={evalStatus}
+              onChange={e => setEvalStatus(e.target.value)}
             >
-              <TextField
-                select
-                label="Decision"
-                size="small"
-                fullWidth
-                value={evalStatus}
-                onChange={e => setEvalStatus(e.target.value)}
-              >
-                {decisions.map(value => (
-                  <MenuItem key={value} value={value}>
-                    {DECISION_LABELS[value]}
-                  </MenuItem>
-                ))}
-              </TextField>
+              {decisions.map(value => (
+                <MenuItem key={value} value={value}>
+                  {DECISION_LABELS[value]}
+                </MenuItem>
+              ))}
+            </TextField>
 
-              {evalStatus === 'GRADED' && (
-                <TextField
-                  label="Score (0–100)"
-                  type="number"
-                  size="small"
-                  fullWidth
-                  required
-                  value={evalScore}
-                  onChange={e => setEvalScore(e.target.value)}
-                  placeholder="e.g. 85"
-                  slotProps={{ htmlInput: { min: 0, max: 100, step: 1 } }}
-                  error={evalScore !== '' && scoreMissing}
-                  helperText={
-                    evalScore !== '' && scoreMissing
-                      ? 'Enter a score from 0 to 100'
-                      : 'Required to grade the KPI'
-                  }
-                />
-              )}
-            </Box>
+            {evalStatus === 'GRADED' && (
+              <TextField
+                label="Score (0–100)"
+                type="number"
+                fullWidth
+                required
+                value={evalScore}
+                onChange={e => setEvalScore(e.target.value)}
+                slotProps={{ htmlInput: { min: 0, max: 100, step: 1 } }}
+                error={evalScore !== '' && scoreMissing}
+                helperText={
+                  evalScore !== '' && scoreMissing
+                    ? 'Enter a score from 0 to 100.'
+                    : 'Required to grade the KPI.'
+                }
+              />
+            )}
 
             <TextField
               label={
                 evalStatus === 'REJECTED'
-                  ? 'Reason and guidance for the student'
+                  ? 'Reason and guidance for the founder'
                   : 'Feedback'
               }
               multiline
@@ -342,41 +240,28 @@ export default function KPIEvaluateDialog({
               required={evalStatus === 'REJECTED'}
               value={evalFeedback}
               onChange={e => setEvalFeedback(e.target.value)}
-              placeholder={
-                evalStatus === 'REJECTED'
-                  ? 'Explain why this KPI is rejected and how the student should improve it...'
-                  : 'Feedback, observations or advice...'
-              }
               helperText={
                 evalStatus === 'REJECTED'
-                  ? 'Required. Visible to the student.'
-                  : 'Visible to the student.'
+                  ? 'Required. The founder sees this when they revise the KPI.'
+                  : 'The founder sees this.'
               }
             />
-          </>
+          </Box>
         )}
       </DialogContent>
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} disabled={saving} color="inherit">
+      <DialogActions>
+        <Button variant="outlined" onClick={onClose} disabled={saving}>
           {decisions.length ? 'Cancel' : 'Close'}
         </Button>
         {decisions.length > 0 && (
           <Button
             variant="contained"
-            color={
-              evalStatus === 'REJECTED'
-                ? 'error'
-                : evalStatus === 'GRADED'
-                  ? 'primary'
-                  : 'success'
-            }
+            color={evalStatus === 'REJECTED' ? 'error' : 'primary'}
             onClick={handleSubmit}
-            disabled={saving || !canSubmit}
-            startIcon={
-              saving ? <CircularProgress size={16} /> : <RateReviewIcon />
-            }
+            loading={saving}
+            disabled={!canSubmit}
           >
-            {saving ? 'Saving...' : SUBMIT_LABELS[evalStatus]}
+            {SUBMIT_LABELS[evalStatus]}
           </Button>
         )}
       </DialogActions>

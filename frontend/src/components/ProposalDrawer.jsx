@@ -5,15 +5,11 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
-import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemText from '@mui/material/ListItemText'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
-import CloseIcon from '@mui/icons-material/Close'
-import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined'
-import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 import { normalizeWebsite } from './proposalFormConfig.js'
 
 const formatDate = value => {
@@ -31,22 +27,12 @@ function Field({ label, value, isLink }) {
 
   return (
     <Box sx={{ mb: 2 }}>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ fontWeight: 600, letterSpacing: 0.5 }}
-      >
+      <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body1" sx={{ mt: 0.5 }}>
+      <Typography variant="body1" sx={{ mt: 0.25 }}>
         {href ? (
-          <Link
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            underline="hover"
-            color="primary"
-          >
+          <Link href={href} target="_blank" rel="noopener noreferrer">
             {value}
           </Link>
         ) : (
@@ -60,15 +46,7 @@ function Field({ label, value, isLink }) {
 function Section({ title, children }) {
   return (
     <Box sx={{ mt: 3, '&:first-of-type': { mt: 1 } }}>
-      <Typography
-        variant="subtitle2"
-        sx={{
-          fontWeight: 700,
-          color: 'primary.main',
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-        }}
-      >
+      <Typography variant="h6" component="h3">
         {title}
       </Typography>
       <Divider sx={{ my: 1.5 }} />
@@ -105,21 +83,12 @@ export default function ProposalDrawer({
       maxWidth="md"
       fullWidth
       scroll="paper"
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-          maxHeight: '90vh',
-        },
-      }}
+      slotProps={{ paper: { sx: { maxHeight: '90vh' } } }}
     >
       {proposal && (
         <>
-          <DialogTitle sx={{ m: 0, p: 3, pb: 2, position: 'relative' }}>
-            <Typography
-              variant="h5"
-              component="div"
-              sx={{ fontWeight: 700, pr: 4 }}
-            >
+          <DialogTitle>
+            <Typography variant="h5" component="div">
               {proposal.startupName}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -127,95 +96,68 @@ export default function ProposalDrawer({
               <strong>{proposal.submittedBy?.username || '-'}</strong> on{' '}
               {formatDate(proposal.createdAt)}
             </Typography>
-            <IconButton
-              aria-label="close"
-              onClick={onClose}
-              sx={{
-                position: 'absolute',
-                right: 16,
-                top: 16,
-                color: theme => theme.palette.grey[500],
-              }}
-            >
-              <CloseIcon />
-            </IconButton>
           </DialogTitle>
 
-          <DialogContent dividers sx={{ p: 3 }}>
+          <DialogContent dividers>
             <Section title="The Idea">
-              <Field label="PROBLEM" value={proposal.description} />
-              <Field label="TARGET CUSTOMER" value={proposal.targetCustomer} />
+              <Field label="Problem" value={proposal.description} />
+              <Field label="Target customer" value={proposal.targetCustomer} />
               <Field
-                label="INDUSTRY"
+                label="Industry"
                 value={proposal.industry?.name || proposal.industryName}
               />
-              <Field label="CAMPUS" value={proposal.campus?.name} />
+              <Field label="Campus" value={proposal.campus?.name} />
             </Section>
 
             <Section title="Where It Stands">
               <Field
-                label="STAGE"
+                label="Stage"
                 value={proposal.stageLabel ?? proposal.stage}
               />
               <Field
-                label="CURRENT TRACTION"
+                label="Current traction"
                 value={proposal.currentTraction}
               />
-              <Field label="BUSINESS MODEL" value={proposal.businessModel} />
+              <Field label="Business model" value={proposal.businessModel} />
               <Field
-                label="ACHIEVEMENTS TILL NOW"
+                label="Achievements so far"
                 value={proposal.achievementsTillNow}
               />
             </Section>
 
             <Section title="Assumptions & Risks">
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600, letterSpacing: 0.5 }}
-              >
-                ASSUMPTIONS
+              <Typography variant="body2" color="text.secondary">
+                Assumptions
               </Typography>
               <Box sx={{ mb: 2, mt: 0.5 }}>
                 <ItemList items={proposal.assumptions} />
               </Box>
 
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600, letterSpacing: 0.5 }}
-              >
-                RISKS
+              <Typography variant="body2" color="text.secondary">
+                Risks
               </Typography>
               <Box sx={{ mb: 2, mt: 0.5 }}>
                 <ItemList items={proposal.risks} />
               </Box>
 
-              <Field label="SIX-MONTH GOALS" value={proposal.sixMonthGoals} />
+              <Field label="Six-month goals" value={proposal.sixMonthGoals} />
             </Section>
 
             <Section title="Execution">
-              <Field label="TECH STACK" value={proposal.techStack} />
-              <Field label="CAPITAL STATUS" value={proposal.capitalStatus} />
+              <Field label="Tech stack" value={proposal.techStack} />
+              <Field label="Capital status" value={proposal.capitalStatus} />
               <Field
-                label="WEEKLY COMMITMENT"
+                label="Weekly commitment"
                 value={
                   proposal.weeklyHours ? `${proposal.weeklyHours} hours` : null
                 }
               />
-              <Field label="WEBSITE" value={proposal.website} isLink />
+              <Field label="Website" value={proposal.website} isLink />
             </Section>
           </DialogContent>
 
-          <DialogActions
-            sx={{ p: 2.5, px: 3, justifyContent: 'space-between' }}
-          >
-            <Button
-              onClick={onClose}
-              disabled={busy}
-              variant="outlined"
-              color="inherit"
-            >
+          <DialogActions sx={{ justifyContent: 'space-between' }}>
+            <Button onClick={onClose} disabled={busy} variant="text">
               Close
             </Button>
 
@@ -224,16 +166,13 @@ export default function ProposalDrawer({
                 variant="outlined"
                 color="error"
                 disabled={busy}
-                startIcon={<CancelOutlinedIcon />}
                 onClick={() => onReject(proposal)}
               >
                 Reject
               </Button>
               <Button
                 variant="contained"
-                color="primary"
                 disabled={busy}
-                startIcon={<CheckCircleOutlinedIcon />}
                 onClick={() => onApprove(proposal)}
               >
                 Approve

@@ -1,7 +1,23 @@
 import { useState } from 'react'
-import { useLoaderData } from 'react-router'
+import { useLoaderData, useRevalidator } from 'react-router'
+import { canManageVentures } from '@nst/shared/permissions.js'
 
-import { Alert, Box, Link, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Link,
+  MenuItem,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material'
 
 import EmptyState from '../../components/EmptyState'
 import KPIReview from '../../components/KPIReview'
@@ -12,6 +28,8 @@ import { PeopleIcon } from '../../components/icons'
 import { normalizeWebsite } from '../../components/proposalFormConfig.js'
 import { formatDate } from '../../components/kpiStatus'
 import BiWeekly from './PageReportBiWeekly'
+import { getMentors, setVentureMentor } from '../../api/venture'
+import useAccess from '../../hooks/useAccess'
 
 const founderColumns = [
   { key: 'username', label: 'Founder' },
@@ -28,6 +46,110 @@ function Fact({ label, children }) {
       </Typography>
       <Typography variant="body1">{children || '-'}</Typography>
     </Box>
+  )
+}
+
+// Who mentors the startup, and (for the board) a way to change it.
+function MentorCard({ venture }) {
+  const { actor } = useAccess()
+  const revalidator = useRevalidator()
+  const [open, setOpen] = useState(false)
+  const [mentors, setMentors] = useState(null)
+  const [choice, setChoice] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const mentor = venture.mentor
+
+  const openDialog = async () => {
+    setChoice(mentor?.id ?? '')
+    setError('')
+    setOpen(true)
+    const result = await getMentors()
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setMentors(result.mentors)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const result = await setVentureMentor(venture.id, choice)
+    setSaving(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setOpen(false)
+    revalidator.revalidate()
+  }
+
+  return (
+    <>
+      <SectionCard
+        title="Mentor"
+        subtitle={
+          mentor
+            ? `${mentor.username} · ${mentor.email}`
+            : 'No mentor yet. Only the academic board can review this startup until one is assigned.'
+        }
+        action={
+          canManageVentures(actor) && (
+            <Button variant="outlined" onClick={openDialog}>
+              {mentor ? 'Change Mentor' : 'Assign Mentor'}
+            </Button>
+          )
+        }
+        sx={{ mb: { xs: 2, sm: 3 } }}
+      />
+
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Mentor for {venture.name}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            The mentor reviews this startup&apos;s KPIs and bi-weekly reports.
+          </DialogContentText>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          <TextField
+            select
+            fullWidth
+            label="Mentor"
+            value={mentors ? choice : ''}
+            disabled={!mentors}
+            onChange={event => setChoice(event.target.value)}
+          >
+            <MenuItem value="">No mentor</MenuItem>
+            {(mentors ?? []).map(option => (
+              <MenuItem key={option.id} value={option.id}>
+                {option.username} · {option.email}
+              </MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            loading={saving}
+            disabled={!mentors}
+            onClick={save}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }
 
@@ -89,6 +211,8 @@ export default function PageVentureDetail() {
           </Fact>
         </Box>
       </SectionCard>
+
+      <MentorCard venture={venture} />
 
       <Tabs
         value={tabIndex}

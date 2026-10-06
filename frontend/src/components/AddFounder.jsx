@@ -25,6 +25,8 @@ const selectLabels = {
   industry: 'Industry',
   batch: 'Batch',
   stage: 'Stage',
+  // Offered only to the board; a mentor's new startup is theirs.
+  mentorId: 'Mentor',
 }
 
 function AddFounder() {
@@ -97,37 +99,39 @@ function AddFounder() {
             />
           ))}
 
-          {Object.keys(selectLabels).map(key => (
-            <FormControl
-              key={key}
-              fullWidth
-              required
-              margin="normal"
-              disabled={saving}
-              error={Boolean(fieldErrors[key])}
-            >
-              <InputLabel id={`${labelId}-${key}`}>
-                {selectLabels[key]}
-              </InputLabel>
-
-              <Select
-                labelId={`${labelId}-${key}`}
-                label={selectLabels[key]}
-                name={key}
-                defaultValue=""
+          {Object.keys(selectLabels)
+            .filter(key => options[key])
+            .map(key => (
+              <FormControl
+                key={key}
+                fullWidth
+                required
+                margin="normal"
+                disabled={saving}
+                error={Boolean(fieldErrors[key])}
               >
-                {options[key].map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
+                <InputLabel id={`${labelId}-${key}`}>
+                  {selectLabels[key]}
+                </InputLabel>
 
-              {fieldErrors[key] && (
-                <FormHelperText>{fieldErrors[key]}</FormHelperText>
-              )}
-            </FormControl>
-          ))}
+                <Select
+                  labelId={`${labelId}-${key}`}
+                  label={selectLabels[key]}
+                  name={key}
+                  defaultValue=""
+                >
+                  {options[key].map(option => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+
+                {fieldErrors[key] && (
+                  <FormHelperText>{fieldErrors[key]}</FormHelperText>
+                )}
+              </FormControl>
+            ))}
 
           <Button
             fullWidth

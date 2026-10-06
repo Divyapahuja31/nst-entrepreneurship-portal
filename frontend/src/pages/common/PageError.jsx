@@ -62,10 +62,15 @@ const normalizeError = error => {
   }
 }
 
-export function ErrorView({ status, message }) {
+// title and detail replace the status's standard wording.
+export function ErrorView({ status, message, title, detail }) {
   const navigate = useNavigate()
 
-  const info = STATUS_INFO[status] || FALLBACK
+  const info = {
+    ...(STATUS_INFO[status] || FALLBACK),
+    ...(title && { title }),
+    ...(detail && { detail }),
+  }
 
   return (
     <Box sx={{ p: 4, maxWidth: 600, mx: 'auto' }}>

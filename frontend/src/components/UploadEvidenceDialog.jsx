@@ -14,6 +14,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import { lockReason } from './kpiStatus'
 
 export default function UploadEvidenceDialog({
   open,
@@ -31,9 +32,9 @@ export default function UploadEvidenceDialog({
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
 
-  const isPastDue = Boolean(kpi?.dueDate && new Date(kpi.dueDate) < new Date())
-  const isGraded = kpi?.status === 'GRADED'
-  const isLocked = isPastDue || isGraded
+  // Locked, graded or past its due date: the same rules the API applies.
+  const lockedBecause = kpi ? lockReason(kpi) : null
+  const isLocked = Boolean(lockedBecause)
 
   if (open !== prevOpen || kpi !== prevKpi) {
     setPrevOpen(open)
@@ -120,9 +121,7 @@ export default function UploadEvidenceDialog({
       <DialogContent sx={{ p: 3, pt: 3 }}>
         {isLocked && (
           <Alert severity="error" sx={{ mb: 2 }}>
-            {isGraded
-              ? 'This KPI has already been graded. Submissions are locked.'
-              : 'The deadline for this KPI has passed. Submissions are closed.'}
+            {lockedBecause}
           </Alert>
         )}
 

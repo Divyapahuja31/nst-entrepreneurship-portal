@@ -14,16 +14,13 @@ import {
   Typography,
 } from '@mui/material'
 
+import { EVALUATION_TRANSITIONS } from '@nst/shared/permissions.js'
+
 import { formatDate } from './kpiStatus'
 
-// What a KPI can become from each status; mirrors EVALUATION_TRANSITIONS on
-// the server. A draft hasn't been submitted, so it has no decisions.
-const DECISIONS = {
-  WAITING_FOR_APPROVAL: ['ACCEPTED', 'REJECTED'],
-  REJECTED: ['ACCEPTED', 'REJECTED'],
-  ACCEPTED: ['GRADED'],
-  GRADED: ['GRADED'],
-}
+// What a KPI can become from each status, the same rules the API applies.
+// A draft hasn't been submitted, so it has no decisions.
+const DECISIONS = EVALUATION_TRANSITIONS
 
 const DECISION_LABELS = {
   ACCEPTED: 'Accept (approve the KPI proposal)',
@@ -64,6 +61,9 @@ export default function KPIEvaluateDialog({
   venture,
   onSave,
   saving = false,
+  // Set when the viewer may not review this KPI (it is locked, or not
+  // their startup): the dialog then only shows the KPI and this reason.
+  readOnlyReason = null,
 }) {
   const [prevOpen, setPrevOpen] = useState(false)
   const [prevKpi, setPrevKpi] = useState(null)
@@ -87,7 +87,7 @@ export default function KPIEvaluateDialog({
     }
   }
 
-  const decisions = DECISIONS[kpi?.status] ?? []
+  const decisions = readOnlyReason ? [] : (DECISIONS[kpi?.status] ?? [])
   const scoreMissing = evalStatus === 'GRADED' && !isValidScore(evalScore)
   const reasonMissing = evalStatus === 'REJECTED' && !evalFeedback.trim()
   const canSubmit = Boolean(evalStatus) && !scoreMissing && !reasonMissing
@@ -191,8 +191,8 @@ export default function KPIEvaluateDialog({
 
         {decisions.length === 0 ? (
           <Alert severity="info">
-            This KPI is still a draft. You can review it once the founder
-            submits it for approval.
+            {readOnlyReason ||
+              'This KPI is still a draft. You can review it once the founder submits it for approval.'}
           </Alert>
         ) : (
           <Box sx={{ display: 'grid', gap: 2 }}>

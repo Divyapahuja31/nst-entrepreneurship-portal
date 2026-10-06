@@ -1,3 +1,4 @@
+import { STAFF_ROLES } from '@nst/shared/permissions.js'
 import { api } from './client'
 import toError from './toError'
 
@@ -87,5 +88,6 @@ export const resetPassword = async payload => {
   }
 }
 
+// Staff start on the staff overview; students on their own.
 export const homePathFor = user =>
-  user?.role?.name === 'admin' ? '/admin' : '/'
+  STAFF_ROLES.includes(user?.role?.name) ? '/admin' : '/'

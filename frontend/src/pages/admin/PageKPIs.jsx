@@ -21,7 +21,14 @@ import {
 } from '../../components/icons'
 import { KPI_STATUS, formatDate } from '../../components/kpiStatus'
 import KPIEvaluateDialog from '../../components/KPIEvaluateDialog'
-import { evaluateKPI } from '../../api/kpi'
+import KpiLockAction from '../../components/KpiLockAction'
+import {
+  reviewBlockedReason,
+  staffKpiContext,
+} from '../../components/kpiAccess'
+import { evaluateKPI, lockKPI, unlockKPI } from '../../api/kpi'
+import useAccess from '../../hooks/useAccess'
+import { canEvaluateKpi } from '@nst/shared/permissions.js'
 
 const columns = [
   { key: 'title', label: 'KPI' },
@@ -36,6 +43,7 @@ const STATUSES = Object.keys(KPI_STATUS)
 export default function PageKPIs() {
   const { kpis } = useLoaderData()
   const revalidator = useRevalidator()
+  const { actor, isMentor } = useAccess()
 
   const [ownerFilter, setOwnerFilter] = React.useState('')
   const [status, setStatus] = React.useState('')
@@ -91,6 +99,21 @@ export default function PageKPIs() {
     }
   }
 
+  const setLock = async (kpiId, locked) => {
+    setBusyId(kpiId)
+    setError('')
+    setSuccess('')
+    try {
+      await (locked ? lockKPI(kpiId) : unlockKPI(kpiId))
+      setSuccess(locked ? 'KPI locked. Its grade is final.' : 'KPI unlocked.')
+      revalidator.revalidate()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const pendingCount = kpis.filter(
     kpi => kpi.status === 'WAITING_FOR_APPROVAL'
   ).length
@@ -101,6 +124,9 @@ export default function PageKPIs() {
   const renderRowActions = row => {
     const kpi = row.kpi
     const isBusy = busyId === row.id
+    // A mentor reviews until the KPI is locked; the board always may.
+    const ctx = staffKpiContext(kpi)
+    const mayReview = canEvaluateKpi(actor, ctx)
 
     return (
       <Stack
@@ -111,7 +137,14 @@ export default function PageKPIs() {
         <Button variant="text" onClick={() => openReview(kpi)}>
           View
         </Button>
-        {kpi.status === 'WAITING_FOR_APPROVAL' && (
+        <KpiLockAction
+          actor={actor}
+          ctx={ctx}
+          busy={isBusy}
+          onLock={() => setLock(row.id, true)}
+          onUnlock={() => setLock(row.id, false)}
+        />
+        {mayReview && kpi.status === 'WAITING_FOR_APPROVAL' && (
           <>
             <Button
               variant="outlined"
@@ -132,7 +165,7 @@ export default function PageKPIs() {
             </Button>
           </>
         )}
-        {kpi.status === 'ACCEPTED' && (
+        {mayReview && kpi.status === 'ACCEPTED' && (
           <Button
             variant="outlined"
             disabled={isBusy}
@@ -141,7 +174,7 @@ export default function PageKPIs() {
             Grade
           </Button>
         )}
-        {kpi.status === 'REJECTED' && (
+        {mayReview && kpi.status === 'REJECTED' && (
           <Button
             variant="outlined"
             disabled={isBusy}
@@ -167,7 +200,11 @@ export default function PageKPIs() {
     <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
       <PageHeader
         title="KPIs"
-        subtitle="Every KPI across all startups, whether it belongs to a startup or one of its founders."
+        subtitle={
+          isMentor
+            ? 'Every KPI of the startups you mentor, whether it belongs to a startup or one of its founders.'
+            : 'Every KPI across all startups, whether it belongs to a startup or one of its founders.'
+        }
       />
 
       {success && (
@@ -280,6 +317,9 @@ export default function PageKPIs() {
         founder={evaluating?.founder}
         venture={evaluating?.venture}
         saving={Boolean(busyId)}
+        readOnlyReason={
+          evaluating && reviewBlockedReason(actor, staffKpiContext(evaluating))
+        }
         onClose={() => setEvaluating(null)}
         onSave={async payload => {
           setEvaluating(null)

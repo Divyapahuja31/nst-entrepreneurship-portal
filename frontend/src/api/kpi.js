@@ -45,6 +45,26 @@ export const evaluateKPI = async ({ kpiId, score, status, feedback }) => {
   }
 }
 
+// Locking makes a graded KPI's score final; only the board can unlock it.
+const setKPILock = async (kpiId, locked) => {
+  try {
+    const { data } = await api.post(
+      `/kpis/${kpiId}/${locked ? 'lock' : 'unlock'}`
+    )
+    return data
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message ||
+        error.message ||
+        `Failed to ${locked ? 'lock' : 'unlock'} KPI`,
+      { cause: error }
+    )
+  }
+}
+
+export const lockKPI = kpiId => setKPILock(kpiId, true)
+export const unlockKPI = kpiId => setKPILock(kpiId, false)
+
 export const submitKPIEvidence = async ({
   kpiId,
   actualValue,

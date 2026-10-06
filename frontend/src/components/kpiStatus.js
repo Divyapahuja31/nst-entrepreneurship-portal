@@ -22,6 +22,7 @@ export const formatDate = value => {
 
 // Why a KPI can't be changed any more, or null if it still can.
 export function lockReason(kpi) {
+  if (kpi.isLocked) return 'This KPI is locked. Its grade is final.'
   if (kpi.status === 'GRADED') return 'Graded KPIs are locked.'
   if (kpi.dueDate && new Date(kpi.dueDate) < new Date()) {
     return 'The deadline has passed, so this KPI is closed.'

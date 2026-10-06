@@ -42,23 +42,28 @@ export const ventureDetailLoader = async ({ params }) => {
 }
 
 export const venturesPageLoader = async () => {
-  const [ventures, applications] = await Promise.all([
+  const [ventures, applications, mentors] = await Promise.all([
     api.get('/ventures'),
     api.get('/admin/applications'),
+    api.get('/admin/mentors'),
   ])
 
   return {
     ventures: ventures.data,
     proposals: applications.data.proposals,
     joinRequests: applications.data.joinRequests,
+    mentors: mentors.data.mentors,
   }
 }
 
-export const reviewProposal = async (proposalId, status, remarks) => {
+// mentorId is who mentors the new startup when the board approves it; a
+// mentor who approves becomes its mentor.
+export const reviewProposal = async (proposalId, status, remarks, mentorId) => {
   try {
     const { data } = await api.patch(`/admin/proposals/${proposalId}/review`, {
       status,
       remarks,
+      mentorId: mentorId || undefined,
     })
 
     return { proposal: data.proposal }
@@ -77,5 +82,26 @@ export const reviewJoinRequest = async (requestId, status) => {
     return { joinRequest: data.joinRequest }
   } catch (err) {
     return toError(err, 'Could not review join request')
+  }
+}
+
+// Active mentor accounts, for choosing who mentors a startup.
+export const getMentors = async () => {
+  try {
+    const { data } = await api.get('/admin/mentors')
+    return { mentors: data.mentors }
+  } catch (err) {
+    return toError(err, 'Could not load mentors')
+  }
+}
+
+export const setVentureMentor = async (ventureId, mentorId) => {
+  try {
+    const { data } = await api.patch(`/admin/ventures/${ventureId}/mentor`, {
+      mentorId: mentorId || null,
+    })
+    return { mentor: data.mentor }
+  } catch (err) {
+    return toError(err, 'Could not assign the mentor')
   }
 }

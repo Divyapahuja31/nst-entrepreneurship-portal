@@ -1,0 +1,14 @@
+{
+  "name": "@nst/shared",
+  "version": "1.0.0",
+  "description": "Rules shared by the API and the UI",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./permissions.js": "./permissions.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "lint": "eslint ."
+  }
+}

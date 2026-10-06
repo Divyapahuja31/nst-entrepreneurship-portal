@@ -46,6 +46,7 @@ import {
   isAllowedEvidenceFile,
   safeEvidenceFileName,
 } from '../utils/evidenceFile.js'
+import { queueLockedKpiEmails } from '../utils/kpiLockEmails.js'
 
 const STUDENT_SETTABLE_STATUSES = ['DRAFT', 'SUBMIT', 'WAITING_FOR_APPROVAL']
 
@@ -565,6 +566,14 @@ const setKPILock = (locked, canChange, refusal) => async (req, res) => {
         success: false,
         message: 'This KPI changed in the meantime. Reload and try again.',
       })
+    }
+
+    // A locked grade is final, so the student hears about it now, and the
+    // mentor or board too after a run of poor grades. The emails go out on
+    // the server after this response, and only for a lock this caller was
+    // allowed to make.
+    if (locked) {
+      queueLockedKpiEmails(updatedKPI._id)
     }
 
     return res.status(200).json({

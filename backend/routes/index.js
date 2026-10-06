@@ -11,6 +11,8 @@ import industryRoutes from './industry.js'
 import stageRoutes from './stage.js'
 import ventures from './venture.js'
 import biweeklyRoutes from './biweekly.js'
+import notificationRoutes from './notification.js'
+import emailPreview from './emailPreview.js'
 const router = Router()
 
 // unprotected routes
@@ -27,5 +29,11 @@ router.use('/industries', requireAuth, industryRoutes)
 router.use('/stages', requireAuth, stageRoutes)
 router.use('/biweekly', requireAuth, biweeklyRoutes)
 router.use('/ventures', requireAuth, ventures)
+router.use('/notifications', requireAuth, notificationRoutes)
+
+// Every email template with sample data, never in production.
+if (process.env.NODE_ENV !== 'production') {
+  router.use('/dev/emails', emailPreview)
+}
 
 export default router

@@ -8,10 +8,28 @@ import KPI from '../models/kpi.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
+import { setEmailProvider } from '../utils/emailProvider.js'
+import { settleEmailJobs } from '../utils/kpiLockEmails.js'
 import { migrateRbac } from '../utils/rbacMigration.js'
 import { signToken } from '../utils/token.js'
 
 process.env.JWT_SECRET ||= 'test-secret'
+
+// app.js loads the real .env, so tests must never reach Resend. Every email
+// lands in `sentEmails` instead; a test can make the next sends fail by
+// setting `emailFailures`.
+export const sentEmails = []
+export const emailFailures = new Set()
+setEmailProvider({
+  name: 'test',
+  sendEmail: async ({ to, subject, html, text }) => {
+    if (emailFailures.has(to)) {
+      return { error: `Mailbox ${to} is unavailable` }
+    }
+    sentEmails.push({ to, subject, html, text })
+    return { messageId: `test-${sentEmails.length}` }
+  },
+})
 
 let mongod = null
 
@@ -21,6 +39,7 @@ export const startDatabase = async () => {
 }
 
 export const stopDatabase = async () => {
+  await settleEmailJobs()
   await mongoose.disconnect()
   await mongod?.stop()
 }
@@ -33,6 +52,9 @@ export const cookieFor = user => `token=${signToken(user)}`
 //   Alpha: mentored by `mentor`, founded by `owner`
 //   Beta:  mentored by `otherMentor`, founded by `outsider`
 export const seed = async () => {
+  await settleEmailJobs()
+  sentEmails.length = 0
+  emailFailures.clear()
   await mongoose.connection.dropDatabase()
   await migrateRbac()
   const roles = Object.fromEntries(

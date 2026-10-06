@@ -10,9 +10,7 @@ Students run startups and track them with KPIs and bi-weekly reports. Mentors an
 
 ```sh
 npm install
-# backend/.env needs MONGODB_URI, JWT_SECRET, GOOGLE_CLIENT_ID,
-# GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, FRONTEND_URL, AWS_*,
-# RESEND_API_KEY and EMAIL_FROM
+cp backend/.env.example backend/.env   # then fill it in
 npm run seed:all -w backend            # roles, campus, batches, industries
 npm run dev                            # backend and frontend together
 ```
@@ -83,6 +81,29 @@ npm run migrate:rbac -w backend
 
 It renames the old `academic board` role to `academic_board`, creates any missing roles, makes accounts without a valid role students and gives every KPI an unlocked flag. Existing admins stay admins.
 
+## Email notifications
+
+Emails go through Resend ([`backend/utils/emailProvider.js`](backend/utils/emailProvider.js)) and need `RESEND_API_KEY` and `EMAIL_FROM` (on a domain verified in Resend). Without them nothing is sent and each attempt is logged as failed. Links in emails point at `APP_URL`, or `FRONTEND_URL` if it isn't set.
+
+| When | Who | Email |
+|---|---|---|
+| A KPI's grade is locked | Its founder, or every active founder for a startup-wide KPI | The result, with score and status |
+| That grade is the second in a row below 70% | The startup's mentor | Follow-up (above 40%) or low score (40% or below) |
+| That grade is the second in a row at 40% or below | Every academic board member | Low-score notification with the student, batch and mentor |
+| Sign-up and forgot password | The account | The 6-digit code |
+
+- Grades count in order of due date, separately for the startup as a whole and for each founder's own KPIs. Once an alert is sent its count starts again from zero ([`kpiEscalation.js`](backend/utils/kpiEscalation.js)).
+- A startup without a mentor has its mentor alerts sent to the board instead, and a board member who already got the low-score alert for that KPI isn't emailed again.
+- The emails go out on the server after a successful lock, never from the browser, and one failed email doesn't stop the others.
+- Every email is logged (the `EmailNotification` model) as pending, then sent or failed. A recipient gets at most one sent email of each type per KPI; a unique index enforces it, and a failed email can be retried. Admins read the whole log at `GET /api/notifications/emails`, anyone else only their own emails.
+- In development, `/api/dev/emails` (also on the Vite port) shows every template with sample data and a score slider.
+
+To create the log's indexes on an existing database, run this once. It's safe to run again.
+
+```sh
+npm run migrate:email -w backend
+```
+
 ## Tests
 
 ```sh
@@ -91,6 +112,7 @@ npm test
 
 - `shared/permissions.test.js` checks every rule against the matrix above, for every role, startup relationship, lock state and status.
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
+- `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
 
 The first run downloads a MongoDB binary for the tests.
 

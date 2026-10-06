@@ -2,16 +2,21 @@ import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
 import { validateSubKPIRequest } from '../utils/kpiValidator.js'
-import {
-  canUserAccessKPI,
-  canUserEditSubKPI,
-  isKPIOpenToMembers,
-} from '../utils/kpiHelper.js'
+import { canEditKpi, kpiLockReason } from '@nst/shared/permissions.js'
+import { kpiContext } from '../utils/access.js'
 
-// Only a KPI's creator adds SubKPIs, and only while they may still access it
-// (a personal KPI is its owner's alone).
-const canAddSubKPI = async (user, kpi) =>
-  String(kpi.createdBy) === String(user.id) && canUserAccessKPI(user, kpi)
+// SubKPIs follow their KPI: whoever may edit the KPI may change its parts.
+// Returns why the caller can't, or null.
+const subKPIChangeError = async (user, kpi) => {
+  if (!kpi) {
+    return 'KPI not found'
+  }
+  const ctx = await kpiContext(user, kpi)
+  if (canEditKpi(user, ctx)) {
+    return null
+  }
+  return kpiLockReason(ctx) ?? 'You are not allowed to change this KPI'
+}
 
 export const createSubKPI = async (req, res) => {
   try {
@@ -36,18 +41,9 @@ export const createSubKPI = async (req, res) => {
       })
     }
 
-    if (!(await canAddSubKPI(req.user, kpi))) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not allowed to modify this KPI',
-      })
-    }
-
-    if (!isKPIOpenToMembers(req.user, kpi)) {
-      return res.status(400).json({
-        success: false,
-        message: 'SubKPIs can only be added to draft, pending or rejected KPIs',
-      })
+    const changeError = await subKPIChangeError(req.user, kpi)
+    if (changeError) {
+      return res.status(403).json({ success: false, message: changeError })
     }
 
     const subKPI = await SubKPI.create({
@@ -113,12 +109,12 @@ export const updateSubKPI = async (req, res) => {
         .json({ success: false, message: 'SubKPI not found' })
     }
 
-    if (!(await canUserEditSubKPI(req.user, subKPI))) {
-      return res.status(403).json({
-        success: false,
-        message:
-          'You can change SubKPIs only while the KPI is a draft, pending or rejected',
-      })
+    const changeError = await subKPIChangeError(
+      req.user,
+      await KPI.findById(subKPI.parentKPI)
+    )
+    if (changeError) {
+      return res.status(403).json({ success: false, message: changeError })
     }
 
     Object.assign(subKPI, updateFields)
@@ -152,12 +148,12 @@ export const deleteSubKPI = async (req, res) => {
         .json({ success: false, message: 'SubKPI not found' })
     }
 
-    if (!(await canUserEditSubKPI(req.user, subKPI))) {
-      return res.status(403).json({
-        success: false,
-        message:
-          'You can delete SubKPIs only while the KPI is a draft, pending or rejected',
-      })
+    const changeError = await subKPIChangeError(
+      req.user,
+      await KPI.findById(subKPI.parentKPI)
+    )
+    if (changeError) {
+      return res.status(403).json({ success: false, message: changeError })
     }
 
     await subKPI.deleteOne()

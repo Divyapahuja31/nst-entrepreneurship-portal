@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { isStaff, isStudent } from '@nst/shared/permissions.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import Founder from '../models/founder.js'
@@ -164,7 +165,7 @@ export const findVenture = async (ventureId, founder, user) => {
   if (founder) {
     return findVentureForUser(founder._id)
   }
-  if (user?.id && user?.role !== 'admin') {
+  if (user?.id && isStudent(user)) {
     return findVentureForUser(user.id)
   }
   return null
@@ -185,7 +186,7 @@ export const findCoFounders = async ventureId => {
 }
 
 export const getTargetFounderId = (user, query = {}, body = {}) => {
-  if (user?.role === 'admin') {
+  if (isStaff(user)) {
     return query.founderId || body.founderId || null
   }
   return user?.id || null
@@ -200,8 +201,7 @@ export const findFounder = async founderId => {
 }
 
 export const resolveVentureAndContext = async (user, query = {}, body = {}) => {
-  const isAdmin = user?.role === 'admin'
-  const ventureId = isAdmin ? query.ventureId || body.ventureId : null
+  const ventureId = isStaff(user) ? query.ventureId || body.ventureId : null
   const requestedFounderId = getTargetFounderId(user, query, body)
   const foundUser = await findFounder(requestedFounderId)
   const venture = await findVenture(ventureId, foundUser, user)

@@ -1,9 +1,8 @@
 import mongoose from 'mongoose'
+import { EVALUATION_TRANSITIONS, isStudent } from '@nst/shared/permissions.js'
 
 import { uploadToS3 } from '../config/s3.js'
-import KPI from '../models/kpi.js'
 import KPIStatus from '../models/enums/KPIStatus.js'
-import { findVentureForUser } from './founderHelper.js'
 
 // Scores are out of 100; health thresholds and the overview chart assume it.
 // Returns null when no score was sent and -1 when it is out of range.
@@ -17,17 +16,6 @@ export const parseEvaluationScore = score => {
 
 export const isValidKPIStatus = status =>
   status === undefined || Object.hasOwn(KPIStatus, status)
-
-// What an admin may change a KPI to from each status. A draft hasn't been
-// submitted, so there is nothing to review; a KPI is graded only once it has
-// been accepted. Keeping the current status lets rejection feedback or a
-// grade be revised.
-export const EVALUATION_TRANSITIONS = {
-  WAITING_FOR_APPROVAL: ['ACCEPTED', 'REJECTED'],
-  REJECTED: ['ACCEPTED', 'REJECTED'],
-  ACCEPTED: ['GRADED'],
-  GRADED: ['GRADED'],
-}
 
 const statusLabel = status => KPIStatus[status] ?? status
 
@@ -152,69 +140,18 @@ export const resolveKPIScope = ({ scope, founder }) => {
   return { scope: 'VENTURE', founder: null }
 }
 
-export const checkKPILockStatus = kpi => {
-  if (!kpi) {
-    return null
-  }
-  if (kpi.status === 'GRADED') {
-    return 'KPI has already been graded. Changes and submissions are locked.'
-  }
-  if (kpi.dueDate && new Date(kpi.dueDate) < new Date()) {
-    return 'KPI deadline has passed. Submissions and edits are closed.'
-  }
-  return null
-}
-
 export const kpisVisibleTo = (ventureId, founderId) => ({
   venture: ventureId,
   $or: [{ founder: null }, { scope: 'VENTURE' }, { founder: founderId }],
 })
 
-export const canUserManageVentureKPI = async (user, ventureId) => {
-  if (user?.role === 'admin') {
-    return true
-  }
-  const userVenture = await findVentureForUser(user.id)
-  return Boolean(
-    userVenture && userVenture._id.toString() === ventureId.toString()
-  )
-}
-
 const ownerId = founder => (founder ? String(founder._id ?? founder) : null)
 
-// A personal KPI (assigned to one member) is private to that member: only
-// they and admins may see or change it, matching what /kpis lists.
-const isPersonalKPI = kpi => Boolean(kpi.founder) && kpi.scope !== 'VENTURE'
-
-const isVentureMember = async (user, ventureId) => {
-  const userVenture = await findVentureForUser(user?.id)
-  return Boolean(userVenture) && String(userVenture._id) === String(ventureId)
-}
-
-export const canUserAccessKPI = async (user, kpi, allowCreator = false) => {
-  if (user?.role === 'admin') {
-    return true
-  }
-  if (isPersonalKPI(kpi)) {
-    return ownerId(kpi.founder) === user?.id
-  }
-  if (await isVentureMember(user, kpi.venture)) {
-    return true
-  }
-  return allowCreator && String(kpi.createdBy) === user?.id
-}
-
-// Members may create startup KPIs or personal KPIs for themselves. A KPI
-// assigned to a teammate would be hidden from the member who created it.
-export const kpiOwnerError = (user, founder) =>
-  user.role !== 'admin' && founder && ownerId(founder) !== user.id
-    ? 'You can only create personal KPIs for yourself'
-    : null
-
-// Members can't hand a KPI to someone else or take a startup KPI private,
-// but may turn their own personal KPI into a startup KPI.
+// Students can't hand a KPI to someone else or take a startup KPI private,
+// but may turn their own personal KPI into a startup KPI. Staff may
+// reassign it to any member of the startup.
 export const kpiOwnerChangeError = (user, kpi, founder) => {
-  if (user.role === 'admin' || founder === undefined) {
+  if (!isStudent(user) || founder === undefined) {
     return null
   }
   const current = ownerId(kpi.founder)
@@ -222,30 +159,7 @@ export const kpiOwnerChangeError = (user, kpi, founder) => {
   if (requested === current || (requested === null && current === user.id)) {
     return null
   }
-  return 'Only admins can change who a KPI belongs to'
-}
-
-// Statuses in which members may still reshape or delete a KPI and its
-// SubKPIs. Once accepted, it is what faculty signed off on (and graded KPIs
-// carry a grade), so only an admin may change its parts or remove it.
-export const EDITABLE_KPI_STATUSES = [
-  'DRAFT',
-  'WAITING_FOR_APPROVAL',
-  'REJECTED',
-]
-
-export const isKPIOpenToMembers = (user, kpi) =>
-  user?.role === 'admin' || EDITABLE_KPI_STATUSES.includes(kpi.status)
-
-// A SubKPI may be changed by whoever may change its parent KPI, while that
-// KPI is still open to members.
-export const canUserEditSubKPI = async (user, subKPI) => {
-  const parentKPI = await KPI.findById(subKPI.parentKPI)
-  return (
-    Boolean(parentKPI) &&
-    isKPIOpenToMembers(user, parentKPI) &&
-    canUserAccessKPI(user, parentKPI)
-  )
+  return 'Only staff can change who a KPI belongs to'
 }
 
 export const buildNewKPIDocument = ({

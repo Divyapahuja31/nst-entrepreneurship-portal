@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import mongoose from 'mongoose'
+import { ROLES, mustPickMentorToAccept } from '@nst/shared/permissions.js'
 
 import Venture from '../models/venture.js'
 import Campus from '../models/campus.js'
@@ -15,11 +16,12 @@ import {
   deactivateFounder,
 } from '../utils/founderHelper.js'
 import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
+import { resolveNewVentureMentor, ventureScope } from '../utils/access.js'
 
-const getFounders = async (_, res) => {
+const getFounders = async (req, res) => {
   try {
     const [{ students }, campuses] = await Promise.all([
-      getFounderPortfolioData(),
+      getFounderPortfolioData(ventureScope(req.user)),
       Campus.find().sort({ name: 1 }),
     ])
 
@@ -38,11 +40,28 @@ const getFounders = async (_, res) => {
   }
 }
 
-const getFounderFormOptions = async (_, res) => {
+// Active mentors, for the board to choose one for the new startup.
+const mentorOptions = async () => {
+  const mentorRole = await Role.findOne({ name: ROLES.MENTOR }).select('_id')
+  if (!mentorRole) {
+    return []
+  }
+  const mentors = await User.find({ role: mentorRole._id, deletedAt: null })
+    .select('username email')
+    .sort({ username: 1 })
+  return mentors.map(mentor => ({
+    value: mentor._id,
+    label: `${mentor.username} · ${mentor.email}`,
+  }))
+}
+
+const getFounderFormOptions = async (req, res) => {
   try {
-    const [industries, batches] = await Promise.all([
+    const [industries, batches, mentors] = await Promise.all([
       Industry.find().sort({ name: 1 }),
       Batch.find().populate('campus', 'name').sort({ name: 1 }),
+      // A mentor's new startup is always theirs, so only the board picks.
+      mustPickMentorToAccept(req.user) ? mentorOptions() : null,
     ])
 
     return res.json({
@@ -58,6 +77,7 @@ const getFounderFormOptions = async (_, res) => {
         value,
         label,
       })),
+      ...(mentors && { mentorId: mentors }),
     })
   } catch (err) {
     console.error('Get founder options error:', err)
@@ -92,7 +112,7 @@ const validateAndResolveFounderReferences = async ({
   const [batchDoc, industryDoc, studentRole, existingUser] = await Promise.all([
     Batch.findById(batch),
     Industry.findById(industry),
-    Role.findOne({ name: 'student' }),
+    Role.findOne({ name: ROLES.STUDENT }),
     User.findOne({ email }),
   ])
 
@@ -124,6 +144,7 @@ const createFounderAndVenture = async ({
   batchDoc,
   industryDoc,
   studentRole,
+  mentorId,
 }) => {
   const user = await User.create({
     username: founder,
@@ -140,6 +161,7 @@ const createFounderAndVenture = async ({
       campus: batchDoc.campus,
       stage,
       industry: industryDoc._id,
+      mentor: mentorId,
     })
 
     await addFounderToVenture(user._id, venture._id)
@@ -160,6 +182,12 @@ const createFounder = async (req, res) => {
   }
 
   try {
+    // A mentor's new startup is theirs; the board assigns one.
+    const mentor = await resolveNewVentureMentor(req.user, payload.mentorId)
+    if (mentor.error) {
+      return res.status(400).json({ error: { mentorId: mentor.error } })
+    }
+
     const refs = await validateAndResolveFounderReferences(payload)
 
     if (refs.error) {
@@ -169,6 +197,7 @@ const createFounder = async (req, res) => {
     const { user, venture } = await createFounderAndVenture({
       ...payload,
       ...refs,
+      mentorId: mentor.mentorId,
     })
 
     return res.status(201).json({

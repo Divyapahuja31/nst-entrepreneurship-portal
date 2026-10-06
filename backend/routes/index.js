@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { STAFF_ROLES } from '@nst/shared/permissions.js'
 import admin from './admin.js'
 import auth from './auth.js'
 import requireAuth from '../middleware/requireAuth.js'
@@ -15,8 +16,8 @@ const router = Router()
 // unprotected routes
 router.use('/auth', auth)
 
-// protected routes with admin role
-router.use('/admin', requireRole('admin'), admin)
+// staff routes; admin.js narrows some to the board or admins
+router.use('/admin', requireRole(...STAFF_ROLES), admin)
 
 // protected routes with sign in only
 router.use('/kpis', requireAuth, kpiRoutes)

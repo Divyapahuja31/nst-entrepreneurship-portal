@@ -67,8 +67,13 @@ export const resolveIndustryId = async (existingIndustry, industryName) => {
   return industry?._id || null
 }
 
-export const createVentureFromProposal = async (proposal, industryId) => {
+export const createVentureFromProposal = async (
+  proposal,
+  industryId,
+  mentorId
+) => {
   const venture = await Venture.create({
+    mentor: mentorId,
     name: proposal.startupName,
     description: proposal.description,
     campus: proposal.campus,
@@ -110,7 +115,7 @@ export const ensureProposalCanBeReviewed = proposal => {
   return null
 }
 
-export const handleProposalApproval = async proposal => {
+export const handleProposalApproval = async (proposal, mentorId) => {
   const existingVenture = await findVentureForUser(proposal.submittedBy)
   if (existingVenture) {
     return {
@@ -130,7 +135,11 @@ export const handleProposalApproval = async proposal => {
     }
   }
 
-  const ventureId = await createVentureFromProposal(proposal, industryId)
+  const ventureId = await createVentureFromProposal(
+    proposal,
+    industryId,
+    mentorId
+  )
   return { ventureId, industryId }
 }
 

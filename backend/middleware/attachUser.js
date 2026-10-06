@@ -11,12 +11,17 @@ const findSessionUser = async token => {
   }
 
   const user = await User.findById(payload.userId)
-    .select('email role sessionVersion')
+    .select('email role sessionVersion deletedAt')
     .populate('role', 'name')
     .lean()
 
   // Users and tokens from before session versions existed count as version 0.
-  if (!user || (user.sessionVersion ?? 0) !== (payload.sessionVersion ?? 0)) {
+  // A deactivated account's sessions end with it.
+  if (
+    !user ||
+    user.deletedAt ||
+    (user.sessionVersion ?? 0) !== (payload.sessionVersion ?? 0)
+  ) {
     return null
   }
 

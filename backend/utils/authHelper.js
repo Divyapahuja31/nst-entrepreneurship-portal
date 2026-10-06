@@ -1,4 +1,5 @@
 import { OAuth2Client } from 'google-auth-library'
+import { ROLES } from '@nst/shared/permissions.js'
 import 'dotenv/config'
 import Role from '../models/role.js'
 import { cookieOptions, signToken } from './token.js'
@@ -12,18 +13,21 @@ const client = new OAuth2Client(
 
 const ALLOWED_GOOGLE_DOMAINS = new Set(['newtonschool.co', 'adypu.edu.in'])
 
+// The role a new account starts with. Newton School staff start as mentors,
+// the least-privileged staff role; admin and academic board are granted only
+// by an admin from the Accounts page.
 export const determineUserRole = email => {
   if (typeof email !== 'string') {
-    return 'student'
+    return ROLES.STUDENT
   }
   const emailSplit = email.split('@')
   if (
     emailSplit.length === 2 &&
     emailSplit[1].toLowerCase() === 'newtonschool.co'
   ) {
-    return 'admin'
+    return ROLES.MENTOR
   }
-  return 'student'
+  return ROLES.STUDENT
 }
 
 // Non-strings become null so a JSON object can never reach a query.
@@ -36,12 +40,19 @@ export const findRoleForEmail = async email => {
   return { position, role }
 }
 
-// Sets the session cookie and responds with the user's portfolio.
+export const DEACTIVATED_MESSAGE =
+  'This account has been deactivated. Ask an administrator if you need access.'
+
+// Sets the session cookie and responds with the user's portfolio. A
+// deactivated account gets no session.
 export const startSession = async (
   res,
   user,
   { status = 200, message } = {}
 ) => {
+  if (user.deletedAt) {
+    return res.status(403).json({ error: DEACTIVATED_MESSAGE })
+  }
   const userPortfolio = await getUserPortfolio(user._id)
   return res
     .cookie('token', signToken(user), cookieOptions)

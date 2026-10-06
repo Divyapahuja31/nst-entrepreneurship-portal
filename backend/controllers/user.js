@@ -31,6 +31,7 @@ import {
   normalizeEmail,
   startSession,
   verifyGoogleAuthCode,
+  DEACTIVATED_MESSAGE,
 } from '../utils/authHelper.js'
 
 // Responses must not reveal whether an email has an account, so endpoints
@@ -86,7 +87,6 @@ export const signUp = async (req, res) => {
         passwordHash: await bcrypt.hash(password, 10),
         batch: batch || undefined,
         campus: campus || undefined,
-        role: role._id,
       }
     } else {
       user = new User({
@@ -192,6 +192,22 @@ const hasValidOAuthState = req => {
   return typeof state === 'string' && Boolean(expected) && state === expected
 }
 
+// Ties a Google sign-in to the account with that email.
+const linkGoogleAccount = async (user, googleId) => {
+  if (!user.isEmailVerified) {
+    // Nobody proved ownership of this email before Google did, so the
+    // password or a pending sign-up may be someone else's. Drop them.
+    user.password = undefined
+    user.pendingSignup = undefined
+    clearSignupCode(user)
+  }
+  if (!user.googleId || !user.isEmailVerified) {
+    user.googleId = googleId
+    user.isEmailVerified = true
+    await user.save()
+  }
+}
+
 export const googleAuthCallback = async (req, res) => {
   try {
     const { code } = req.query
@@ -222,19 +238,12 @@ export const googleAuthCallback = async (req, res) => {
       $or: [{ googleId }, { email }],
     }).populate('role')
 
+    if (user?.deletedAt) {
+      return res.status(403).send(DEACTIVATED_MESSAGE)
+    }
+
     if (user) {
-      if (!user.isEmailVerified) {
-        // Nobody proved ownership of this email before Google did, so the
-        // password or a pending sign-up may be someone else's. Drop them.
-        user.password = undefined
-        user.pendingSignup = undefined
-        clearSignupCode(user)
-      }
-      if (!user.googleId || !user.isEmailVerified) {
-        user.googleId = googleId
-        user.isEmailVerified = true
-        await user.save()
-      }
+      await linkGoogleAccount(user, googleId)
 
       return res
         .cookie('token', signToken(user), cookieOptions)
@@ -455,7 +464,8 @@ const adoptPendingSignup = (user, password) => {
   }
   user.username = pending.username
   user.password = password
-  user.role = pending.role
+  // The account's role stays: it may have been set by an admin, and an email
+  // sign-up must not reset it.
   user.batch = pending.batch
   user.campus = pending.campus
   user.pendingSignup = undefined

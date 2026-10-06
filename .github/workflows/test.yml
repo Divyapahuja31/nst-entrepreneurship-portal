@@ -1,0 +1,25 @@
+name: Lint and test
+
+on:
+  pull_request:
+  push:
+    branches: [main, AI-GEN]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      # The permission matrix (shared) and the API tests (backend), which run
+      # against an in-memory MongoDB.
+      - run: npm test

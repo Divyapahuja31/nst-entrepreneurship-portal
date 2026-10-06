@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { ROLES } from '@nst/shared/permissions.js'
 import { api } from '../api/client'
 
 export const useAuthStore = create(
@@ -52,10 +53,29 @@ export const useAuthStore = create(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
+      // Not isLoading: every page load starts loading until fetchUser has
+      // confirmed the session, so a stale saved role is never trusted.
+      partialize: ({ user, isAuthenticated }) => ({ user, isAuthenticated }),
     }
   )
 )
 
+// Resolves with the auth state once the session check has finished.
+export const whenAuthReady = () =>
+  new Promise(resolve => {
+    const state = useAuthStore.getState()
+    if (!state.isLoading) {
+      resolve(state)
+      return
+    }
+    const unsubscribe = useAuthStore.subscribe(next => {
+      if (!next.isLoading) {
+        unsubscribe()
+        resolve(next)
+      }
+    })
+  })
+
 // A student isn't part of the portal until they belong to a startup.
 export const needsOnboarding = user =>
-  user?.role?.name === 'student' && !user.venture
+  user?.role?.name === ROLES.STUDENT && !user.venture

@@ -4,15 +4,17 @@
   "description": "",
   "workspaces": [
     "backend",
-    "frontend"
+    "frontend",
+    "shared"
   ],
   "scripts": {
     "build": "cd frontend && npm run build",
     "start": "npm start -w backend",
+    "test": "npm test -w shared && npm test -w backend",
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
     "prettify": "concurrently \"cd backend && npm run prettify\" \"cd frontend && npm run prettify\"",
-    "lint": "eslint ./backend ./frontend",
-    "lint-fix": "eslint ./backend ./frontend --fix",
+    "lint": "eslint ./backend ./frontend ./shared",
+    "lint-fix": "eslint ./backend ./frontend ./shared --fix",
     "prepare": "husky"
   },
   "repository": {

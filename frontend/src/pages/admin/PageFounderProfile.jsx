@@ -5,7 +5,7 @@ import { Alert, Box, Link, Tab, Tabs } from '@mui/material'
 
 import KPIReview from '../../components/KPIReview'
 import PageHeader from '../../components/PageHeader'
-import { useAuthStore } from '../../stores/auth'
+import useAccess from '../../hooks/useAccess'
 import BiWeekly from './PageReportBiWeekly'
 
 const breadcrumbs = name => [
@@ -17,12 +17,10 @@ const breadcrumbs = name => [
 export default function PageFounderProfile() {
   const [tab, setTab] = React.useState(0)
   const biweeklyData = useLoaderData()
-  const currentUser = useAuthStore(state => state.user)
   const params = useParams()
+  const { isStaff } = useAccess()
 
-  const isEvaluator = currentUser?.role?.name?.toLowerCase() === 'admin'
-
-  if (!isEvaluator) {
+  if (!isStaff) {
     return <BiWeekly data={biweeklyData} />
   }
 

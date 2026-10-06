@@ -9,6 +9,7 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import MenuItem from '@mui/material/MenuItem'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
 import TextField from '@mui/material/TextField'
@@ -20,6 +21,8 @@ import CustomizedTable from '../../components/Table'
 import ReviewTable from '../../components/ReviewTable'
 import ProposalDrawer from '../../components/ProposalDrawer'
 import { reviewJoinRequest, reviewProposal } from '../../api/venture'
+import useAccess from '../../hooks/useAccess'
+import { mustPickMentorToAccept } from '@nst/shared/permissions.js'
 import {
   BriefcaseIcon,
   LightbulbIcon,
@@ -48,6 +51,7 @@ const ventureColumns = [
   { key: 'stage', label: 'Stage' },
   { key: 'industry', label: 'Industry' },
   { key: 'founders', label: 'Founders' },
+  { key: 'mentorName', label: 'Mentor' },
   { key: 'team', label: 'Team', align: 'right' },
 ]
 
@@ -103,9 +107,47 @@ const formatDate = value => {
   })
 }
 
+// The mentor choice in the approve dialog, when the board approves.
+function MentorPicker({ mentors, value, onChange }) {
+  if (!mentors.length) {
+    return (
+      <Alert severity="warning" sx={{ mt: 2 }}>
+        There are no mentor accounts yet. An admin can give someone the Mentor
+        role from Accounts &amp; Roles.
+      </Alert>
+    )
+  }
+  return (
+    <TextField
+      select
+      fullWidth
+      label="Mentor"
+      value={value}
+      onChange={event => onChange(event.target.value)}
+      helperText="The mentor reviews this startup's KPIs and reports."
+      sx={{ mt: 2 }}
+    >
+      {mentors.map(mentor => (
+        <MenuItem key={mentor.id} value={mentor.id}>
+          {mentor.username} · {mentor.email}
+        </MenuItem>
+      ))}
+    </TextField>
+  )
+}
+
 export default function PageVentures() {
-  const { ventures, proposals, joinRequests } = useLoaderData()
+  const { ventures, proposals, joinRequests, mentors } = useLoaderData()
   const revalidator = useRevalidator()
+  const { actor, isMentor } = useAccess()
+  // The board picks the new startup's mentor; a mentor becomes it.
+  const pickMentor = mustPickMentorToAccept(actor)
+  const [mentorId, setMentorId] = React.useState('')
+
+  const ventureRows = ventures.map(venture => ({
+    ...venture,
+    mentorName: venture.mentor?.username ?? 'Unassigned',
+  }))
 
   const [tab, setTab] = React.useState(0)
   const [busyId, setBusyId] = React.useState(null)
@@ -194,14 +236,19 @@ export default function PageVentures() {
     const student = row.studentName ?? row.submittedBy?.username
 
     setViewing(null)
+    setMentorId('')
     setConfirming({
       title: `Approve ${startup}?`,
-      body: `This creates the startup with ${student} as its founder.`,
+      body: pickMentor
+        ? `This creates the startup with ${student} as its founder. Choose who mentors it.`
+        : `This creates the startup with ${student} as its founder, and you as its mentor.`,
       confirmLabel: 'Approve',
-      run: () => {
+      needsMentor: pickMentor,
+      run: chosenMentorId => {
         setBusyId(proposalId)
         runReview(
-          () => reviewProposal(proposalId, 'APPROVED'),
+          () =>
+            reviewProposal(proposalId, 'APPROVED', undefined, chosenMentorId),
           `Approved ${startup}.`
         )
       },
@@ -264,8 +311,12 @@ export default function PageVentures() {
   return (
     <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
       <PageHeader
-        title="Startups"
-        subtitle="Approved startups, and everything waiting on your decision."
+        title={isMentor ? 'My Startups' : 'Startups'}
+        subtitle={
+          isMentor
+            ? 'The startups you mentor, new proposals any mentor can take on, and requests to join your startups.'
+            : 'Approved startups, and everything waiting on your decision.'
+        }
       />
 
       {error && (
@@ -296,14 +347,18 @@ export default function PageVentures() {
         {ventures.length ? (
           <CustomizedTable
             columnNames={ventureColumns}
-            data={ventures}
+            data={ventureRows}
             targetRoute="/admin/venture"
           />
         ) : (
           <Empty
             icon={BriefcaseIcon}
             title="No startups yet"
-            description="Startups appear here once you approve a proposal."
+            description={
+              isMentor
+                ? 'Startups appear here once one is assigned to you, or you approve a proposal.'
+                : 'Startups appear here once you approve a proposal.'
+            }
           />
         )}
       </TabPanel>
@@ -400,6 +455,13 @@ export default function PageVentures() {
         <DialogTitle>{confirming?.title}</DialogTitle>
         <DialogContent>
           <DialogContentText>{confirming?.body}</DialogContentText>
+          {confirming?.needsMentor && (
+            <MentorPicker
+              mentors={mentors}
+              value={mentorId}
+              onChange={setMentorId}
+            />
+          )}
         </DialogContent>
         <DialogActions>
           <Button variant="outlined" onClick={() => setConfirming(null)}>
@@ -408,8 +470,9 @@ export default function PageVentures() {
           <Button
             variant="contained"
             color={confirming?.confirmLabel === 'Reject' ? 'error' : 'primary'}
+            disabled={Boolean(confirming?.needsMentor && !mentorId)}
             onClick={() => {
-              confirming.run()
+              confirming.run(mentorId)
               setConfirming(null)
             }}
           >

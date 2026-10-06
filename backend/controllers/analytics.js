@@ -5,6 +5,11 @@ import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
 import startupStage from '../models/enums/startupStage.js'
 import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
+import { scopedVentureIds, ventureScope } from '../utils/access.js'
+
+// Limits a query to the given startups; null means every startup.
+const inVentures = (ventureIds, field = 'venture') =>
+  ventureIds ? { [field]: { $in: ventureIds } } : {}
 
 const MONTH_NAMES = [
   'january',
@@ -23,13 +28,17 @@ const MONTH_NAMES = [
 
 async function getMonthlyAverageKPIScores({
   year = new Date().getFullYear(),
+  ventureIds = null,
 } = {}) {
   const startOfYear = new Date(Date.UTC(year, 0, 1))
   const endOfYear = new Date(Date.UTC(year + 1, 0, 1))
 
   const [ventures, kpis] = await Promise.all([
-    Venture.find().select('_id').populate('teamSize'),
+    Venture.find(inVentures(ventureIds, '_id'))
+      .select('_id')
+      .populate('teamSize'),
     KpiModel.find({
+      ...inVentures(ventureIds),
       status: 'GRADED',
       score: { $gte: 0 },
       evaluationDate: { $gte: startOfYear, $lt: endOfYear },
@@ -111,6 +120,7 @@ const INACTIVE_DAYS = 14
 // Not-started ventures come first, then the longest idle.
 const getVentureCheckIns = async ventures => {
   const activity = await KpiModel.aggregate([
+    { $match: { venture: { $in: ventures.map(venture => venture._id) } } },
     {
       $group: {
         _id: '$venture',
@@ -165,17 +175,28 @@ const queueOf = async (Model, filter, dateField) => {
   return { count, oldestAt: oldest?.[dateField] ?? null }
 }
 
-// Work waiting on admins, so the overview starts with what to act on.
-const getActionQueue = async () => {
+// Work waiting on staff, so the overview starts with what to act on. Any
+// staff member may take a proposal; the rest is limited to their startups.
+const getActionQueue = async ventureIds => {
+  const scoped = inVentures(ventureIds)
   const [proposals, joinRequests, kpisToGrade, missedDeadlines] =
     await Promise.all([
       queueOf(VentureProposal, { status: 'PENDING' }, 'createdAt'),
-      queueOf(VentureJoinRequest, { status: 'PENDING' }, 'createdAt'),
-      queueOf(KpiModel, { status: 'WAITING_FOR_APPROVAL' }, 'submissionDate'),
+      queueOf(
+        VentureJoinRequest,
+        { ...scoped, status: 'PENDING' },
+        'createdAt'
+      ),
+      queueOf(
+        KpiModel,
+        { ...scoped, status: 'WAITING_FOR_APPROVAL' },
+        'submissionDate'
+      ),
       // Past the due date and never submitted: the KPI is now locked.
       queueOf(
         KpiModel,
         {
+          ...scoped,
           status: { $in: ['DRAFT', 'REJECTED'] },
           dueDate: { $lt: new Date() },
         },
@@ -185,13 +206,15 @@ const getActionQueue = async () => {
   return { proposals, joinRequests, kpisToGrade, missedDeadlines }
 }
 
-const getOverview = async (_, res) => {
+// Mentors get the same overview, of the startups assigned to them.
+const getOverview = async (req, res) => {
   try {
+    const ventureIds = await scopedVentureIds(req.user)
     const [{ ventures, students, ventureHealth: health }, kpi, actions] =
       await Promise.all([
-        getFounderPortfolioData(),
-        getMonthlyAverageKPIScores(),
-        getActionQueue(),
+        getFounderPortfolioData(ventureScope(req.user)),
+        getMonthlyAverageKPIScores({ ventureIds }),
+        getActionQueue(ventureIds),
       ])
     const checkIns = await getVentureCheckIns(ventures)
 

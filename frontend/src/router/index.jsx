@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router'
+import { ROLE_NAMES, ROLES, STAFF_ROLES } from '@nst/shared/permissions.js'
 
 import EmptyLayout from '../layouts/EmptyLayout.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
@@ -19,6 +20,7 @@ import PageAdminKPIs from '../pages/admin/PageKPIs.jsx'
 import PageReportBiWeekly from '../pages/admin/PageReportBiWeekly.jsx'
 import PageVentures from '../pages/admin/PageVentures.jsx'
 import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
+import PageAccounts from '../pages/admin/PageAccounts.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -45,6 +47,18 @@ import {
   foundersLoader,
 } from '../api/admin.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
+import { accountsLoader } from '../api/accounts.js'
+import { whenAuthReady } from '../stores/auth.js'
+
+// Runs a route's loader only for the roles RequireRole lets through, once
+// the session is confirmed. Anyone else gets no data, so RequireRole can
+// explain why instead of the API's 403 replacing the page.
+const forRoles = (allow, loader) => async args => {
+  const { user } = await whenAuthReady()
+  return allow.includes(user?.role?.name) ? loader(args) : null
+}
+const studentLoader = loader => forRoles([ROLES.STUDENT], loader)
+const staffLoader = loader => forRoles(STAFF_ROLES, loader)
 
 export const router = createBrowserRouter([
   // Public: the only routes a signed-out visitor may reach.
@@ -96,24 +110,35 @@ export const router = createBrowserRouter([
           {
             Component: MainLayout,
             children: [
+              // Students only; MainLayout sends staff from / to /admin.
               {
-                path: '/',
-                index: true,
-                Component: PageStudentOverview,
+                element: <RequireRole allow={[ROLES.STUDENT]} />,
+                children: [
+                  {
+                    path: '/',
+                    index: true,
+                    Component: PageStudentOverview,
+                  },
+                  {
+                    path: '/kpis',
+                    Component: PageKPIs,
+                    loader: studentLoader(kpisLoader),
+                  },
+                  {
+                    path: '/profile/:userid',
+                    Component: PageReportBiWeekly,
+                    loader: studentLoader(biWeeklyLoader),
+                  },
+                ],
               },
               {
-                path: '/kpis',
-                Component: PageKPIs,
-                loader: kpisLoader,
-              },
-              {
-                path: '/methodology',
-                Component: PageMethodology,
-              },
-              {
-                path: '/profile/:userid',
-                Component: PageReportBiWeekly,
-                loader: biWeeklyLoader,
+                element: <RequireRole allow={ROLE_NAMES} />,
+                children: [
+                  {
+                    path: '/methodology',
+                    Component: PageMethodology,
+                  },
+                ],
               },
             ],
           },
@@ -122,10 +147,11 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Signed in as an admin.
+  // Signed in as staff. Mentors see only the startups assigned to them; the
+  // API applies the same limits.
   {
     ErrorBoundary: PageError,
-    element: <RequireRole role="admin" />,
+    element: <RequireRole allow={STAFF_ROLES} />,
     children: [
       {
         Component: MainLayout,
@@ -134,42 +160,52 @@ export const router = createBrowserRouter([
             path: '/admin',
             index: true,
             Component: PageAdminOverview,
-            loader: foundersCount,
+            loader: staffLoader(foundersCount),
           },
           {
             path: '/admin/founders',
             Component: PagePortfolios,
-            loader: foundersLoader,
+            loader: staffLoader(foundersLoader),
           },
           {
             path: '/admin/kpis',
             Component: PageAdminKPIs,
-            loader: allKPIsLoader,
+            loader: staffLoader(allKPIsLoader),
           },
           {
             path: '/admin/venture',
             Component: PageVentures,
-            loader: venturesPageLoader,
+            loader: staffLoader(venturesPageLoader),
           },
           {
             path: '/admin/venture/:ventureId',
             Component: PageVentureDetail,
-            loader: ventureDetailLoader,
+            loader: staffLoader(ventureDetailLoader),
           },
           {
             path: '/admin/portfolio',
             Component: PagePortfolios,
-            loader: foundersLoader,
+            loader: staffLoader(foundersLoader),
           },
           {
             path: '/admin/founders/new',
             Component: AddFounder,
-            loader: addFounderLoader,
+            loader: staffLoader(addFounderLoader),
           },
           {
             path: '/admin/profile/:userid',
             Component: PageFounderProfile,
-            loader: biWeeklyLoader,
+            loader: staffLoader(biWeeklyLoader),
+          },
+          {
+            element: <RequireRole allow={[ROLES.ADMIN]} />,
+            children: [
+              {
+                path: '/admin/accounts',
+                Component: PageAccounts,
+                loader: forRoles([ROLES.ADMIN], accountsLoader),
+              },
+            ],
           },
         ],
       },

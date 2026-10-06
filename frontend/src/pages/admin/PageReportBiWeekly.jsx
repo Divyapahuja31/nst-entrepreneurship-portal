@@ -9,7 +9,11 @@ import {
 } from '../../api/biweekly'
 import toError from '../../api/toError'
 
-import { useAuthStore } from '../../stores/auth'
+import {
+  canAuthorBiweeklyReview,
+  canReopenBiweekly,
+} from '@nst/shared/permissions.js'
+import useAccess from '../../hooks/useAccess'
 
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -251,11 +255,14 @@ function BiWeekly({ data: propData }) {
   // Embedded in the admin founder profile, which already has its own page title.
   const embedded = propData !== undefined
   const data = embedded ? propData : loaderData
-  const currentUser = useAuthStore(state => state.user)
   const revalidator = useRevalidator()
-  const isAdmin = currentUser?.role?.name === 'admin'
+  // Staff read the report; the startup's mentor and the board write
+  // observations and evaluations; only the board reopens a cycle.
+  const { actor, isStaff } = useAccess()
 
   const { founder, venture, coFounders = [] } = data || {}
+  const canReview = canAuthorBiweeklyReview(actor, venture?.mentor)
+  const canReopen = canReopenBiweekly(actor)
   const rows = data?.submissions ?? []
   const observations = data?.observations ?? []
   const evaluations = data?.evaluations ?? []
@@ -475,7 +482,8 @@ function BiWeekly({ data: propData }) {
             periodEnd={activeMeta.end.toISOString().slice(0, 10)}
             deadline={activeMeta.deadline}
             existing={activeRow}
-            isAdmin={isAdmin}
+            isStaff={isStaff}
+            canReopen={canReopen}
             onSave={saveSubmission}
             onReopen={reopenSubmission}
           />
@@ -487,7 +495,7 @@ function BiWeekly({ data: propData }) {
             observation={observations.find(
               o => o.cycle_number === activeMeta.n
             )}
-            canAuthor={isAdmin}
+            canAuthor={canReview}
             onSave={saveObservation}
           />
 
@@ -499,7 +507,7 @@ function BiWeekly({ data: propData }) {
                 e.checklist_id === activeMeta.n ||
                 e.month_number === Math.ceil(activeMeta.n / 2)
             )}
-            canAuthor={isAdmin}
+            canAuthor={canReview}
             onSave={saveEvaluation}
           />
         </Stack>
@@ -860,7 +868,8 @@ function CycleForm({
   periodEnd,
   deadline,
   existing,
-  isAdmin,
+  isStaff,
+  canReopen,
   onSave,
   onReopen,
 }) {
@@ -888,8 +897,9 @@ function CycleForm({
   const now = new Date()
   const submitted = !!existing?.submitted_at
   const pastDeadline = deadline < now
-  // Admin view is read-only (admin cannot submit student progress). Student is locked if submitted or past deadline.
-  const locked = isAdmin ? true : submitted || pastDeadline
+  // Staff view is read-only (staff never submit student progress). Students
+  // are locked out once it is submitted or past its deadline.
+  const locked = isStaff ? true : submitted || pastDeadline
   const checklist = checklistFor(cycleNumber)
 
   const requiredCount = checklist?.items.length ?? 0
@@ -1314,9 +1324,9 @@ function CycleForm({
           useFlexGap
           sx={{ alignItems: 'center', flexWrap: 'wrap' }}
         >
-          {isAdmin && <Chip size="small" label="Admin view (read-only)" />}
+          {isStaff && <Chip size="small" label="Staff view (read-only)" />}
           <CycleStatusPill status={status} />
-          {isAdmin && (submitted || pastDeadline) && existing && (
+          {canReopen && (submitted || pastDeadline) && existing && (
             <Button
               size="small"
               variant="outlined"
@@ -1356,7 +1366,7 @@ function CycleForm({
       </Stack>
 
       <Box sx={{ mt: 3 }}>
-        {isAdmin ? (
+        {isStaff ? (
           <Alert severity="info">
             {submitted
               ? `Submission received from ${

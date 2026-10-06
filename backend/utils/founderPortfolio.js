@@ -19,19 +19,23 @@ export const deriveStatus = score => {
   return ventureHealth.AT_RISK
 }
 
-export const getFounderPortfolioData = async () => {
-  const [ventures, kpis] = await Promise.all([
-    Venture.find()
-      .populate('campus', 'name')
-      .populate({
-        path: 'founders',
-        populate: { path: 'user', select: 'username' },
-      })
-      .sort({ name: 1 }),
+// scope is a Venture filter (see ventureScope) limiting which startups and
+// founders are included.
+export const getFounderPortfolioData = async (scope = {}) => {
+  const ventures = await Venture.find(scope)
+    .populate('campus', 'name')
+    .populate({
+      path: 'founders',
+      populate: { path: 'user', select: 'username' },
+    })
+    .sort({ name: 1 })
 
-    // A score of 0 is a real grade; leaving it out inflated every average.
-    KpiModel.find({ status: 'GRADED', score: { $gte: 0 } }),
-  ])
+  // A score of 0 is a real grade; leaving it out inflated every average.
+  const kpis = await KpiModel.find({
+    venture: { $in: ventures.map(venture => venture._id) },
+    status: 'GRADED',
+    score: { $gte: 0 },
+  })
 
   const kpisByVenture = new Map()
   for (const kpi of kpis) {

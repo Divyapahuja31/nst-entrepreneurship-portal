@@ -6,11 +6,13 @@ WORKDIR /app
 COPY package.json ./
 COPY frontend/package.json ./frontend/
 COPY backend/package.json ./backend/
+COPY shared/package.json ./shared/
 
 # Install workspace dependencies at root to hoist single React instance and download Linux native bindings
 RUN npm install --no-package-lock --ignore-scripts
 
-# Copy frontend source and build
+# Copy the permission rules the UI shares with the API, then build
+COPY shared ./shared
 COPY frontend ./frontend
 RUN npm run build -w frontend
 
@@ -24,11 +26,13 @@ ENV PORT=4000
 # Copy root manifests and backend package files
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/
+COPY shared/package.json ./shared/
 
 # Install backend production dependencies
 RUN npm ci --workspace=backend --omit=dev --ignore-scripts
 
-# Copy backend source code
+# Copy backend source code and the permission rules it enforces
+COPY shared ./shared
 COPY backend ./backend
 
 # Copy built frontend dist from builder stage

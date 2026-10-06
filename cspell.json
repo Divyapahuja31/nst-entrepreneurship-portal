@@ -27,6 +27,7 @@
 
     "useRevalidator",
     "revalidator",
+    "partialize",
 
     "nosniff",
     "clickjacking",

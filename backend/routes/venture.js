@@ -6,14 +6,15 @@ import {
   getMyJoinRequest,
   createJoinRequest,
 } from '../controllers/venture.js'
+import { ROLES, STAFF_ROLES } from '@nst/shared/permissions.js'
 import requireRole from '../middleware/requireRole.js'
 
 const router = Router()
 
 router.get('/', getVentures)
 router.get('/join-requests/me', getMyJoinRequest)
-// Founder emails and past members: only the admin startup page needs these.
-router.get('/:ventureId', requireRole('admin'), getVentureById)
-router.post('/:ventureId/join', createJoinRequest)
+// Founder emails and past members: only the staff startup page needs these.
+router.get('/:ventureId', requireRole(...STAFF_ROLES), getVentureById)
+router.post('/:ventureId/join', requireRole(ROLES.STUDENT), createJoinRequest)
 
 export default router

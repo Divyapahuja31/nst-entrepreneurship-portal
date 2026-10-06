@@ -7,7 +7,6 @@ const pendingSignupSchema = new mongoose.Schema(
     passwordHash: String,
     batch: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch' },
     campus: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus' },
-    role: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
   },
   { _id: false }
 )
@@ -106,6 +105,12 @@ const userSchema = new mongoose.Schema(
     pendingSignup: {
       type: pendingSignupSchema,
       default: undefined,
+    },
+    // Set when an admin deactivates the account. The record stays so the
+    // KPIs, reviews and history that point at it still resolve.
+    deletedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

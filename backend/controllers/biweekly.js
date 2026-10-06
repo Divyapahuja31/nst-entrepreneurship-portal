@@ -1,3 +1,10 @@
+import {
+  canAuthorBiweeklyReview,
+  canReadVenture,
+  canReopenBiweekly,
+  isStaff,
+  isStudent,
+} from '@nst/shared/permissions.js'
 import BiWeeklyEvaluation from '../models/biWeeklyEvaluation.js'
 import BiWeeklyObservation from '../models/biWeeklyObservation.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
@@ -28,13 +35,22 @@ export const getBiWeeklyData = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    const isAdmin = req.user.role === 'admin'
-    const query = isAdmin ? req.query : {}
+    // Staff pick whose report to see; students always get their own.
+    const query = isStaff(req.user) ? req.query : {}
 
     const { venture, founder, coFounders } = await resolveVentureAndContext(
       req.user,
       query
     )
+
+    if (
+      isStaff(req.user) &&
+      !canReadVenture(req.user, { mentorId: venture?.mentor, isMember: false })
+    ) {
+      return res
+        .status(403)
+        .json({ error: 'This startup is not assigned to you' })
+    }
 
     let submissions = []
 
@@ -93,10 +109,10 @@ export const submitBiWeeklyCycle = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    if (req.user.role === 'admin') {
+    if (!isStudent(req.user)) {
       return res
         .status(403)
-        .json({ error: 'Admins cannot submit student bi-weekly progress' })
+        .json({ error: 'Only students submit bi-weekly progress' })
     }
 
     const parsed = parseStudentSubmission(req.body)
@@ -139,11 +155,38 @@ export const submitBiWeeklyCycle = async (req, res) => {
   }
 }
 
-// parseBody checks the rest of the request before anything is created; it
-// returns { error } or values passed back as `parsed`.
-const getOrCreateSubmissionForAdmin = async (req, res, parseBody) => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Forbidden: Admin access required' })
+// The startup's report for the cycle, or (for a founder without one) theirs.
+const findOrCreateSubmission = (venture, founder, cycleNum) => {
+  if (venture) {
+    return updateOrCreateVentureSubmission({
+      ventureId: venture._id,
+      cycle_number: cycleNum,
+    })
+  }
+  return BiWeeklySubmission.findOneAndUpdate(
+    { custom_id: `${founder._id}_cycle_${cycleNum}` },
+    {
+      $set: {
+        cycle_number: cycleNum,
+        founder: founder._id,
+        scope: 'FOUNDER',
+      },
+    },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+  )
+}
+
+// For staff acting on a startup's report. parseBody checks the rest of the
+// request before anything is created; it returns { error } or values passed
+// back as `parsed`. isAllowed(user, ventureMentorId) says whether this
+// caller may act on that startup.
+const getOrCreateSubmissionForStaff = async (
+  req,
+  res,
+  { parseBody, isAllowed }
+) => {
+  if (!isStaff(req.user)) {
+    res.status(403).json({ error: 'Forbidden: staff access required' })
     return null
   }
 
@@ -168,37 +211,24 @@ const getOrCreateSubmissionForAdmin = async (req, res, parseBody) => {
     return null
   }
 
-  let submission
-  if (venture) {
-    submission = await updateOrCreateVentureSubmission({
-      ventureId: venture._id,
-      cycle_number: cycleNum,
+  if (!isAllowed(req.user, venture?.mentor ?? null)) {
+    res.status(403).json({
+      error: "Only this startup's mentor or the academic board can do this",
     })
-  } else {
-    const custom_id = `${founder._id}_cycle_${cycleNum}`
-    submission = await BiWeeklySubmission.findOneAndUpdate(
-      { custom_id },
-      {
-        $set: {
-          cycle_number: cycleNum,
-          founder: founder._id,
-          scope: 'FOUNDER',
-        },
-      },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-    )
+    return null
   }
+
+  const submission = await findOrCreateSubmission(venture, founder, cycleNum)
 
   return { venture, founder, submission, cycleNum, parsed }
 }
 
 export const saveBiWeeklyObservation = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(
-      req,
-      res,
-      parseObservation
-    )
+    const target = await getOrCreateSubmissionForStaff(req, res, {
+      parseBody: parseObservation,
+      isAllowed: canAuthorBiweeklyReview,
+    })
     if (!target) {
       return null
     }
@@ -236,11 +266,10 @@ export const saveBiWeeklyObservation = async (req, res) => {
 
 export const saveBiWeeklyEvaluation = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(
-      req,
-      res,
-      parseEvaluationScores
-    )
+    const target = await getOrCreateSubmissionForStaff(req, res, {
+      parseBody: parseEvaluationScores,
+      isAllowed: canAuthorBiweeklyReview,
+    })
     if (!target) {
       return null
     }
@@ -279,7 +308,10 @@ export const saveBiWeeklyEvaluation = async (req, res) => {
 
 export const reopenBiWeeklySubmission = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(req, res)
+    // Reopening unlocks a submitted report, which only the board may do.
+    const target = await getOrCreateSubmissionForStaff(req, res, {
+      isAllowed: canReopenBiweekly,
+    })
     if (!target) {
       return null
     }

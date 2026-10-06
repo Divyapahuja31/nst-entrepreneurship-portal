@@ -13,7 +13,17 @@ import {
   TextField,
 } from '@mui/material'
 
-import { evaluateKPI, createKPIWithSubKpis } from '../api/kpi'
+import { canAddKpi, canEvaluateKpi } from '@nst/shared/permissions.js'
+
+import {
+  createKPIWithSubKpis,
+  evaluateKPI,
+  lockKPI,
+  unlockKPI,
+} from '../api/kpi'
+import useAccess from '../hooks/useAccess'
+import KpiLockAction from './KpiLockAction'
+import { mentorIdOf, staffKpiContext } from './kpiAccess'
 import AddKpi from './AddKpi'
 import EmptyState from './EmptyState'
 import KPIEvaluateDialog from './KPIEvaluateDialog'
@@ -28,7 +38,7 @@ import {
   TargetIcon,
 } from './icons'
 
-// The action an admin takes next on a KPI, by its status.
+// The review step a staff member takes next on a KPI, by its status.
 function ReviewAction({ kpi, busy, approving, onApprove, onOpen }) {
   switch (kpi.status) {
     case 'WAITING_FOR_APPROVAL':
@@ -89,6 +99,17 @@ export default function KPIReview({
   const kpis = propKpis || loaderData?.kpis || []
   const loading = navigation.state === 'loading'
   const [savingEval, setSavingEval] = useState(false)
+  const [lockingId, setLockingId] = useState(null)
+
+  // Who may review, lock or add KPIs depends on whether the startup is
+  // assigned to this mentor (the board may always).
+  const { actor } = useAccess()
+  const contextOf = kpi => staffKpiContext(kpi, venture?.mentor)
+  const mayAddKpi = canAddKpi(actor, {
+    ventureMentorId: mentorIdOf(venture?.mentor),
+    isMember: false,
+    founderId: null,
+  })
 
   const members = (
     founders.length > 0
@@ -223,6 +244,24 @@ export default function KPIReview({
     setTimeout(() => setSuccessMsg(''), 4000)
   }
 
+  const setLock = async (kpi, locked) => {
+    setLockingId(kpi._id)
+    setErrorMsg('')
+    try {
+      await (locked ? lockKPI(kpi._id) : unlockKPI(kpi._id))
+      setSuccessMsg(
+        locked
+          ? 'KPI locked. Its grade is final.'
+          : 'KPI unlocked. Its mentor can change the grade again.'
+      )
+      revalidator.revalidate()
+    } catch (err) {
+      setErrorMsg(err.message)
+    } finally {
+      setLockingId(null)
+    }
+  }
+
   const totalCount = filteredKpis.length
   const [approvingId, setApprovingId] = useState(null)
   const approve = async kpi => {
@@ -345,7 +384,7 @@ export default function KPIReview({
                 <Tab key={label} label={label} />
               ))}
             </Tabs>
-            {venture && (
+            {venture && mayAddKpi && (
               <Button
                 variant="contained"
                 startIcon={<PlusIcon />}
@@ -398,13 +437,24 @@ export default function KPIReview({
                   setExpandedId(prev => (prev === kpi._id ? null : kpi._id))
                 }
                 action={
-                  <ReviewAction
-                    kpi={kpi}
-                    busy={savingEval}
-                    approving={approvingId === kpi._id}
-                    onApprove={() => approve(kpi)}
-                    onOpen={status => handleOpenEvaluate(kpi, status)}
-                  />
+                  <>
+                    {canEvaluateKpi(actor, contextOf(kpi)) && (
+                      <ReviewAction
+                        kpi={kpi}
+                        busy={savingEval}
+                        approving={approvingId === kpi._id}
+                        onApprove={() => approve(kpi)}
+                        onOpen={status => handleOpenEvaluate(kpi, status)}
+                      />
+                    )}
+                    <KpiLockAction
+                      actor={actor}
+                      ctx={contextOf(kpi)}
+                      busy={lockingId === kpi._id}
+                      onLock={() => setLock(kpi, true)}
+                      onUnlock={() => setLock(kpi, false)}
+                    />
+                  </>
                 }
               >
                 <KpiDetails kpi={kpi} showEvaluator />

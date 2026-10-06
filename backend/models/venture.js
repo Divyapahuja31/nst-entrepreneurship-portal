@@ -28,6 +28,14 @@ const ventureSchema = new mongoose.Schema(
     website: {
       type: String,
     },
+    // The mentor who evaluates this startup. Assigned by the board, or the
+    // mentor who accepted its proposal.
+    mentor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

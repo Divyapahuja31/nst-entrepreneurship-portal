@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { ROLE_LABELS } from '@nst/shared/permissions.js'
 
 import {
   Box,
@@ -18,6 +19,7 @@ import {
   OverviewIcon,
   PeopleIcon,
   SidebarIcon,
+  ShieldIcon,
   SignOutIcon,
 } from '../components/icons'
 
@@ -28,6 +30,7 @@ import { AppBar, Drawer, DrawerHeader } from '../components/Sidebar.style'
 import DrawerItem from '../components/DrawerItem'
 import useSignOut from '../components/useSignOut'
 
+import useAccess from '../hooks/useAccess'
 import { useAuthStore } from '../stores/auth'
 
 const studentMenuItems = [
@@ -43,7 +46,7 @@ const studentMenuItems = [
   },
 ]
 
-const adminMenuItems = [
+const staffMenuItems = [
   {
     menu: 'Overview',
     icon: OverviewIcon,
@@ -79,34 +82,48 @@ const commonMenuItems = [
   },
 ]
 
-export default function MiniDrawer() {
-  const [drawerItems, setDrawerItems] = useState([])
+const accountsMenuItem = {
+  menu: 'Accounts & Roles',
+  icon: ShieldIcon,
+  path: '/admin/accounts',
+}
 
+const menuFor = (user, { isStaff, isMentor, isAdmin, isStudent }) => {
+  if (isStaff) {
+    // A mentor's lists hold only the startups assigned to them.
+    const staffItems = isMentor
+      ? staffMenuItems.map(item =>
+          item.path === '/admin/venture'
+            ? { ...item, menu: 'My Startups' }
+            : item
+        )
+      : staffMenuItems
+    return [
+      ...staffItems,
+      ...(isAdmin ? [accountsMenuItem] : []),
+      ...commonMenuItems,
+    ]
+  }
+  if (isStudent) {
+    return [
+      ...studentMenuItems,
+      {
+        menu: 'Bi-Weekly',
+        icon: CalendarIcon,
+        path: `/profile/${user._id}`,
+      },
+      ...commonMenuItems,
+    ]
+  }
+  return commonMenuItems
+}
+
+export default function MiniDrawer() {
   const loggedInUserData = useAuthStore(state => state.user)
+  const access = useAccess()
+  const drawerItems = menuFor(loggedInUserData, access)
 
   const location = useLocation()
-
-  useEffect(() => {
-    function getDrawerItems() {
-      if (loggedInUserData?.role?.name === 'admin') {
-        setDrawerItems([...adminMenuItems, ...commonMenuItems])
-      } else if (loggedInUserData?.role?.name === 'student') {
-        setDrawerItems([
-          ...studentMenuItems,
-          {
-            menu: 'Bi-Weekly',
-            icon: CalendarIcon,
-            path: `/profile/${loggedInUserData._id}`,
-          },
-          ...commonMenuItems,
-        ])
-      } else {
-        setDrawerItems([...commonMenuItems])
-      }
-    }
-
-    getDrawerItems()
-  }, [loggedInUserData])
 
   const { signingOut, signOutError, handleSignOut } = useSignOut()
 
@@ -117,8 +134,8 @@ export default function MiniDrawer() {
   // Authentication is enforced by the RequireAuth / RequireRole route guards,
   // so by the time this layout renders the user is known to be signed in.
 
-  // Admins have no student dashboard, so send them to their own.
-  if (loggedInUserData?.role?.name === 'admin' && location.pathname === '/') {
+  // Staff have no student dashboard, so send them to their own.
+  if (access.isStaff && location.pathname === '/') {
     return <Navigate to="/admin" replace />
   }
 
@@ -150,6 +167,16 @@ export default function MiniDrawer() {
           >
             NST Entrepreneurship Portal
           </Typography>
+          {access.role && (
+            <Typography
+              component="span"
+              variant="caption"
+              color="text.secondary"
+              sx={{ ml: 'auto', fontWeight: 500 }}
+            >
+              {ROLE_LABELS[access.role]}
+            </Typography>
+          )}
         </Toolbar>
       </AppBar>
 

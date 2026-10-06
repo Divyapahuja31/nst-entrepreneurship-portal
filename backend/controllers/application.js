@@ -1,3 +1,4 @@
+import { canReviewJoinRequest } from '@nst/shared/permissions.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import VentureProposal from '../models/ventureProposal.js'
 import {
@@ -14,6 +15,7 @@ import {
 } from '../utils/applicationHelper.js'
 import Venture from '../models/venture.js'
 import startupStage from '../models/enums/startupStage.js'
+import { resolveNewVentureMentor, scopedVentureIds } from '../utils/access.js'
 
 // Best effort: the approval already succeeded, so a failure here is logged
 // rather than reported as a failed review.
@@ -31,6 +33,14 @@ export const getPendingApplications = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
+    // Any staff member may accept a proposal (a mentor then mentors the new
+    // startup), but join requests go to the startup's own mentor.
+    const ventureIds = await scopedVentureIds(req.user)
+    const joinFilter = { status: 'PENDING' }
+    if (ventureIds) {
+      joinFilter.venture = { $in: ventureIds }
+    }
+
     // Oldest first, so whoever has waited longest is reviewed first.
     const [proposals, joinRequests] = await Promise.all([
       VentureProposal.find({ status: 'PENDING' })
@@ -39,7 +49,7 @@ export const getPendingApplications = async (req, res) => {
         .populate('industry', 'name')
         .populate('campus', 'name')
         .lean(),
-      VentureJoinRequest.find({ status: 'PENDING' })
+      VentureJoinRequest.find(joinFilter)
         .sort({ createdAt: 1 })
         .populate('requestedBy', 'username email')
         .populate('venture', 'name'),
@@ -90,7 +100,14 @@ export const reviewProposal = async (req, res) => {
     let industryId = null
 
     if (status === 'APPROVED') {
-      const approvalResult = await handleProposalApproval(proposal)
+      const mentor = await resolveNewVentureMentor(req.user, req.body.mentorId)
+      if (mentor.error) {
+        return res.status(400).json({ error: mentor.error })
+      }
+      const approvalResult = await handleProposalApproval(
+        proposal,
+        mentor.mentorId
+      )
       if (approvalResult.error) {
         return res
           .status(approvalResult.status)
@@ -145,6 +162,23 @@ export const reviewProposal = async (req, res) => {
   }
 }
 
+// Why this caller can't review the join request now, or null. Join requests
+// go to the startup's own mentor or the board.
+const joinRequestReviewError = async (user, joinRequest) => {
+  const stateError = ensureJoinRequestCanBeReviewed(joinRequest)
+  if (stateError) {
+    return stateError
+  }
+  const venture = await Venture.findById(joinRequest.venture).select('mentor')
+  if (!canReviewJoinRequest(user, venture?.mentor)) {
+    return {
+      status: 403,
+      error: "Only this startup's mentor or the academic board can review it",
+    }
+  }
+  return null
+}
+
 export const reviewJoinRequest = async (req, res) => {
   let approvedFounderAdded = false
   let joinRequest = null
@@ -166,9 +200,9 @@ export const reviewJoinRequest = async (req, res) => {
     }
 
     joinRequest = await VentureJoinRequest.findById(requestId)
-    const stateError = ensureJoinRequestCanBeReviewed(joinRequest)
-    if (stateError) {
-      return res.status(stateError.status).json({ error: stateError.error })
+    const reviewError = await joinRequestReviewError(req.user, joinRequest)
+    if (reviewError) {
+      return res.status(reviewError.status).json({ error: reviewError.error })
     }
 
     if (status === 'APPROVED') {

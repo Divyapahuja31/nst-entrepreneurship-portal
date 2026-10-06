@@ -18,6 +18,7 @@
     "lint-fix": "eslint . --fix",
     "prettify": "prettier --write .",
     "migrate:rbac": "node scripts/migrate-rbac.js",
+    "migrate:email": "node scripts/migrate-email-notifications.js",
     "make-admin": "node scripts/make-admin.js"
   },
   "dependencies": {

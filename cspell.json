@@ -31,6 +31,18 @@
 
     "nosniff",
     "clickjacking",
+    "SAMEORIGIN",
+
+    "preheader",
+    "cellspacing",
+    "dedupe",
+    "Segoe",
+    "Menlo",
+    "Consolas",
+    "Priya",
+    "Sharma",
+    "Rahul",
+    "Mehta",
 
     "Divya",
     "Pahuja",

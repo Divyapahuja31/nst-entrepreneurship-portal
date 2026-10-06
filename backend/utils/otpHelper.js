@@ -77,7 +77,13 @@ const sendCode = async (user, flow) => {
   // Sent in the background: waiting for the email would make registered
   // emails answer slower than unknown ones, revealing which exist.
   flow
-    .sendEmail({ to: user.email, username: user.username, otp })
+    .sendEmail({
+      to: user.email,
+      userId: user._id,
+      username: user.username,
+      otp,
+      expiresInMinutes: OTP_TTL_MS / 60000,
+    })
     .catch(async error => {
       console.error('Failed to send verification email:', error)
       // No code reached the user, so drop it. Otherwise its cooldown would

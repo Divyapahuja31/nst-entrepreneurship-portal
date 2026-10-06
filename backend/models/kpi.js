@@ -106,6 +106,22 @@ const kpiSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+
+    // A locked KPI's grade is final: its mentor can no longer change it,
+    // only the academic board can (or unlock it).
+    isLocked: {
+      type: Boolean,
+      default: false,
+    },
+    lockedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    lockedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

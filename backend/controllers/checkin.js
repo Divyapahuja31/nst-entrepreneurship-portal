@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import {
   canManageCheckIns,
   canReadCheckIns,
+  canRunCheckIn,
   isBoard,
   isStaff,
   isStudent,
@@ -25,6 +26,7 @@ import {
   withMeetLink,
 } from '../utils/checkInHelper.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
+import { cycleOrigin } from '../utils/programme.js'
 import { processCheckIn } from '../utils/transcriptPoller.js'
 
 const DEFAULT_DURATION = 30
@@ -35,9 +37,24 @@ const VENTURE_FIELDS = 'name mentor createdAt'
 
 const sameId = (a, b) => String(a) === String(b)
 
+const programmeCheckIn = (req, res, { checkIn, venture, programme }) => {
+  if (!programme) {
+    res.status(409).json({
+      error: 'Programme sessions are changed from the Programme page',
+    })
+    return null
+  }
+  if (!canRunCheckIn(req.user, checkIn.staff)) {
+    res.status(403).json({ error: 'Only the staff running it can do that' })
+    return null
+  }
+  return { checkIn, venture }
+}
+
 const POPULATE = [
   { path: 'venture', select: 'name' },
   { path: 'mentor', select: 'username email' },
+  { path: 'staff', select: 'username email' },
   { path: 'attendees.user', select: 'username' },
 ]
 
@@ -75,11 +92,9 @@ const isTimeZone = value => {
   }
 }
 
-const lastCycleEnds = venture => cycleStart(venture.createdAt, CYCLES + 1)
-
-// Checks the time of a new or moved check-in. Returns { error } or
-// { startAt, durationMinutes, cycle }.
-const parseTime = (body, venture, fallbackDuration = DEFAULT_DURATION) => {
+// Checks the time of a new or moved check-in, against cycles counted from
+// `origin`. Returns { error } or { startAt, durationMinutes, cycle }.
+const parseTime = (body, origin, fallbackDuration = DEFAULT_DURATION) => {
   const startAt = new Date(body.startAt)
   if (typeof body.startAt !== 'string' || Number.isNaN(startAt.getTime())) {
     return { error: 'Choose a date and time' }
@@ -98,11 +113,12 @@ const parseTime = (body, venture, fallbackDuration = DEFAULT_DURATION) => {
       error: `A check-in lasts ${MIN_DURATION} to ${MAX_DURATION} minutes`,
     }
   }
-  const cycle = cycleForDate(venture.createdAt, startAt)
+  const cycle = cycleForDate(origin, startAt)
   if (!cycle) {
     return {
-      error: `Choose a time before the startup's last cycle ends (${lastCycleEnds(
-        venture
+      error: `Choose a time within the programme's ${CYCLES} cycles (they end ${cycleStart(
+        origin,
+        CYCLES + 1
       ).toDateString()})`,
     }
   }
@@ -131,8 +147,10 @@ const findManagedVenture = async (req, res, ventureId) => {
 }
 
 // A check-in the caller may change, with its startup. Sends the error
-// response and returns null otherwise.
-const findManagedCheckIn = async (req, res) => {
+// response and returns null otherwise. A programme meeting is moved and
+// cancelled only through its session; its staff write its notes and check
+// its transcript (`programme: true`).
+const findManagedCheckIn = async (req, res, { programme = false } = {}) => {
   const { id } = req.params
   if (!mongoose.isValidObjectId(id)) {
     res.status(400).json({ error: 'Valid check-in id is required' })
@@ -144,6 +162,9 @@ const findManagedCheckIn = async (req, res) => {
     return null
   }
   const venture = await Venture.findById(checkIn.venture).select(VENTURE_FIELDS)
+  if (checkIn.session) {
+    return programmeCheckIn(req, res, { checkIn, venture, programme })
+  }
   if (!venture || !canManageCheckIns(req.user, venture.mentor)) {
     res
       .status(403)
@@ -204,11 +225,12 @@ const listForFounder = async (req, res, founderId) => {
   })
 }
 
-// Students see their own startup's check-ins. Staff name a startup, or a
-// founder for the check-ins that founder was invited to (their record).
+// Students see their own startup's check-ins. Staff name a startup, a
+// founder for the check-ins that founder was invited to (their record), or
+// `mine` for the programme meetings they run.
 export const listCheckIns = async (req, res) => {
   try {
-    const { ventureId, founderId } = req.query
+    const { ventureId, founderId, mine } = req.query
     if (isStudent(req.user)) {
       return await listForStudent(req, res)
     }
@@ -221,6 +243,14 @@ export const listCheckIns = async (req, res) => {
     if (founderId) {
       return await listForFounder(req, res, founderId)
     }
+    if (mine) {
+      return res.json({
+        checkIns: await loadCheckIns({
+          staff: req.user.id,
+          session: { $ne: null },
+        }),
+      })
+    }
     return res.status(400).json({ error: 'Name a ventureId or founderId' })
   } catch (error) {
     return sendError(res, error, 'Could not load check-ins')
@@ -230,7 +260,8 @@ export const listCheckIns = async (req, res) => {
 // Checks a new check-in for a startup. Returns { status, error } or
 // { time, timeZone, occurrences, attendees }.
 const parseNewCheckIn = async (body, venture) => {
-  const time = parseTime(body, venture)
+  const origin = await cycleOrigin(venture)
+  const time = parseTime(body, origin)
   if (time.error) {
     return { status: 400, error: time.error }
   }
@@ -255,7 +286,7 @@ const parseNewCheckIn = async (body, venture) => {
       error: 'This startup has no active founders to invite',
     }
   }
-  return { time, timeZone: body.timeZone, occurrences, attendees }
+  return { time, timeZone: body.timeZone, occurrences, attendees, origin }
 }
 
 // Schedules one check-in, or with `recurring` one every two weeks through
@@ -272,7 +303,7 @@ export const createCheckIns = async (req, res) => {
     if (parsed.error) {
       return res.status(parsed.status).json({ error: parsed.error })
     }
-    const { time, timeZone, occurrences, attendees } = parsed
+    const { time, timeZone, occurrences, attendees, origin } = parsed
 
     const google = await googleFor(req.user.id)
     const event = await withMeetLink(
@@ -292,6 +323,7 @@ export const createCheckIns = async (req, res) => {
     const fields = ev => ({
       ...checkInFields({
         venture,
+        origin,
         event: { ...ev, hangoutLink: ev.hangoutLink ?? event.hangoutLink },
         durationMinutes: time.durationMinutes,
         timeZone,
@@ -351,7 +383,11 @@ export const rescheduleCheckIn = async (req, res) => {
         .json({ error: 'Only an upcoming check-in can be moved' })
     }
 
-    const time = parseTime(req.body ?? {}, venture, checkIn.durationMinutes)
+    const time = parseTime(
+      req.body ?? {},
+      await cycleOrigin(venture),
+      checkIn.durationMinutes
+    )
     if (time.error) {
       return res.status(400).json({ error: time.error })
     }
@@ -463,7 +499,8 @@ export const getCheckIn = async (req, res) => {
       req.user,
       checkIn.venture
     )
-    if (!canReadCheckIns(req.user, { mentorId, isMember })) {
+    const runsIt = checkIn.session && canRunCheckIn(req.user, checkIn.staff)
+    if (!runsIt && !canReadCheckIns(req.user, { mentorId, isMember })) {
       return res.status(403).json({ error: 'Forbidden' })
     }
     return res.json({ checkIn })
@@ -482,7 +519,7 @@ export const saveCheckInNotes = async (req, res) => {
         .status(400)
         .json({ error: `Notes are text of at most ${MAX_NOTES} characters` })
     }
-    const found = await findManagedCheckIn(req, res)
+    const found = await findManagedCheckIn(req, res, { programme: true })
     if (!found) {
       return null
     }
@@ -502,7 +539,7 @@ export const saveCheckInNotes = async (req, res) => {
 // Asks Meet for the transcript now instead of waiting for the poller.
 export const refreshTranscript = async (req, res) => {
   try {
-    const found = await findManagedCheckIn(req, res)
+    const found = await findManagedCheckIn(req, res, { programme: true })
     if (!found) {
       return null
     }

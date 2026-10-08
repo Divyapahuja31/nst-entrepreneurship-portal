@@ -6,6 +6,11 @@ import {
   studentResultEmail,
 } from './kpiEmails.js'
 import { passwordResetEmail, signupVerificationEmail } from './authEmails.js'
+import {
+  founderSessionEmail,
+  sessionCancelledEmail,
+  staffSessionEmail,
+} from './sessionEmails.js'
 
 // Every template with made-up data, for the dev preview page.
 
@@ -29,6 +34,16 @@ const code = {
   recipientName: 'Priya Sharma',
   code: '482915',
   expiresInMinutes: 5,
+}
+
+const session = {
+  recipientName: 'Priya Sharma',
+  group: false,
+  ventureName: 'GreenCart',
+  day: 'Thu 16 Oct',
+  time: '6:15 PM – 6:30 PM',
+  staffNames: 'Rahul Mehta',
+  meetUrl: 'https://meet.google.com/abc-defg-hij',
 }
 
 export const EMAIL_PREVIEWS = {
@@ -66,5 +81,48 @@ export const EMAIL_PREVIEWS = {
     label: 'Sign-up verification code',
     usesScore: false,
     render: () => signupVerificationEmail(code),
+  },
+  'session-founder': {
+    label: 'Programme session slot (founder)',
+    usesScore: false,
+    render: () => founderSessionEmail(session),
+  },
+  'session-group': {
+    label: 'Programme group session (founder)',
+    usesScore: false,
+    render: () =>
+      founderSessionEmail({
+        ...session,
+        group: true,
+        time: '6:00 PM – 8:00 PM',
+        staffNames: 'Rahul Mehta, Divya Pahuja',
+      }),
+  },
+  'session-staff': {
+    label: 'Programme session schedule (staff)',
+    usesScore: false,
+    render: () =>
+      staffSessionEmail({
+        recipientName: 'Rahul Mehta',
+        group: false,
+        day: session.day,
+        time: '6:00 PM – 8:00 PM',
+        meetUrl: null,
+        meetings: [
+          { time: '6:00 PM – 6:15 PM', ventureName: 'GreenCart' },
+          { time: '6:15 PM – 6:30 PM', ventureName: 'Vyapaar Express' },
+        ],
+      }),
+  },
+  'session-cancelled': {
+    label: 'Programme session cancelled',
+    usesScore: false,
+    render: () =>
+      sessionCancelledEmail({
+        recipientName: 'Priya Sharma',
+        ventureName: 'GreenCart',
+        day: session.day,
+        time: session.time,
+      }),
   },
 }

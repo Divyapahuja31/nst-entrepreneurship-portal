@@ -4,6 +4,7 @@ import { useLoaderData } from 'react-router'
 import ActionQueue from '../../components/ActionQueue'
 import BarChart from '../../components/BarChart'
 import ChartCard from '../../components/ChartCard'
+import CheckInsSection from '../../components/CheckInsSection'
 import HorizontalBars from '../../components/HorizontalBars'
 import PageHeader from '../../components/PageHeader'
 import StatTile from '../../components/StatTile'
@@ -56,6 +57,7 @@ function Index() {
     overview,
     stages = [],
     campuses = [],
+    programmeMeetings,
   } = useLoaderData()
   const ventureCount = overview?.ventures ?? 0
   const hasScores = Object.values(kpi ?? {}).some(score => score != null)
@@ -85,6 +87,15 @@ function Index() {
         }}
       >
         <ActionQueue actions={actions} />
+
+        {programmeMeetings?.length > 0 && (
+          <CheckInsSection
+            checkIns={programmeMeetings}
+            showVenture
+            title="Your Programme Sessions"
+            subtitle="The meetings you run. Open a past one for its transcript and notes."
+          />
+        )}
 
         <Box
           sx={{

@@ -9,7 +9,8 @@ import { cookieOptions } from '../utils/token.js'
 import { encryptToken, decryptToken } from '../utils/tokenCrypto.js'
 
 // A mentor connects their Google Calendar so the portal can put check-ins on
-// it. The route allows mentors only.
+// it; the admin hosting the programme connects theirs for its sessions. The
+// route allows mentors and admins.
 
 // Ties Google's callback to the browser that started connecting, and
 // remembers which page to return to.

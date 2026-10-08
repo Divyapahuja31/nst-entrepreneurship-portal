@@ -10,6 +10,11 @@ import {
   passwordResetEmail,
   signupVerificationEmail,
 } from './emailTemplates/authEmails.js'
+import {
+  founderSessionEmail,
+  sessionCancelledEmail,
+  staffSessionEmail,
+} from './emailTemplates/sessionEmails.js'
 
 const DUPLICATE_KEY = 11000
 
@@ -115,10 +120,11 @@ export const deliver = async ({
   return { messageId }
 }
 
-// ------------------------------------------------------------- KPI emails
-// recipient: { email, userId? }. dedupeKey identifies the KPI.
+// ---------------------------------------------- KPI and programme emails
+// recipient: { email, userId? }. For a KPI email dedupeKey identifies the
+// KPI.
 
-const kpiEmail =
+const toRecipient =
   (type, template) =>
   ({ recipient, dedupeKey, ...props }) =>
     deliver({
@@ -129,19 +135,19 @@ const kpiEmail =
       email: template(props),
     })
 
-export const sendStudentResult = kpiEmail(
+export const sendStudentResult = toRecipient(
   'KPI_SCORED_STUDENT',
   studentResultEmail
 )
-export const sendMentorFollowUp = kpiEmail(
+export const sendMentorFollowUp = toRecipient(
   'CONSECUTIVE_MID_SCORE_MENTOR',
   mentorFollowUpEmail
 )
-export const sendMentorLowScore = kpiEmail(
+export const sendMentorLowScore = toRecipient(
   'CONSECUTIVE_LOW_SCORE_MENTOR',
   mentorLowScoreEmail
 )
-export const sendBoardLowScore = kpiEmail(
+export const sendBoardLowScore = toRecipient(
   'CONSECUTIVE_LOW_SCORE_BOARD',
   boardLowScoreEmail
 )
@@ -165,4 +171,18 @@ export const sendResetPasswordOtpEmail = codeEmail(
 export const sendSignupOtpEmail = codeEmail(
   'SIGNUP_VERIFICATION',
   signupVerificationEmail
+)
+
+// ------------------------------------------------------ programme emails
+// recipient: { email, userId? }. dedupeKey identifies what the email says,
+// so a changed meeting is emailed again and an unchanged one never is.
+
+export const sendFounderSession = toRecipient(
+  'SESSION_FOUNDER',
+  founderSessionEmail
+)
+export const sendStaffSession = toRecipient('SESSION_STAFF', staffSessionEmail)
+export const sendSessionCancelled = toRecipient(
+  'SESSION_CANCELLED',
+  sessionCancelledEmail
 )

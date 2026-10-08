@@ -85,3 +85,33 @@ export const disconnectCalendar = async () => {
     return toError(err, 'Could not disconnect Google Calendar')
   }
 }
+
+// ------------------------------------------------ transcripts and notes
+
+export const getCheckIn = async id => {
+  try {
+    const { data } = await api.get(`/checkins/${id}`)
+    return { checkIn: data.checkIn }
+  } catch (err) {
+    return toError(err, 'Could not load the check-in')
+  }
+}
+
+export const saveCheckInNotes = async (id, notes) => {
+  try {
+    const { data } = await api.put(`/checkins/${id}/notes`, { notes })
+    return { notes: data.notes }
+  } catch (err) {
+    return toError(err, 'Could not save the notes')
+  }
+}
+
+// `settled` says whether Meet gave a definite answer.
+export const refreshTranscript = async id => {
+  try {
+    const { data } = await api.post(`/checkins/${id}/transcript/refresh`)
+    return { checkIn: data.checkIn, settled: data.settled }
+  } catch (err) {
+    return withCode(err, 'Could not check for a transcript')
+  }
+}

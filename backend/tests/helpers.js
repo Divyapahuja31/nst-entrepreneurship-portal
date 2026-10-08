@@ -46,6 +46,12 @@ export const google = {
   grants: new Map(),
   failures: new Map(),
   revoked: [],
+  // Meet: conference records, and each record's transcripts, each
+  // transcript's entries and each participant, by resource name.
+  records: [],
+  transcripts: new Map(),
+  entries: new Map(),
+  participants: new Map(),
 }
 
 const fakeCall = (method, token, ...args) => {
@@ -98,6 +104,22 @@ setGoogleWorkspace({
   },
   deleteEvent: async (token, id) => {
     fakeCall('deleteEvent', token, id)
+  },
+  conferenceRecords: async (token, meetingCode) => {
+    fakeCall('conferenceRecords', token, meetingCode)
+    return google.records.filter(r => r.meetingCode === meetingCode)
+  },
+  transcripts: async (token, recordName) => {
+    fakeCall('transcripts', token, recordName)
+    return google.transcripts.get(recordName) ?? []
+  },
+  transcriptEntries: async (token, transcriptName) => {
+    fakeCall('transcriptEntries', token, transcriptName)
+    return google.entries.get(transcriptName) ?? []
+  },
+  participant: async (token, name) => {
+    fakeCall('participant', token, name)
+    return google.participants.get(name)
   },
   listInstances: async (token, id) => {
     fakeCall('listInstances', token, id)
@@ -153,6 +175,10 @@ export const seed = async () => {
   google.grants.clear()
   google.failures.clear()
   google.revoked.length = 0
+  google.records.length = 0
+  google.transcripts.clear()
+  google.entries.clear()
+  google.participants.clear()
   await mongoose.connection.dropDatabase()
   await migrateRbac()
   const roles = Object.fromEntries(

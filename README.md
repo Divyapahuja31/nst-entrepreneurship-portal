@@ -125,6 +125,15 @@ A startup's mentor schedules bi-weekly check-ins from the startup's **Check-Ins*
 - When a startup's mentor changes, or the mentor is deactivated or loses the mentor role, their upcoming check-ins for it are cancelled. Removing them from Google is best effort.
 - The invitees are the active founders when a check-in is scheduled or moved. A founder who joins later is invited from the next one that is scheduled or moved.
 
+### Transcripts and notes
+
+After each check-in the server looks for its Google Meet transcript through the mentor's connection ([`transcriptPoller.js`](backend/utils/transcriptPoller.js)). It first looks 15 minutes after the check-in should end, then again with longer gaps, and stops after two days. Each check-in then reads as held (someone joined) or not held, and its transcript as ready or unavailable. Anyone who can read the startup can read the transcript, with speaker names, under **Transcript** on a past check-in. The mentor can also write notes there, and press **Check Now** instead of waiting.
+
+- Meet only makes a transcript when someone turns transcription on during the meeting (Activities, then Transcripts), or when the Workspace turns it on by default. That needs a Google Workspace edition with Meet transcripts. Without one, every check-in ends up with no transcript, and the mentor's notes are the record.
+- Meet keeps a meeting's records for 30 days, so a transcript that arrives later than that is never collected.
+- A very long transcript is cut at about 1 MB of text. The full one stays in the mentor's Google Drive.
+- With more than one server, each check-in is claimed before it is fetched, so it is only fetched once.
+
 ### Setting up Google
 
 1. In the Google Cloud project, enable the **Google Calendar API** and the **Google Meet REST API**.
@@ -143,7 +152,7 @@ npm test
 - `shared/permissions.test.js` checks every rule against the matrix above, for every role, startup relationship, lock state and status.
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
-- `backend/tests/checkins.test.js` and `googleConnect.test.js` check scheduling, recurring check-ins, who may do what and connecting a calendar against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
+- `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, recurring check-ins, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 
 The first run downloads a MongoDB binary for the tests.
 

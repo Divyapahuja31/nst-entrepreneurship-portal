@@ -284,7 +284,11 @@ export default function CheckInsSection({ checkIns, venture, showVenture }) {
       key={checkIn._id}
       checkIn={checkIn}
       showVenture={showVenture}
-      canManage={canManage}
+      // A founder's record can hold an earlier startup's check-ins.
+      canManage={
+        canManage &&
+        String(checkIn.venture?._id ?? checkIn.venture) === String(venture.id)
+      }
       onMove={c => setDialog({ checkIn: c })}
       onCancel={c => setConfirm({ kind: 'one', id: c._id })}
       onOpen={c => setOpen(c._id)}

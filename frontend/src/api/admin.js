@@ -16,14 +16,11 @@ export const addFounderLoader = async () => {
   return data
 }
 
-export const biWeeklyLoader = async ({ params }) => {
+// The founder, their KPIs and the bi-weekly reports of the startup they
+// are in now.
+export const founderProfileLoader = async ({ params }) => {
   const [{ data: biweekly }, kpisRes] = await Promise.all([
-    api.get('/biweekly', {
-      params: {
-        ventureId: params?.ventureId,
-        founderId: params?.userid,
-      },
-    }),
+    api.get('/biweekly', { params: { founderId: params?.userid } }),
     api
       .get(`/kpis/founder/${params?.userid}`)
       .catch(() => ({ data: { data: [] } })),

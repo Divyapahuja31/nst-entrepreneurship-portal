@@ -93,7 +93,7 @@ function VentureDashboard({ user, venture }) {
         <Grid size={{ xs: 12, sm: 6 }}>
           <ActionCard
             component={RouterLink}
-            to={`/profile/${user._id}`}
+            to="/biweekly"
             icon={CalendarIcon}
             tint="green"
             title="Bi-weekly check-in"

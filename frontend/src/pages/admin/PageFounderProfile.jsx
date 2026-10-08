@@ -1,5 +1,10 @@
 import * as React from 'react'
-import { Link as RouterLink, useLoaderData, useParams } from 'react-router'
+import {
+  Link as RouterLink,
+  useLoaderData,
+  useParams,
+  useSearchParams,
+} from 'react-router'
 
 import { Alert, Box, Link, Tab, Tabs } from '@mui/material'
 
@@ -15,8 +20,14 @@ const breadcrumbs = name => [
   { label: name || 'Founder' },
 ]
 
+const CHECK_INS_TAB = 2
+
 export default function PageFounderProfile() {
-  const [tab, setTab] = React.useState(0)
+  // Coming back from connecting Google Calendar lands on the check-ins.
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = React.useState(() =>
+    searchParams.has('calendar') ? CHECK_INS_TAB : 0
+  )
   const biweeklyData = useLoaderData()
   const params = useParams()
   const { isStaff } = useAccess()
@@ -87,8 +98,13 @@ export default function PageFounderProfile() {
         />
       )}
       {tab === 1 && <BiWeekly data={biweeklyData} />}
-      {tab === 2 && (
-        <CheckInsSection checkIns={biweeklyData?.checkIns} showVenture />
+      {tab === CHECK_INS_TAB && (
+        // The startup the founder is in now, so its mentor can schedule here.
+        <CheckInsSection
+          checkIns={biweeklyData?.checkIns}
+          venture={venture && { ...venture, id: venture.id ?? venture._id }}
+          showVenture
+        />
       )}
     </Box>
   )

@@ -40,8 +40,9 @@ const callback = ({ state, cookies }, query) =>
     .query({ state, ...query })
     .set('Cookie', cookies)
 
+// Without FRONTEND_URL (as in CI) the redirect is a path on this site.
 const outcome = res =>
-  new URL(res.headers.location).searchParams.get('calendar')
+  new URL(res.headers.location, 'http://localhost').searchParams.get('calendar')
 
 const grant = (email, scopes = REQUIRED_SCOPES) =>
   google.grants.set('code', { email, scopes, refreshToken: 'refresh-1' })

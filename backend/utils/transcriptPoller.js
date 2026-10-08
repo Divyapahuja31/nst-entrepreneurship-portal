@@ -6,7 +6,7 @@ import { googleFor } from './checkInHelper.js'
 // Meet makes a transcript only when someone turns transcription on (or the
 // Workspace does it by default), so many check-ins won't have one.
 //
-// server.js starts the poller; tests call pollTranscripts directly.
+// utils/jobs.js runs it; tests call pollTranscripts directly.
 
 const MINUTE_MS = 60 * 1000
 const HOUR_MS = 60 * MINUTE_MS
@@ -23,7 +23,6 @@ export const GIVE_UP_MS = 48 * HOUR_MS
 const MATCH_WINDOW_MS = 3 * HOUR_MS
 // While one poll works on a check-in, another leaves it alone.
 const LEASE_MS = 10 * MINUTE_MS
-const POLL_EVERY_MS = 10 * MINUTE_MS
 const BATCH = 25
 // About 1 MB of text keeps a check-in well inside MongoDB's 16 MB limit.
 const MAX_TEXT = 1_000_000
@@ -159,7 +158,8 @@ const inspect = async (google, checkIn, giveUp) => {
 // is time to give up.
 const checkMeet = async (checkIn, giveUp) => {
   try {
-    const google = await googleFor(checkIn.mentor)
+    // Programme meetings are on the admin's calendar, the rest on the mentor's.
+    const google = await googleFor(checkIn.host ?? checkIn.mentor)
     return await inspect(google, checkIn, giveUp)
   } catch (error) {
     console.warn(
@@ -171,6 +171,13 @@ const checkMeet = async (checkIn, giveUp) => {
       : { fields: {}, done: false }
   }
 }
+
+// A group session is one meeting with a CheckIn per startup: what is found
+// for one is saved on all of them.
+const sharedWith = checkIn =>
+  checkIn.group
+    ? { googleEventId: checkIn.googleEventId, status: { $ne: 'CANCELLED' } }
+    : { _id: checkIn._id }
 
 // When to look again: never once settled, else after the next backoff.
 const nextPoll = (attempts, done, now) => ({
@@ -195,10 +202,9 @@ export const processCheckIn = async (
   const schedule = manual
     ? {}
     : nextPoll((checkIn.transcript?.attempts ?? 0) + 1, done, now)
-  await CheckIn.updateOne(
-    { _id: checkIn._id },
-    { $set: { ...fields, ...schedule, 'transcript.fetchedAt': now } }
-  )
+  await CheckIn.updateMany(sharedWith(checkIn), {
+    $set: { ...fields, ...schedule, 'transcript.fetchedAt': now },
+  })
   return done
 }
 
@@ -223,29 +229,15 @@ export const pollTranscripts = async (now = new Date()) => {
       { returnDocument: 'after' }
     )
     if (claimed) {
+      // The rest of a group wait while this one fetches for them all.
+      if (claimed.group) {
+        await CheckIn.updateMany(sharedWith(claimed), {
+          $set: { 'transcript.nextPollAt': claimed.transcript.nextPollAt },
+        })
+      }
       await processCheckIn(claimed, { now })
       processed += 1
     }
   }
   return processed
-}
-
-let timer = null
-let inFlight = null
-
-export const startTranscriptPoller = () => {
-  if (timer) {
-    return
-  }
-  // One poll at a time: a slow one makes the next tick a no-op.
-  const tick = () => {
-    inFlight ??= pollTranscripts()
-      .catch(error => console.error('Transcript poll failed:', error))
-      .finally(() => {
-        inFlight = null
-      })
-  }
-  timer = setInterval(tick, POLL_EVERY_MS)
-  timer.unref()
-  setTimeout(tick, MINUTE_MS).unref()
 }

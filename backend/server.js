@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import app from './app.js'
-import { startTranscriptPoller } from './utils/transcriptPoller.js'
+import { startBackgroundJobs } from './utils/jobs.js'
 
 const PORT = process.env.PORT || 4000
 
@@ -10,7 +10,7 @@ mongoose
   })
   .then(() => {
     console.info('Connected to MongoDB')
-    startTranscriptPoller()
+    startBackgroundJobs()
   })
   .catch(err => console.error('Error connecting to MongoDB:', err.message))
 

@@ -246,7 +246,14 @@ describe('check-ins', () => {
     for (const [who, actor] of Object.entries(ACTORS)) {
       assert.equal(
         can.canConnectCalendar(actor),
-        ['mentor', 'otherMentor'].includes(who),
+        ['admin', 'mentor', 'otherMentor'].includes(who),
+        who
+      )
+      assert.equal(can.canManageProgramme(actor), who === 'admin', who)
+      // A programme meeting run by `otherMentor`, whoever mentors the startup.
+      assert.equal(
+        can.canRunCheckIn(actor, [ACTORS.otherMentor.id]),
+        ['admin', 'otherMentor'].includes(who),
         who
       )
       assert.equal(
@@ -264,6 +271,8 @@ describe('check-ins', () => {
       )
     }
     assert.equal(can.canManageCheckIns(ACTORS.mentor, null), false)
+    // A student listed as staff by mistake still can't run it.
+    assert.equal(can.canRunCheckIn(ACTORS.owner, [ACTORS.owner.id]), false)
   })
 })
 

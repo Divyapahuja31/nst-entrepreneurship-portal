@@ -50,9 +50,11 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Submit a bi-weekly report | ❌ | ❌ | ❌ | own startup, until submitted |
 | Write bi-weekly observations and evaluations | ✅ | ✅ | assigned startups | ❌ |
 | Reopen a submitted bi-weekly report | ✅ | ✅ | ❌ | ❌ |
-| Connect a Google Calendar | ❌ | ❌ | ✅ | ❌ |
-| Schedule, move or cancel check-ins | ❌ | ❌ | assigned startups | ❌ |
-| Read check-ins | all | all | assigned startups | own startup |
+| Set up the programme: calendar, staff, who is invited, sessions | ✅ | ❌ | ❌ | ❌ |
+| Connect a Google Calendar | ✅ | ❌ | ✅ | ❌ |
+| Schedule, move or cancel their own check-ins | ❌ | ❌ | assigned startups | ❌ |
+| Notes and "Check Now" on a programme meeting | ✅ | the meetings they run | the meetings they run | ❌ |
+| Read check-ins | all | all | assigned startups, and meetings they run | own startup |
 
 ### How it is enforced
 
@@ -116,7 +118,27 @@ To create the log's indexes on an existing database, run this once. It's safe to
 npm run migrate:email -w backend
 ```
 
+## The programme (bi-weekly sessions)
+
+An admin runs the programme from **Programme** (`/admin/programme`). It sets one calendar for every startup:
+
+- **Cycle 1 starts** on a date the admin chooses. Every startup's bi-weekly report cycles count from it, instead of from the day the startup was created. Reports already filed keep their cycle numbers.
+- **One session every other week**, on the chosen day and between the chosen times (Thursday 6–8 pm by default, in the chosen time zone). That gives 13 sessions, one per cycle.
+- **Meeting staff:** the people who run the sessions. They can be any admins, academic board members or mentors, including the admin. Who mentors a startup doesn't matter here.
+- **Who is invited:** every startup with active founders, and all their founders, unless the admin switches a startup or a founder off. New startups and founders are invited automatically.
+- **Mode:**
+  - **Slots:** each startup meets one staff member in its own slot (15 minutes by default, with an optional gap between slots and before the first). The staff run their slots in parallel. Startups are dealt at random and evenly across the staff, drawn again for every session. Saving refuses settings that leave too few slots for the invited startups.
+  - **Group:** one meeting for the whole session, with every invited founder and all the staff.
+
+Each session is scheduled a few days before it (7 by default, "Schedule ahead"). The meetings are drawn, created as events with Meet links on the admin's Google Calendar, and every staff member and founder is invited and emailed their time and link. The admin who first saves the programme hosts the events and must connect their Google Calendar on that page. An admin can also **Schedule Now**, **Redraw** or **Cancel** each session.
+
+Later changes don't start the draw again. A new time, gap or length moves the meetings, and adding or removing staff, startups or founders moves only what it has to. Only people whose meeting changed get an email, and anyone removed gets a cancellation. If a staff member is deactivated, save the programme or redraw to move their startups.
+
+Programme meetings show on each startup's Check-Ins tab and on founders' pages. Each staff member sees the meetings they run on their Overview, where they can read the transcript and write notes. Transcripts are collected through the admin's connection. A group session's transcript is collected once and attached to every startup in it.
+
 ## Mentor check-ins (Google Calendar and Meet)
+
+Besides the programme, a startup's mentor can schedule their own check-ins with it.
 
 A startup's mentor schedules bi-weekly check-ins from the startup's **Check-Ins** tab. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. A check-in is one-off or repeats every two weeks, one per cycle, through cycle 13. Each occurrence can be moved or cancelled on its own, and a recurring check-in can be ended.
 
@@ -141,7 +163,7 @@ After each check-in the server looks for its Google Meet transcript through the 
 3. Set `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` and `GOOGLE_WORKSPACE_REDIRECT_URI` in `backend/.env`. Without them the sign-in client (`GOOGLE_CLIENT_*`) is used, which then needs the scopes and redirect URI above. Students would see a consent screen asking for calendar access only if they reached the connect route, which is for mentors only.
 4. Set `GOOGLE_TOKEN_KEY` to 32 random bytes (`openssl rand -base64 32`, or `-hex 32`). Mentors' refresh tokens are encrypted with it. Changing it means every mentor connects again.
 
-Each mentor then clicks **Connect Google Calendar** once, the first time they schedule. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
+The admin hosting the programme connects their calendar on the Programme page. Each mentor clicks **Connect Google Calendar** once, the first time they schedule their own check-in. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
 
 ## Tests
 
@@ -152,6 +174,7 @@ npm test
 - `shared/permissions.test.js` checks every rule against the matrix above, for every role, startup relationship, lock state and status.
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
+- `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and cycles counted from the programme start.
 - `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, recurring check-ins, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 
 The first run downloads a MongoDB binary for the tests.

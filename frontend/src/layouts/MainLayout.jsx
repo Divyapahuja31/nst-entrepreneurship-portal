@@ -83,11 +83,18 @@ const commonMenuItems = [
   },
 ]
 
-const accountsMenuItem = {
-  menu: 'Accounts & Roles',
-  icon: ShieldIcon,
-  path: '/admin/accounts',
-}
+const adminMenuItems = [
+  {
+    menu: 'Programme',
+    icon: CalendarIcon,
+    path: '/admin/programme',
+  },
+  {
+    menu: 'Accounts & Roles',
+    icon: ShieldIcon,
+    path: '/admin/accounts',
+  },
+]
 
 const menuFor = (user, { isStaff, isMentor, isAdmin, isStudent }) => {
   if (isStaff) {
@@ -101,7 +108,7 @@ const menuFor = (user, { isStaff, isMentor, isAdmin, isStudent }) => {
       : staffMenuItems
     return [
       ...staffItems,
-      ...(isAdmin ? [accountsMenuItem] : []),
+      ...(isAdmin ? adminMenuItems : []),
       ...commonMenuItems,
     ]
   }

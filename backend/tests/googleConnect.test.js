@@ -124,12 +124,14 @@ describe('connecting a Google Calendar', () => {
     assert.equal(await GoogleCredential.countDocuments(), 0)
   })
 
-  it('is for mentors only', async () => {
-    for (const user of [data.users.admin, data.users.board, data.users.owner]) {
+  it('is for mentors and admins (who host the programme)', async () => {
+    const allowed = [data.users.mentor, data.users.admin]
+    const refused = [data.users.board, data.users.owner]
+    for (const user of [...allowed, ...refused]) {
       const res = await request(app)
         .get('/api/google/status')
         .set('Cookie', cookieFor(user))
-      assert.equal(res.status, 403, user.email)
+      assert.equal(res.status, allowed.includes(user) ? 200 : 403, user.email)
     }
   })
 })

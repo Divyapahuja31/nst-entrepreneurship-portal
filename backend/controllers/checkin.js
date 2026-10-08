@@ -11,7 +11,7 @@ import { CYCLES, cycleForDate, cycleStart } from '@nst/shared/biweeklyCycles.js'
 import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import Venture from '../models/venture.js'
-import { scopedVentureIds } from '../utils/access.js'
+import { scopedVentureIds, ventureAccess } from '../utils/access.js'
 import {
   checkInEvent,
   checkInFields,
@@ -21,9 +21,11 @@ import {
   googleFor,
   occurrencesFrom,
   rescheduledEvent,
+  transcriptDueAt,
   withMeetLink,
 } from '../utils/checkInHelper.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
+import { processCheckIn } from '../utils/transcriptPoller.js'
 
 const DEFAULT_DURATION = 30
 const MIN_DURATION = 15
@@ -39,8 +41,12 @@ const POPULATE = [
   { path: 'attendees.user', select: 'username' },
 ]
 
+// Lists leave out the transcript itself; GET /:id has it.
 const loadCheckIns = filter =>
-  CheckIn.find(filter).sort({ scheduledAt: 1 }).populate(POPULATE)
+  CheckIn.find(filter)
+    .select('-transcript.entries -transcript.text')
+    .sort({ scheduledAt: 1 })
+    .populate(POPULATE)
 
 // Google failures carry their own status and message; anything else is ours.
 const sendError = (res, error, fallback) => {
@@ -368,6 +374,10 @@ export const rescheduleCheckIn = async (req, res) => {
       durationMinutes: time.durationMinutes,
       cycle_number: time.cycle,
       attendees,
+      'transcript.nextPollAt': transcriptDueAt(
+        time.startAt,
+        time.durationMinutes
+      ),
     })
     await checkIn.save()
     return res.json({ checkIn: (await loadCheckIns({ _id: checkIn._id }))[0] })
@@ -432,5 +442,87 @@ export const endCheckInSeries = async (req, res) => {
     })
   } catch (error) {
     return sendError(res, error, 'Could not end the recurring check-in')
+  }
+}
+
+const MAX_NOTES = 20000
+
+// One check-in with its transcript and notes, for anyone who can read the
+// startup.
+export const getCheckIn = async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Valid check-in id is required' })
+    }
+    const checkIn = await CheckIn.findById(id).populate(POPULATE)
+    if (!checkIn) {
+      return res.status(404).json({ error: 'Check-in not found' })
+    }
+    const { mentorId, isMember } = await ventureAccess(
+      req.user,
+      checkIn.venture
+    )
+    if (!canReadCheckIns(req.user, { mentorId, isMember })) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+    return res.json({ checkIn })
+  } catch (error) {
+    return sendError(res, error, 'Could not load the check-in')
+  }
+}
+
+// The mentor's notes: what was discussed, or the record of a meeting Meet
+// made no transcript of.
+export const saveCheckInNotes = async (req, res) => {
+  try {
+    const { notes } = req.body ?? {}
+    if (typeof notes !== 'string' || notes.length > MAX_NOTES) {
+      return res
+        .status(400)
+        .json({ error: `Notes are text of at most ${MAX_NOTES} characters` })
+    }
+    const found = await findManagedCheckIn(req, res)
+    if (!found) {
+      return null
+    }
+    if (found.checkIn.status === 'CANCELLED') {
+      return res
+        .status(409)
+        .json({ error: 'A cancelled check-in has no notes' })
+    }
+    found.checkIn.notes = notes
+    await found.checkIn.save()
+    return res.json({ notes: found.checkIn.notes })
+  } catch (error) {
+    return sendError(res, error, 'Could not save the notes')
+  }
+}
+
+// Asks Meet for the transcript now instead of waiting for the poller.
+export const refreshTranscript = async (req, res) => {
+  try {
+    const found = await findManagedCheckIn(req, res)
+    if (!found) {
+      return null
+    }
+    const { checkIn } = found
+    const ended =
+      checkIn.scheduledAt.getTime() + checkIn.durationMinutes * 60 * 1000 <=
+      Date.now()
+    if (
+      !ended ||
+      checkIn.status === 'CANCELLED' ||
+      checkIn.transcript.status === 'READY'
+    ) {
+      return res
+        .status(409)
+        .json({ error: 'Only a check-in that has ended can be checked' })
+    }
+    const settled = await processCheckIn(checkIn, { manual: true })
+    const updated = await CheckIn.findById(checkIn._id).populate(POPULATE)
+    return res.json({ checkIn: updated, settled })
+  } catch (error) {
+    return sendError(res, error, 'Could not check for a transcript')
   }
 }

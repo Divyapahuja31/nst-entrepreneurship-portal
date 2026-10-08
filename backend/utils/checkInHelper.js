@@ -126,6 +126,16 @@ const meetFields = event => ({
 
 const eventStart = event => new Date(event.start?.dateTime ?? event.start?.date)
 
+// When to first look for a check-in's Meet transcript: a little after the
+// meeting is due to end.
+export const TRANSCRIPT_GRACE_MS = 15 * MINUTE_MS
+export const transcriptDueAt = (scheduledAt, durationMinutes) =>
+  new Date(
+    new Date(scheduledAt).getTime() +
+      durationMinutes * MINUTE_MS +
+      TRANSCRIPT_GRACE_MS
+  )
+
 // The CheckIn fields for an event or for one occurrence of a series.
 export const checkInFields = ({
   venture,
@@ -146,6 +156,7 @@ export const checkInFields = ({
     timeZone,
     googleEventId: event.id,
     ...meetFields(event),
+    transcript: { nextPollAt: transcriptDueAt(scheduledAt, durationMinutes) },
   }
 }
 

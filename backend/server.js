@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import app from './app.js'
+import { startTranscriptPoller } from './utils/transcriptPoller.js'
 
 const PORT = process.env.PORT || 4000
 
@@ -7,7 +8,10 @@ mongoose
   .connect(process.env.MONGODB_URI, {
     serverSelectionTimeoutMS: 5000,
   })
-  .then(() => console.info('Connected to MongoDB'))
+  .then(() => {
+    console.info('Connected to MongoDB')
+    startTranscriptPoller()
+  })
   .catch(err => console.error('Error connecting to MongoDB:', err.message))
 
 app.listen(PORT, err => {

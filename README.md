@@ -81,6 +81,15 @@ npm run migrate:rbac -w backend
 
 It renames the old `academic board` role to `academic_board`, creates any missing roles, makes accounts without a valid role students and gives every KPI an unlocked flag. Existing admins stay admins.
 
+Bi-weekly reports belong to the startup, like its KPIs, and are shared by its co-founders: one report per startup per cycle. Older reports were filed per founder, so move them once:
+
+```sh
+npm run migrate:biweekly -w backend -- --dry-run   # shows what would change
+npm run migrate:biweekly -w backend
+```
+
+It moves each founder's report onto the startup they are in (or were in most recently). When a startup ends up with two reports for one cycle, it keeps the submitted one, which takes over any review only the other had. A report it can't keep, such as a second report for a cycle or one from a founder who never joined a startup, is copied to `biweeklysubmissions_archive` instead of being deleted. It's safe to run again.
+
 ## Email notifications
 
 Emails go through Resend ([`backend/utils/emailProvider.js`](backend/utils/emailProvider.js)) and need `RESEND_API_KEY` and `EMAIL_FROM` (on a domain verified in Resend). Without them nothing is sent and each attempt is logged as failed. Links in emails point at `APP_URL`, or `FRONTEND_URL` if it isn't set.

@@ -19,7 +19,8 @@ import {
   resolveVentureAndContext,
   loadVentureSubmissions,
   updateOrCreateVentureSubmission,
-  resolveAdminTarget,
+  findTargetVenture,
+  ventureCycleKey,
 } from '../utils/biweeklyHelper.js'
 
 // Adds the readable stage ("Fund Raising") next to the stored key.
@@ -35,12 +36,10 @@ export const getBiWeeklyData = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    // Staff pick whose report to see; students always get their own.
-    const query = isStaff(req.user) ? req.query : {}
-
+    // Staff pick the startup; students always get their own startup's.
     const { venture, founder, coFounders } = await resolveVentureAndContext(
       req.user,
-      query
+      req.query
     )
 
     if (
@@ -52,18 +51,7 @@ export const getBiWeeklyData = async (req, res) => {
         .json({ error: 'This startup is not assigned to you' })
     }
 
-    let submissions = []
-
-    if (venture) {
-      submissions = await loadVentureSubmissions(venture._id, coFounders)
-    } else if (founder) {
-      submissions = await BiWeeklySubmission.find({ founder: founder._id })
-        .populate('biWeeklyEvaluation')
-        .populate('biWeeklyObservationSchema')
-        .populate('submitted_by', 'username email')
-        .sort({ cycle_number: 1 })
-        .exec()
-    }
+    const submissions = venture ? await loadVentureSubmissions(venture._id) : []
 
     const evaluations = submissions
       .map(sub => sub.biWeeklyEvaluation)
@@ -126,8 +114,9 @@ export const submitBiWeeklyCycle = async (req, res) => {
       return res.status(400).json({ error })
     }
 
-    const custom_id = `venture_${venture._id}_cycle_${cycleNum}`
-    const existing = await BiWeeklySubmission.findOne({ custom_id })
+    const existing = await BiWeeklySubmission.findOne({
+      custom_id: ventureCycleKey(venture._id, cycleNum),
+    })
     if (existing?.submitted_at) {
       return res.status(403).json({
         error: 'This cycle has already been submitted and is locked.',
@@ -155,27 +144,6 @@ export const submitBiWeeklyCycle = async (req, res) => {
   }
 }
 
-// The startup's report for the cycle, or (for a founder without one) theirs.
-const findOrCreateSubmission = (venture, founder, cycleNum) => {
-  if (venture) {
-    return updateOrCreateVentureSubmission({
-      ventureId: venture._id,
-      cycle_number: cycleNum,
-    })
-  }
-  return BiWeeklySubmission.findOneAndUpdate(
-    { custom_id: `${founder._id}_cycle_${cycleNum}` },
-    {
-      $set: {
-        cycle_number: cycleNum,
-        founder: founder._id,
-        scope: 'FOUNDER',
-      },
-    },
-    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-  )
-}
-
 // For staff acting on a startup's report. parseBody checks the rest of the
 // request before anything is created; it returns { error } or values passed
 // back as `parsed`. isAllowed(user, ventureMentorId) says whether this
@@ -190,7 +158,7 @@ const getOrCreateSubmissionForStaff = async (
     return null
   }
 
-  const { ventureId, founderId, cycle_number } = req.body
+  const { ventureId, cycle_number } = req.body
   const cycleNum = validateCycleNumber(cycle_number)
 
   if (!cycleNum) {
@@ -204,23 +172,26 @@ const getOrCreateSubmissionForStaff = async (
     return null
   }
 
-  const { venture, founder } = await resolveAdminTarget(ventureId, founderId)
-
-  if (!venture && !founder) {
-    res.status(404).json({ error: 'Neither venture nor founder was found' })
+  // Reports belong to a startup, so staff always name one.
+  const venture = await findTargetVenture(ventureId)
+  if (!venture) {
+    res.status(404).json({ error: 'Startup not found' })
     return null
   }
 
-  if (!isAllowed(req.user, venture?.mentor ?? null)) {
+  if (!isAllowed(req.user, venture.mentor)) {
     res.status(403).json({
       error: "Only this startup's mentor or the academic board can do this",
     })
     return null
   }
 
-  const submission = await findOrCreateSubmission(venture, founder, cycleNum)
+  const submission = await updateOrCreateVentureSubmission({
+    ventureId: venture._id,
+    cycle_number: cycleNum,
+  })
 
-  return { venture, founder, submission, cycleNum, parsed }
+  return { venture, submission, cycleNum, parsed }
 }
 
 export const saveBiWeeklyObservation = async (req, res) => {

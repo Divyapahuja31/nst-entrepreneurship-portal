@@ -110,7 +110,7 @@ const menuFor = (user, { isStaff, isMentor, isAdmin, isStudent }) => {
       {
         menu: 'Bi-Weekly',
         icon: CalendarIcon,
-        path: `/profile/${user._id}`,
+        path: '/biweekly',
       },
       ...commonMenuItems,
     ]

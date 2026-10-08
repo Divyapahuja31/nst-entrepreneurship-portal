@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, redirect } from 'react-router'
 import { ROLE_NAMES, ROLES, STAFF_ROLES } from '@nst/shared/permissions.js'
 
 import EmptyLayout from '../layouts/EmptyLayout.jsx'
@@ -42,10 +42,11 @@ import AddFounder from '../components/AddFounder.jsx'
 import { allKPIsLoader, kpisLoader } from '../api/kpi.js'
 import {
   addFounderLoader,
-  biWeeklyLoader,
+  founderProfileLoader,
   foundersCount,
   foundersLoader,
 } from '../api/admin.js'
+import { biWeeklyLoader } from '../api/biweekly.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 import { accountsLoader } from '../api/accounts.js'
 import { whenAuthReady } from '../stores/auth.js'
@@ -125,9 +126,14 @@ export const router = createBrowserRouter([
                     loader: studentLoader(kpisLoader),
                   },
                   {
-                    path: '/profile/:userid',
+                    path: '/biweekly',
                     Component: PageReportBiWeekly,
                     loader: studentLoader(biWeeklyLoader),
+                  },
+                  // Bi-weekly reports used to live under the student's id.
+                  {
+                    path: '/profile/:userid',
+                    loader: () => redirect('/biweekly'),
                   },
                 ],
               },
@@ -195,7 +201,7 @@ export const router = createBrowserRouter([
           {
             path: '/admin/profile/:userid',
             Component: PageFounderProfile,
-            loader: staffLoader(biWeeklyLoader),
+            loader: staffLoader(founderProfileLoader),
           },
           {
             element: <RequireRole allow={[ROLES.ADMIN]} />,

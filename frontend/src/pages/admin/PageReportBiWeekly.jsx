@@ -260,7 +260,8 @@ function BiWeekly({ data: propData }) {
   // observations and evaluations; only the board reopens a cycle.
   const { actor, isStaff } = useAccess()
 
-  const { founder, venture, coFounders = [] } = data || {}
+  // Reports belong to the startup and are shared by its co-founders.
+  const { venture, coFounders = [] } = data || {}
   const canReview = canAuthorBiweeklyReview(actor, venture?.mentor)
   const canReopen = canReopenBiweekly(actor)
   const rows = data?.submissions ?? []
@@ -271,8 +272,8 @@ function BiWeekly({ data: propData }) {
   const detailRef = React.useRef(null)
 
   const cycles = React.useMemo(
-    () => computeCycles(venture?.createdAt || founder?.createdAt || new Date()),
-    [venture?.createdAt, founder?.createdAt]
+    () => computeCycles(venture?.createdAt || new Date()),
+    [venture?.createdAt]
   )
 
   const currentCycle = React.useMemo(() => {
@@ -281,12 +282,13 @@ function BiWeekly({ data: propData }) {
     return c?.n ?? cycles.find(c => now < c.start)?.n ?? CYCLES
   }, [cycles])
 
-  if (!data || (!founder && !venture)) {
+  if (!venture) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="info">
-          No active venture or founder profile found. Bi-weekly progress reports
-          are shared across co-founders of an active venture.
+          {isStaff
+            ? 'This founder is not in a startup right now. Bi-weekly reports belong to a startup.'
+            : 'Bi-weekly reports belong to your startup and are shared with your co-founders. Join or start one to file them.'}
         </Alert>
       </Box>
     )
@@ -322,7 +324,6 @@ function BiWeekly({ data: propData }) {
         ...payload,
         isSubmit: submit,
         ventureId: venture?._id,
-        founderId: founder?._id,
       })
     )
 
@@ -333,7 +334,6 @@ function BiWeekly({ data: propData }) {
     return run('Unlocking...', () =>
       reopenBiWeeklySubmission({
         ventureId: venture?._id,
-        founderId: founder?._id,
         cycle_number: cycleNumber,
       })
     )
@@ -344,7 +344,6 @@ function BiWeekly({ data: propData }) {
       saveBiWeeklyObservation({
         ...payload,
         ventureId: venture?._id,
-        founderId: founder?._id,
       })
     )
 
@@ -353,7 +352,6 @@ function BiWeekly({ data: propData }) {
       saveBiWeeklyEvaluation({
         ...payload,
         ventureId: venture?._id,
-        founderId: founder?._id,
       })
     )
 
@@ -421,13 +419,6 @@ function BiWeekly({ data: propData }) {
               <Chip key={cf._id} label={cf.username} size="small" />
             ))}
           </Stack>
-        )}
-
-        {!venture && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            You are not currently linked to an active venture. Bi-weekly reports
-            are shared across co-founders of your venture team.
-          </Alert>
         )}
       </Box>
 

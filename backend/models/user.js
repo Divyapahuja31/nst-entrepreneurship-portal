@@ -120,12 +120,6 @@ const userSchema = new mongoose.Schema(
   }
 )
 
-userSchema.virtual('biWeeklySubmissions', {
-  ref: 'BiWeeklySubmission',
-  localField: '_id',
-  foreignField: 'founder',
-})
-
 userSchema.pre('save', async function () {
   if (!this.isModified('password') || !this.password) {
     return

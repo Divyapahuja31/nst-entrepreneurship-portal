@@ -158,18 +158,14 @@ export const parseObservation = body => {
   return { fields }
 }
 
-export const findVenture = async (ventureId, founder, user) => {
-  if (ventureId && mongoose.isValidObjectId(ventureId)) {
-    return Venture.findById(ventureId).populate('campus industry').exec()
-  }
-  if (founder) {
-    return findVentureForUser(founder._id)
-  }
-  if (user?.id && isStudent(user)) {
-    return findVentureForUser(user.id)
-  }
-  return null
-}
+// The key a startup's report for a cycle is stored under.
+export const ventureCycleKey = (ventureId, cycleNumber) =>
+  `venture_${ventureId}_cycle_${cycleNumber}`
+
+const findVentureById = ventureId =>
+  mongoose.isValidObjectId(ventureId)
+    ? Venture.findById(ventureId).populate('campus industry').exec()
+    : null
 
 export const findCoFounders = async ventureId => {
   if (!ventureId) {
@@ -185,62 +181,37 @@ export const findCoFounders = async ventureId => {
   return founderRecords.map(r => r.user).filter(Boolean)
 }
 
-export const getTargetFounderId = (user, query = {}, body = {}) => {
-  if (isStaff(user)) {
-    return query.founderId || body.founderId || null
+// Only what the bi-weekly page shows; not role, batch or Google IDs.
+const findFounder = founderId =>
+  mongoose.isValidObjectId(founderId)
+    ? User.findById(founderId).select('username email createdAt').exec()
+    : null
+
+// Whose reports to show. Reports belong to a startup: students always get
+// their own startup's; staff name a startup, or a founder to get the startup
+// they are in now (for the founder profile page).
+export const resolveVentureAndContext = async (user, query = {}) => {
+  let founder = null
+  let venture = null
+  if (isStudent(user)) {
+    venture = await findVentureForUser(user.id)
+  } else if (isStaff(user) && query.ventureId) {
+    venture = await findVentureById(query.ventureId)
+  } else if (isStaff(user) && query.founderId) {
+    founder = await findFounder(query.founderId)
+    venture = founder ? await findVentureForUser(founder._id) : null
   }
-  return user?.id || null
-}
-
-export const findFounder = async founderId => {
-  if (founderId && mongoose.isValidObjectId(founderId)) {
-    // Only what the bi-weekly page shows; not role, batch or Google IDs.
-    return User.findById(founderId).select('username email createdAt').exec()
-  }
-  return null
-}
-
-export const resolveVentureAndContext = async (user, query = {}, body = {}) => {
-  const ventureId = isStaff(user) ? query.ventureId || body.ventureId : null
-  const requestedFounderId = getTargetFounderId(user, query, body)
-  const foundUser = await findFounder(requestedFounderId)
-  const venture = await findVenture(ventureId, foundUser, user)
-  const coFounders = await findCoFounders(venture ? venture._id : null)
-  const founder = foundUser || (coFounders.length > 0 ? coFounders[0] : null)
-
+  const coFounders = await findCoFounders(venture?._id)
   return { venture, founder, coFounders }
 }
 
-export const loadVentureSubmissions = async (ventureId, coFounders) => {
-  let submissions = await BiWeeklySubmission.find({ venture: ventureId })
+export const loadVentureSubmissions = ventureId =>
+  BiWeeklySubmission.find({ venture: ventureId })
     .populate('biWeeklyEvaluation')
     .populate('biWeeklyObservationSchema')
     .populate('submitted_by', 'username email')
     .sort({ cycle_number: 1 })
     .exec()
-
-  if (submissions.length === 0 && coFounders.length > 0) {
-    const founderIds = coFounders.map(f => f._id)
-    const legacySubmissions = await BiWeeklySubmission.find({
-      founder: { $in: founderIds },
-    })
-      .populate('biWeeklyEvaluation')
-      .populate('biWeeklyObservationSchema')
-      .populate('submitted_by', 'username email')
-      .sort({ cycle_number: 1 })
-      .exec()
-
-    if (legacySubmissions.length > 0) {
-      await BiWeeklySubmission.updateMany(
-        { _id: { $in: legacySubmissions.map(s => s._id) } },
-        { $set: { venture: ventureId, scope: 'VENTURE' } }
-      )
-      submissions = legacySubmissions
-    }
-  }
-
-  return submissions
-}
 
 export const updateOrCreateVentureSubmission = async ({
   ventureId,
@@ -249,13 +220,7 @@ export const updateOrCreateVentureSubmission = async ({
   data = {},
   isSubmit = false,
 }) => {
-  const custom_id = `venture_${ventureId}_cycle_${cycle_number}`
-  const updateData = {
-    ...data,
-    cycle_number,
-    venture: ventureId,
-    scope: 'VENTURE',
-  }
+  const updateData = { ...data, cycle_number, venture: ventureId }
 
   if (isSubmit) {
     updateData.submitted_at = new Date()
@@ -269,8 +234,8 @@ export const updateOrCreateVentureSubmission = async ({
     updateQuery.$setOnInsert = { submitted_by: userId }
   }
 
-  const submission = await BiWeeklySubmission.findOneAndUpdate(
-    { custom_id },
+  return BiWeeklySubmission.findOneAndUpdate(
+    { custom_id: ventureCycleKey(ventureId, cycle_number) },
     updateQuery,
     {
       upsert: true,
@@ -279,24 +244,8 @@ export const updateOrCreateVentureSubmission = async ({
       runValidators: true,
     }
   )
-
-  return submission
 }
 
-export const resolveAdminTarget = async (ventureId, founderId) => {
-  let venture = null
-  let founder = null
-
-  if (ventureId && mongoose.isValidObjectId(ventureId)) {
-    venture = await Venture.findById(ventureId)
-  }
-
-  if (founderId && mongoose.isValidObjectId(founderId)) {
-    founder = await User.findById(founderId)
-    if (!venture && founder) {
-      venture = await findVentureForUser(founder._id)
-    }
-  }
-
-  return { venture, founder }
-}
+// The startup staff named in a review or reopen request.
+export const findTargetVenture = ventureId =>
+  mongoose.isValidObjectId(ventureId) ? Venture.findById(ventureId) : null

@@ -139,7 +139,7 @@ After each check-in the server looks for its Google Meet transcript through the 
 1. In the Google Cloud project, enable the **Google Calendar API** and the **Google Meet REST API**.
 2. Create an OAuth client (Web application) for mentors, with the redirect URI `<API origin>/api/google/callback` (for example `http://localhost:4000/api/google/callback`). Set its consent screen to **Internal** in the newtonschool.co Workspace if you can. Mentors are all Newton School staff, and an internal app needs no Google verification for these scopes. The scopes are `openid`, `email`, `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/meetings.space.readonly` (for transcripts).
 3. Set `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` and `GOOGLE_WORKSPACE_REDIRECT_URI` in `backend/.env`. Without them the sign-in client (`GOOGLE_CLIENT_*`) is used, which then needs the scopes and redirect URI above. Students would see a consent screen asking for calendar access only if they reached the connect route, which is for mentors only.
-4. Set `GOOGLE_TOKEN_KEY` to 32 random bytes (`openssl rand -base64 32`). Mentors' refresh tokens are encrypted with it. Changing it means every mentor connects again.
+4. Set `GOOGLE_TOKEN_KEY` to 32 random bytes (`openssl rand -base64 32`, or `-hex 32`). Mentors' refresh tokens are encrypted with it. Changing it means every mentor connects again.
 
 Each mentor then clicks **Connect Google Calendar** once, the first time they schedule. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
 

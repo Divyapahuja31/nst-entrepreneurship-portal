@@ -145,4 +145,15 @@ describe('token encryption', () => {
     assert.throws(() => decryptToken(parts.join('.')))
     assert.throws(() => decryptToken('plain-token'))
   })
+
+  it('takes the key as base64 or hex', () => {
+    const base64 = process.env.GOOGLE_TOKEN_KEY
+    const sealed = encryptToken('1//refresh-token')
+    process.env.GOOGLE_TOKEN_KEY = Buffer.from(base64, 'base64').toString('hex')
+    try {
+      assert.equal(decryptToken(sealed), '1//refresh-token')
+    } finally {
+      process.env.GOOGLE_TOKEN_KEY = base64
+    }
+  })
 })

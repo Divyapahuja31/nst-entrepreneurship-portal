@@ -17,7 +17,8 @@ import { signToken } from '../utils/token.js'
 import { encryptToken } from '../utils/tokenCrypto.js'
 
 process.env.JWT_SECRET ||= 'test-secret'
-process.env.GOOGLE_TOKEN_KEY ||= Buffer.alloc(32, 7).toString('base64')
+// Never the developer's own key from .env.
+process.env.GOOGLE_TOKEN_KEY = Buffer.alloc(32, 7).toString('base64')
 
 // app.js loads the real .env, so tests must never reach Resend. Every email
 // lands in `sentEmails` instead; a test can make the next sends fail by

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { STAFF_ROLES } from '@nst/shared/permissions.js'
+import { ROLES, STAFF_ROLES } from '@nst/shared/permissions.js'
 import admin from './admin.js'
 import auth from './auth.js'
 import requireAuth from '../middleware/requireAuth.js'
@@ -12,6 +12,8 @@ import stageRoutes from './stage.js'
 import ventures from './venture.js'
 import biweeklyRoutes from './biweekly.js'
 import notificationRoutes from './notification.js'
+import checkInRoutes from './checkins.js'
+import googleRoutes from './google.js'
 import emailPreview from './emailPreview.js'
 const router = Router()
 
@@ -30,6 +32,10 @@ router.use('/stages', requireAuth, stageRoutes)
 router.use('/biweekly', requireAuth, biweeklyRoutes)
 router.use('/ventures', requireAuth, ventures)
 router.use('/notifications', requireAuth, notificationRoutes)
+router.use('/checkins', requireAuth, checkInRoutes)
+
+// a mentor's Google Calendar connection
+router.use('/google', requireRole(ROLES.MENTOR), googleRoutes)
 
 // Every email template with sample data, never in production.
 if (process.env.NODE_ENV !== 'production') {

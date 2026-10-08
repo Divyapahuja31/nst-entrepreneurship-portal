@@ -195,6 +195,19 @@ export const canAuthorBiweeklyReview = (actor, ventureMentorId) =>
 // Reopening a submitted report unlocks it for the students.
 export const canReopenBiweekly = actor => isBoard(actor)
 
+// -------------------------------------------------------------- check-ins
+
+// Check-ins are events on the mentor's own Google Calendar, so only mentors
+// connect a calendar, and only the startup's mentor schedules, moves or
+// cancels its check-ins and writes their notes.
+export const canConnectCalendar = actor => isMentor(actor)
+
+export const canManageCheckIns = (actor, ventureMentorId) =>
+  isMentorOf(actor, ventureMentorId)
+
+// Check-ins and their transcripts are part of the startup's record.
+export const canReadCheckIns = canReadVenture
+
 // --------------------------------------------------------------- accounts
 
 export const canManageAccounts = actor => isAdmin(actor)

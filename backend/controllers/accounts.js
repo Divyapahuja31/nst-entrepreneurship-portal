@@ -13,6 +13,7 @@ import Role from '../models/role.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import { validateAccountInput } from '../utils/accountValidator.js'
+import { cancelFutureCheckIns } from '../utils/checkInHelper.js'
 import { normalizeEmail } from '../utils/authHelper.js'
 import { deactivateFounder } from '../utils/founderHelper.js'
 import { validateBatchAndCampus } from '../utils/validator.js'
@@ -46,9 +47,13 @@ const activeAdminCount = async () => {
   return admin ? User.countDocuments({ role: admin._id, deletedAt: null }) : 0
 }
 
-// Startups stay with a mentor only while they are an active mentor.
+// Startups stay with a mentor only while they are an active mentor, and so
+// do the check-ins on their calendar.
 const releaseMentoredVentures = userId =>
-  Venture.updateMany({ mentor: userId }, { $set: { mentor: null } })
+  Promise.all([
+    Venture.updateMany({ mentor: userId }, { $set: { mentor: null } }),
+    cancelFutureCheckIns({ mentor: userId }),
+  ])
 
 export const listAccounts = async (req, res) => {
   try {

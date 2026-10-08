@@ -8,6 +8,7 @@ import {
 import BiWeeklyEvaluation from '../models/biWeeklyEvaluation.js'
 import BiWeeklyObservation from '../models/biWeeklyObservation.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
+import CheckIn from '../models/checkIn.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import startupStage from '../models/enums/startupStage.js'
 import {
@@ -51,7 +52,15 @@ export const getBiWeeklyData = async (req, res) => {
         .json({ error: 'This startup is not assigned to you' })
     }
 
-    const submissions = venture ? await loadVentureSubmissions(venture._id) : []
+    const [submissions, checkIns] = venture
+      ? await Promise.all([
+          loadVentureSubmissions(venture._id),
+          // Each cycle's check-in, shown beside its report.
+          CheckIn.find({ venture: venture._id, status: { $ne: 'CANCELLED' } })
+            .select('cycle_number scheduledAt meetUrl status')
+            .sort({ scheduledAt: 1 }),
+        ])
+      : [[], []]
 
     const evaluations = submissions
       .map(sub => sub.biWeeklyEvaluation)
@@ -67,6 +76,7 @@ export const getBiWeeklyData = async (req, res) => {
       submissions,
       evaluations,
       observations,
+      checkIns,
     })
   } catch (err) {
     console.error('Get biweekly error:', err)

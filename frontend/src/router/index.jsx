@@ -11,6 +11,7 @@ import PageOnboarding, {
   OnboardingSignOut,
 } from '../pages/student/PageOnboarding.jsx'
 import PageKPIs from '../pages/student/PageKPIs.jsx'
+import PageCheckIns from '../pages/student/PageCheckIns.jsx'
 
 // Admin pages
 import PageAdminOverview from '../pages/admin/PageOverview.jsx'
@@ -47,6 +48,7 @@ import {
   foundersLoader,
 } from '../api/admin.js'
 import { biWeeklyLoader } from '../api/biweekly.js'
+import { myCheckInsLoader } from '../api/checkins.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 import { accountsLoader } from '../api/accounts.js'
 import { whenAuthReady } from '../stores/auth.js'
@@ -119,6 +121,10 @@ export const router = createBrowserRouter([
                     path: '/',
                     index: true,
                     Component: PageStudentOverview,
+                    // For the next check-in; the page works without it.
+                    loader: studentLoader(args =>
+                      myCheckInsLoader(args).catch(() => null)
+                    ),
                   },
                   {
                     path: '/kpis',
@@ -129,6 +135,13 @@ export const router = createBrowserRouter([
                     path: '/biweekly',
                     Component: PageReportBiWeekly,
                     loader: studentLoader(biWeeklyLoader),
+                  },
+                  {
+                    path: '/checkins',
+                    Component: PageCheckIns,
+                    loader: studentLoader(() =>
+                      myCheckInsLoader().catch(() => null)
+                    ),
                   },
                   // Bi-weekly reports used to live under the student's id.
                   {

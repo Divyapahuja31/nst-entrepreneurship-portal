@@ -3,6 +3,7 @@ import { Link as RouterLink, useLoaderData, useParams } from 'react-router'
 
 import { Alert, Box, Link, Tab, Tabs } from '@mui/material'
 
+import CheckInsSection from '../../components/CheckInsSection'
 import KPIReview from '../../components/KPIReview'
 import PageHeader from '../../components/PageHeader'
 import useAccess from '../../hooks/useAccess'
@@ -73,6 +74,7 @@ export default function PageFounderProfile() {
       >
         <Tab label="KPIs" />
         <Tab label="Bi-weekly" />
+        <Tab label="Check-Ins" />
       </Tabs>
 
       {tab === 0 && (
@@ -85,6 +87,9 @@ export default function PageFounderProfile() {
         />
       )}
       {tab === 1 && <BiWeekly data={biweeklyData} />}
+      {tab === 2 && (
+        <CheckInsSection checkIns={biweeklyData?.checkIns} showVenture />
+      )}
     </Box>
   )
 }

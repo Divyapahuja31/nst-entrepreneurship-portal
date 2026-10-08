@@ -50,6 +50,9 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Submit a bi-weekly report | ❌ | ❌ | ❌ | own startup, until submitted |
 | Write bi-weekly observations and evaluations | ✅ | ✅ | assigned startups | ❌ |
 | Reopen a submitted bi-weekly report | ✅ | ✅ | ❌ | ❌ |
+| Connect a Google Calendar | ❌ | ❌ | ✅ | ❌ |
+| Schedule, move or cancel check-ins | ❌ | ❌ | assigned startups | ❌ |
+| Read check-ins | all | all | assigned startups | own startup |
 
 ### How it is enforced
 
@@ -113,6 +116,24 @@ To create the log's indexes on an existing database, run this once. It's safe to
 npm run migrate:email -w backend
 ```
 
+## Mentor check-ins (Google Calendar and Meet)
+
+A startup's mentor schedules bi-weekly check-ins from the startup's **Check-Ins** tab. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. A check-in is one-off or repeats every two weeks, one per cycle, through cycle 13. Each occurrence can be moved or cancelled on its own, and a recurring check-in can be ended.
+
+- Only the startup's mentor schedules, because the events live on their calendar. Founders see their check-ins at `/checkins` and on their overview. Staff see them on the startup and on each founder's profile. Each cycle's check-in also shows beside its bi-weekly report.
+- Google is written first. If it refuses a change, the portal saves nothing and shows Google's reason.
+- When a startup's mentor changes, or the mentor is deactivated or loses the mentor role, their upcoming check-ins for it are cancelled. Removing them from Google is best effort.
+- The invitees are the active founders when a check-in is scheduled or moved. A founder who joins later is invited from the next one that is scheduled or moved.
+
+### Setting up Google
+
+1. In the Google Cloud project, enable the **Google Calendar API** and the **Google Meet REST API**.
+2. Create an OAuth client (Web application) for mentors, with the redirect URI `<API origin>/api/google/callback` (for example `http://localhost:4000/api/google/callback`). Set its consent screen to **Internal** in the newtonschool.co Workspace if you can. Mentors are all Newton School staff, and an internal app needs no Google verification for these scopes. The scopes are `openid`, `email`, `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/meetings.space.readonly` (for transcripts).
+3. Set `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` and `GOOGLE_WORKSPACE_REDIRECT_URI` in `backend/.env`. Without them the sign-in client (`GOOGLE_CLIENT_*`) is used, which then needs the scopes and redirect URI above. Students would see a consent screen asking for calendar access only if they reached the connect route, which is for mentors only.
+4. Set `GOOGLE_TOKEN_KEY` to 32 random bytes (`openssl rand -base64 32`). Mentors' refresh tokens are encrypted with it. Changing it means every mentor connects again.
+
+Each mentor then clicks **Connect Google Calendar** once, the first time they schedule. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
+
 ## Tests
 
 ```sh
@@ -122,6 +143,7 @@ npm test
 - `shared/permissions.test.js` checks every rule against the matrix above, for every role, startup relationship, lock state and status.
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
+- `backend/tests/checkins.test.js` and `googleConnect.test.js` check scheduling, recurring check-ins, who may do what and connecting a calendar against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 
 The first run downloads a MongoDB binary for the tests.
 

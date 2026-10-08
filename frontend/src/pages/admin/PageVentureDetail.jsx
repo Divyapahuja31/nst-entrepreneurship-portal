@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLoaderData, useRevalidator } from 'react-router'
+import { useLoaderData, useRevalidator, useSearchParams } from 'react-router'
 import { canManageVentures } from '@nst/shared/permissions.js'
 
 import {
@@ -19,6 +19,7 @@ import {
   Typography,
 } from '@mui/material'
 
+import CheckInsSection from '../../components/CheckInsSection'
 import EmptyState from '../../components/EmptyState'
 import KPIReview from '../../components/KPIReview'
 import PageHeader from '../../components/PageHeader'
@@ -153,14 +154,21 @@ function MentorCard({ venture }) {
   )
 }
 
+const CHECK_INS_TAB = 3
+
 export default function PageVentureDetail() {
-  const [tabIndex, setTabIndex] = useState(0)
+  // Coming back from connecting Google Calendar lands on the check-ins.
+  const [searchParams] = useSearchParams()
+  const [tabIndex, setTabIndex] = useState(() =>
+    searchParams.has('calendar') ? CHECK_INS_TAB : 0
+  )
   const {
     venture,
     founders = [],
     pastFounders = [],
     biweekly,
     kpis = [],
+    checkIns,
   } = useLoaderData()
 
   const toRow = founder => ({
@@ -223,6 +231,7 @@ export default function PageVentureDetail() {
         <Tab label={`Founders (${founders.length})`} />
         <Tab label={`KPIs (${kpis.length})`} />
         <Tab label="Bi-weekly" />
+        <Tab label="Check-Ins" />
       </Tabs>
 
       {tabIndex === 0 && (
@@ -277,6 +286,10 @@ export default function PageVentureDetail() {
             page to try again.
           </Alert>
         ))}
+
+      {tabIndex === CHECK_INS_TAB && (
+        <CheckInsSection checkIns={checkIns} venture={venture} />
+      )}
     </Box>
   )
 }

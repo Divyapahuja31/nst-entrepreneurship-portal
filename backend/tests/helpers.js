@@ -3,17 +3,21 @@ import { MongoMemoryServer } from 'mongodb-memory-server'
 
 import Campus from '../models/campus.js'
 import Founder from '../models/founder.js'
+import GoogleCredential from '../models/googleCredential.js'
 import Industry from '../models/industry.js'
 import KPI from '../models/kpi.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import { setEmailProvider } from '../utils/emailProvider.js'
+import { GoogleError, setGoogleWorkspace } from '../utils/googleWorkspace.js'
 import { settleEmailJobs } from '../utils/kpiLockEmails.js'
 import { migrateRbac } from '../utils/rbacMigration.js'
 import { signToken } from '../utils/token.js'
+import { encryptToken } from '../utils/tokenCrypto.js'
 
 process.env.JWT_SECRET ||= 'test-secret'
+process.env.GOOGLE_TOKEN_KEY ||= Buffer.alloc(32, 7).toString('base64')
 
 // app.js loads the real .env, so tests must never reach Resend. Every email
 // lands in `sentEmails` instead; a test can make the next sends fail by
@@ -30,6 +34,94 @@ setEmailProvider({
     return { messageId: `test-${sentEmails.length}` }
   },
 })
+
+// Tests never reach Google either. `google` is a fake calendar: events by
+// id, every call made, the accounts that can consent (`grants`, by code) and
+// failures to throw (`failures`, by method name).
+const DAY_MS = 24 * 60 * 60 * 1000
+export const google = {
+  events: new Map(),
+  calls: [],
+  grants: new Map(),
+  failures: new Map(),
+  revoked: [],
+}
+
+const fakeCall = (method, token, ...args) => {
+  google.calls.push({ method, token, args })
+  const failure = google.failures.get(method)
+  if (failure) {
+    throw failure
+  }
+}
+
+const recurrenceCount = event =>
+  Number(event.recurrence?.[0]?.match(/COUNT=(\d+)/)?.[1] ?? 1)
+
+setGoogleWorkspace({
+  name: 'test',
+  authUrl: ({ state, loginHint }) =>
+    `https://accounts.google.test/auth?state=${state}&login_hint=${loginHint}`,
+  exchangeCode: async code => {
+    fakeCall('exchangeCode', null, code)
+    const grant = google.grants.get(code)
+    if (!grant) {
+      throw new GoogleError('invalid_grant', { status: 400 })
+    }
+    return grant
+  },
+  revoke: async token => {
+    fakeCall('revoke', token)
+    google.revoked.push(token)
+  },
+  createEvent: async (token, event) => {
+    fakeCall('createEvent', token, event)
+    const id = `event${google.events.size + 1}`
+    const code = `abc-defg-${String(google.events.size + 1).padStart(3, '0')}`
+    const created = {
+      ...event,
+      id,
+      hangoutLink: `https://meet.google.com/${code}`,
+      conferenceData: { conferenceId: code },
+    }
+    google.events.set(id, created)
+    return created
+  },
+  getEvent: async (token, id) => {
+    fakeCall('getEvent', token, id)
+    return google.events.get(id)
+  },
+  patchEvent: async (token, id, patch) => {
+    fakeCall('patchEvent', token, id, patch)
+    return { id, ...patch }
+  },
+  deleteEvent: async (token, id) => {
+    fakeCall('deleteEvent', token, id)
+  },
+  listInstances: async (token, id) => {
+    fakeCall('listInstances', token, id)
+    const event = google.events.get(id)
+    const first = new Date(event.start.dateTime).getTime()
+    return Array.from({ length: recurrenceCount(event) }, (_, i) => {
+      const start = new Date(first + i * 14 * DAY_MS).toISOString()
+      return {
+        id: `${id}_${i}`,
+        start: { dateTime: start },
+        originalStartTime: { dateTime: start },
+        hangoutLink: event.hangoutLink,
+      }
+    })
+  },
+})
+
+// What a mentor has after connecting their Google Calendar.
+export const connectCalendar = user =>
+  GoogleCredential.create({
+    user: user._id,
+    googleEmail: user.email,
+    scopes: [],
+    refreshToken: encryptToken(`refresh-${user.email}`),
+  })
 
 let mongod = null
 
@@ -55,6 +147,11 @@ export const seed = async () => {
   await settleEmailJobs()
   sentEmails.length = 0
   emailFailures.clear()
+  google.events.clear()
+  google.calls.length = 0
+  google.grants.clear()
+  google.failures.clear()
+  google.revoked.length = 0
   await mongoose.connection.dropDatabase()
   await migrateRbac()
   const roles = Object.fromEntries(

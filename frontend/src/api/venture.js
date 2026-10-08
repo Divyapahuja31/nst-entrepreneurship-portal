@@ -1,4 +1,5 @@
 import { api } from './client'
+import { loadCheckIns } from './checkins'
 import toError from './toError'
 
 export const getVentures = async () => {
@@ -24,7 +25,8 @@ export const applyToVenture = async (ventureId, message) => {
 }
 
 export const ventureDetailLoader = async ({ params }) => {
-  const [{ data: ventureData }, biweeklyRes, kpisRes] = await Promise.all([
+  const [{ data: ventureData }, biweeklyRes, kpisRes, checkIns] =
+    await Promise.all([
     api.get(`/ventures/${params.ventureId}`),
     api
       .get('/biweekly', { params: { ventureId: params.ventureId } })
@@ -32,12 +34,14 @@ export const ventureDetailLoader = async ({ params }) => {
     api
       .get(`/kpis/venture/${params.ventureId}`)
       .catch(() => ({ data: { data: [] } })),
+    loadCheckIns({ ventureId: params.ventureId }),
   ])
 
   return {
     ...ventureData,
     biweekly: biweeklyRes?.data,
     kpis: kpisRes?.data?.data || [],
+    checkIns,
   }
 }
 

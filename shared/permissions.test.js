@@ -241,6 +241,32 @@ describe('bi-weekly reports', () => {
   })
 })
 
+describe('check-ins', () => {
+  it('only the startup mentor manages them; whoever reads the startup reads them', () => {
+    for (const [who, actor] of Object.entries(ACTORS)) {
+      assert.equal(
+        can.canConnectCalendar(actor),
+        ['mentor', 'otherMentor'].includes(who),
+        who
+      )
+      assert.equal(
+        can.canManageCheckIns(actor, ACTORS.mentor.id),
+        who === 'mentor',
+        who
+      )
+      assert.equal(
+        can.canReadCheckIns(actor, {
+          mentorId: ACTORS.mentor.id,
+          isMember: MEMBERS.has(who),
+        }),
+        ['admin', 'board', 'mentor', 'owner', 'teammate'].includes(who),
+        who
+      )
+    }
+    assert.equal(can.canManageCheckIns(ACTORS.mentor, null), false)
+  })
+})
+
 describe('accounts', () => {
   it('only admins manage accounts, never their own', () => {
     for (const [who, actor] of Object.entries(ACTORS)) {

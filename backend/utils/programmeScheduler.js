@@ -83,10 +83,17 @@ const previousAssignment = rows => {
     if (!assignment.has(staffId)) {
       assignment.set(staffId, [])
     }
-    assignment.get(staffId).push(String(row.venture?._id ?? row.venture))
+    if (row.venture) {
+      assignment.get(staffId).push(String(row.venture._id))
+    }
   }
   return assignment
 }
+
+// A session's rows by startup. A row whose startup was deleted keys on its
+// own id, so it never matches the plan and is cancelled.
+const rowsByVenture = rows =>
+  new Map(rows.map(r => [String(r.venture?._id ?? r._id), r]))
 
 // ------------------------------------------------------ people to tell
 
@@ -195,7 +202,7 @@ const removeRows = async (rows, { google, tell, deleteEvents }) => {
 
 const applySlots = async (ctx, rows) => {
   const { google, programme, plan, tell } = ctx
-  const byVenture = new Map(rows.map(r => [String(r.venture._id), r]))
+  const byVenture = rowsByVenture(rows)
   for (const meeting of plan) {
     const [startup] = meeting.startups
     const [member] = meeting.staff
@@ -250,7 +257,7 @@ const applyGroup = async (ctx, rows) => {
     await removeRows(rows, { ...ctx, deleteEvents: true })
     return
   }
-  const byVenture = new Map(rows.map(r => [String(r.venture._id), r]))
+  const byVenture = rowsByVenture(rows)
   const planned = meeting.startups.map(startup => ({
     startup,
     row: byVenture.get(String(startup.venture._id)),

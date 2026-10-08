@@ -362,6 +362,24 @@ describe('scheduling a session in slots', () => {
   })
 })
 
+describe('a startup deleted after its slot was drawn', () => {
+  it('loses its slot on the next change instead of breaking it', async () => {
+    const { default: Venture } = await import('../models/venture.js')
+    await save()
+    await Venture.deleteOne({ _id: data.ventures.beta._id })
+    await Founder.deleteMany({ venture: data.ventures.beta._id })
+
+    const res = await save({ gapMinutes: 5 })
+    assert.equal(res.status, 200)
+    const meetings = await meetingsOf(await firstSession())
+    assert.deepEqual(
+      meetings.map(m => m.venture?.name),
+      ['Alpha']
+    )
+    assert.equal((await firstSession()).problem, null)
+  })
+})
+
 describe('a group session', () => {
   it('is one meeting for every invited founder and all the staff', async () => {
     const { admin, mentor, owner, outsider } = data.users

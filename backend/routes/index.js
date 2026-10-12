@@ -34,8 +34,8 @@ router.use('/ventures', requireAuth, ventures)
 router.use('/notifications', requireAuth, notificationRoutes)
 router.use('/checkins', requireAuth, checkInRoutes)
 
-// a mentor's Google Calendar connection
-router.use('/google', requireRole(ROLES.MENTOR), googleRoutes)
+// a mentor's (or the programme host admin's) Google Calendar connection
+router.use('/google', requireRole(ROLES.MENTOR, ROLES.ADMIN), googleRoutes)
 
 // Every email template with sample data, never in production.
 if (process.env.NODE_ENV !== 'production') {

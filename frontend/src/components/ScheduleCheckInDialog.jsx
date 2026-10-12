@@ -46,7 +46,7 @@ const defaultStart = () => {
 }
 
 // Why the time can't be used, or '' when it can.
-const timeProblem = (value, createdAt) => {
+const timeProblem = (value, origin) => {
   const date = new Date(value)
   if (!value || Number.isNaN(date.getTime())) {
     return 'Choose a date and time.'
@@ -54,8 +54,8 @@ const timeProblem = (value, createdAt) => {
   if (date <= new Date()) {
     return 'Choose a time in the future.'
   }
-  if (!cycleForDate(createdAt, date)) {
-    return `Choose a time within the startup's ${CYCLES} cycles.`
+  if (!cycleForDate(origin, date)) {
+    return `Choose a time within the programme's ${CYCLES} cycles.`
   }
   return ''
 }
@@ -106,8 +106,10 @@ export default function ScheduleCheckInDialog({
     )
   }, [])
 
-  const problem = timeProblem(startAt, venture.createdAt)
-  const startCycle = problem ? null : cycleForDate(venture.createdAt, startAt)
+  // Cycles count from the programme start, or the startup's creation.
+  const origin = venture.cycleOrigin ?? venture.createdAt
+  const problem = timeProblem(startAt, origin)
+  const startCycle = problem ? null : cycleForDate(origin, startAt)
   const occurrences = startCycle ? CYCLES - startCycle + 1 : 0
   const connected = status?.connected && !status.needsReconnect
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useRevalidator, useSearchParams } from 'react-router'
-import { canManageCheckIns } from '@nst/shared/permissions.js'
+import { canManageCheckIns, canRunCheckIn } from '@nst/shared/permissions.js'
 
 import {
   Alert,
@@ -20,32 +20,9 @@ import EmptyState from './EmptyState'
 import ScheduleCheckInDialog from './ScheduleCheckInDialog'
 import SectionCard from './SectionCard'
 import StatusPill from './StatusPill'
+import TranscriptDialog from './TranscriptDialog'
+import { CALENDAR_OUTCOMES } from './calendarOutcomes'
 import { ChatIcon } from './icons'
-
-// What Google said when the mentor came back from connecting their
-// calendar (?calendar=<outcome>).
-const CALENDAR_OUTCOMES = {
-  connected: {
-    severity: 'success',
-    text: 'Google Calendar connected. You can schedule check-ins now.',
-  },
-  denied: {
-    severity: 'info',
-    text: 'Google Calendar wasn’t connected. Connect it whenever you’re ready.',
-  },
-  'wrong-account': {
-    severity: 'error',
-    text: 'Connect the Google account you sign in to the portal with.',
-  },
-  'missing-access': {
-    severity: 'error',
-    text: 'Allow both Calendar and Meet access when Google asks, so check-ins and their transcripts work.',
-  },
-  failed: {
-    severity: 'error',
-    text: 'Google Calendar couldn’t be connected. Try again.',
-  },
-}
 
 const MINUTE_MS = 60 * 1000
 
@@ -79,13 +56,31 @@ const formatWhen = date =>
     minute: '2-digit',
   })
 
-function CheckInRow({ checkIn, showVenture, canManage, onMove, onCancel }) {
+const TRANSCRIPT_LABELS = {
+  PENDING: 'Transcript pending',
+  READY: 'Transcript ready',
+  UNAVAILABLE: 'No transcript',
+}
+
+function CheckInRow({
+  checkIn,
+  showVenture,
+  canManage,
+  onMove,
+  onCancel,
+  onOpen,
+}) {
   const upcoming = isUpcoming(checkIn)
+  const happened = !upcoming && checkIn.status !== 'CANCELLED'
   const details = [
     checkIn.cycle_number && `Cycle ${checkIn.cycle_number}`,
     `${checkIn.durationMinutes} min`,
     showVenture && checkIn.venture?.name,
+    checkIn.session &&
+      `Programme session with ${(checkIn.staff ?? []).map(s => s.username).join(', ')}`,
     checkIn.series && 'Repeats',
+    happened && TRANSCRIPT_LABELS[checkIn.transcript?.status],
+    happened && checkIn.notes && 'Notes',
   ].filter(Boolean)
 
   return (
@@ -109,6 +104,11 @@ function CheckInRow({ checkIn, showVenture, canManage, onMove, onCancel }) {
         </Typography>
       </Box>
       <StatusPill {...statusOf(checkIn)} />
+      {happened && (
+        <Button variant="outlined" onClick={() => onOpen(checkIn)}>
+          Transcript
+        </Button>
+      )}
       {upcoming && (
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           {checkIn.meetUrl && (
@@ -190,14 +190,21 @@ const emptyText = (canManage, isStaff) => {
     return 'Schedule one and it goes on your Google Calendar, with a Meet link, and on every founder’s calendar.'
   }
   if (isStaff) {
-    return 'Check-ins appear here once the startup’s mentor schedules them.'
+    return 'Check-ins appear here once a programme session or the startup’s mentor schedules them.'
   }
-  return 'Your mentor hasn’t scheduled a check-in yet. It will appear here, and on your Google Calendar, once they do.'
+  return 'Nothing is scheduled yet. Your bi-weekly sessions will appear here, and on your Google Calendar, once they are.'
 }
 
 // A startup's check-ins (or, without `venture`, a founder's across
-// startups). The startup's mentor schedules, moves and cancels them here.
-export default function CheckInsSection({ checkIns, venture, showVenture }) {
+// startups): programme sessions and the mentor's own. The startup's mentor
+// schedules, moves and cancels their own ones here.
+export default function CheckInsSection({
+  checkIns,
+  venture,
+  showVenture,
+  title = 'Check-Ins',
+  subtitle = 'Bi-weekly meetings on Google Meet.',
+}) {
   const { actor, isStaff } = useAccess()
   const revalidator = useRevalidator()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -214,6 +221,7 @@ export default function CheckInsSection({ checkIns, venture, showVenture }) {
       : null
   )
   const [confirm, setConfirm] = useState(null)
+  const [open, setOpen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -256,26 +264,35 @@ export default function CheckInsSection({ checkIns, venture, showVenture }) {
     revalidator.revalidate()
   }
 
+  // A founder's record can hold an earlier startup's check-ins, and
+  // programme meetings change only from the Programme page.
+  const managesRow = checkIn =>
+    canManage &&
+    !checkIn.session &&
+    String(checkIn.venture?._id ?? checkIn.venture) === String(venture.id)
+  // Who writes a meeting's notes: its mentor, or a programme meeting's staff.
+  const runsRow = checkIn =>
+    checkIn.session
+      ? canRunCheckIn(actor, checkIn.staff ?? [])
+      : managesRow(checkIn)
+
   const row = checkIn => (
     <CheckInRow
       key={checkIn._id}
       checkIn={checkIn}
       showVenture={showVenture}
-      // A founder's record can hold an earlier startup's check-ins.
-      canManage={
-        canManage &&
-        String(checkIn.venture?._id ?? checkIn.venture) === String(venture.id)
-      }
+      canManage={managesRow(checkIn)}
       onMove={c => setDialog({ checkIn: c })}
       onCancel={c => setConfirm({ kind: 'one', id: c._id })}
+      onOpen={c => setOpen({ id: c._id, canManage: runsRow(c) })}
     />
   )
 
   return (
     <SectionCard
       icon={ChatIcon}
-      title="Check-Ins"
-      subtitle="Bi-weekly meetings with the mentor on Google Meet."
+      title={title}
+      subtitle={subtitle}
       action={
         canManage && (
           <Button
@@ -339,6 +356,14 @@ export default function CheckInsSection({ checkIns, venture, showVenture }) {
           venture={venture}
           onClose={() => setDialog(null)}
           onDone={done}
+        />
+      )}
+      {open && (
+        <TranscriptDialog
+          checkInId={open.id}
+          canManage={open.canManage}
+          onClose={() => setOpen(null)}
+          onChanged={() => revalidator.revalidate()}
         />
       )}
       <ConfirmDialog

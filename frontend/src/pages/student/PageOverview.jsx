@@ -42,13 +42,7 @@ const nextCheckInText = checkIns => {
   if (!next) {
     return 'Your mentor hasn’t scheduled the next one yet.'
   }
-  return `Next: ${new Date(next.scheduledAt).toLocaleString(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  })}`
+  return `Next: ${formatWhen(next.scheduledAt)}`
 }
 
 function PageHeader({ title, subtitle }) {
@@ -70,6 +64,113 @@ function PageHeader({ title, subtitle }) {
   )
 }
 
+// Recent activity -----------------------------------------------------------
+
+const KPI_EVENTS = {
+  WAITING_FOR_APPROVAL: 'sent for approval',
+  ACCEPTED: 'approved',
+  REJECTED: 'sent back for changes',
+  GRADED: 'graded',
+}
+
+const kpiActivity = kpi => {
+  if (kpi.isLocked) {
+    return {
+      at: kpi.lockedAt ?? kpi.updatedAt,
+      text: `KPI “${kpi.title}” locked at ${kpi.score} pts`,
+    }
+  }
+  const event = KPI_EVENTS[kpi.status]
+  if (!event) {
+    return null
+  }
+  const score = kpi.status === 'GRADED' ? ` (${kpi.score} pts)` : ''
+  return { at: kpi.updatedAt, text: `KPI “${kpi.title}” ${event}${score}` }
+}
+
+const CHECK_IN_EVENTS = {
+  SCHEDULED: (c, what) => [
+    c.createdAt,
+    `${what} scheduled for ${formatWhen(c.scheduledAt)}`,
+  ],
+  HELD: (c, what) =>
+    c.transcript?.status === 'READY'
+      ? [c.transcript.fetchedAt ?? c.scheduledAt, `${what} transcript ready`]
+      : [c.scheduledAt, `${what} held`],
+  NOT_HELD: (c, what) => [c.scheduledAt, `${what} not held`],
+  CANCELLED: (c, what) => [
+    c.cancelledAt ?? c.updatedAt,
+    `${what} on ${formatWhen(c.scheduledAt)} cancelled`,
+  ],
+}
+
+const checkInActivity = checkIn => {
+  const describe = CHECK_IN_EVENTS[checkIn.status]
+  if (!describe) {
+    return null
+  }
+  const [at, text] = describe(
+    checkIn,
+    checkIn.session ? 'Programme session' : 'Check-in'
+  )
+  return { at, text }
+}
+
+const formatWhen = date =>
+  new Date(date).toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+
+const formatAgo = date => {
+  const days = Math.floor((Date.now() - new Date(date)) / 86400000)
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days} days ago`
+  return new Date(date).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+// The latest KPI and check-in changes, newest first, nothing in the future.
+const recentActivity = ({ kpis, checkIns }, limit = 6) =>
+  [
+    ...(kpis ?? []).map(kpiActivity),
+    ...(checkIns ?? []).map(checkInActivity),
+  ]
+    .filter(item => item?.at && new Date(item.at) <= Date.now())
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, limit)
+
+function RecentActivity({ items }) {
+  if (!items.length) {
+    return (
+      <EmptyState
+        icon={ChartIcon}
+        title="No activity yet"
+        description="Updates to your KPIs and check-ins will show up here."
+      />
+    )
+  }
+  return (
+    <List disablePadding>
+      {items.map(item => (
+        <ListItem key={`${item.at}-${item.text}`} disableGutters>
+          <ListItemText
+            primary={item.text}
+            secondary={formatAgo(item.at)}
+            slotProps={{ primary: { variant: 'body1' } }}
+          />
+        </ListItem>
+      ))}
+    </List>
+  )
+}
+
 // Founder dashboard ---------------------------------------------------------
 
 function initials(name = '') {
@@ -83,7 +184,9 @@ function initials(name = '') {
 
 function VentureDashboard({ user, venture }) {
   const founders = venture.founders || []
-  const checkIns = useLoaderData()?.checkIns
+  const loaded = useLoaderData()
+  const checkIns = loaded?.checkIns
+  const activity = recentActivity({ kpis: loaded?.kpis, checkIns })
 
   return (
     <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
@@ -172,11 +275,7 @@ function VentureDashboard({ user, venture }) {
 
         <Grid size={{ xs: 12, md: 7 }}>
           <SectionCard icon={ChartIcon} title="Recent activity">
-            <EmptyState
-              icon={ChartIcon}
-              title="No activity yet"
-              description="Updates to your KPIs and check-ins will show up here."
-            />
+            <RecentActivity items={activity} />
           </SectionCard>
         </Grid>
       </Grid>

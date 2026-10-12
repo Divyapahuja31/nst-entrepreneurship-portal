@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import {
   canManageCheckIns,
   canReadCheckIns,
+  canRunCheckIn,
   isBoard,
   isStaff,
   isStudent,
@@ -11,7 +12,7 @@ import { CYCLES, cycleForDate, cycleStart } from '@nst/shared/biweeklyCycles.js'
 import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import Venture from '../models/venture.js'
-import { scopedVentureIds } from '../utils/access.js'
+import { scopedVentureIds, ventureAccess } from '../utils/access.js'
 import {
   checkInEvent,
   checkInFields,
@@ -21,9 +22,12 @@ import {
   googleFor,
   occurrencesFrom,
   rescheduledEvent,
+  transcriptDueAt,
   withMeetLink,
 } from '../utils/checkInHelper.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
+import { cycleOrigin } from '../utils/programme.js'
+import { processCheckIn } from '../utils/transcriptPoller.js'
 
 const DEFAULT_DURATION = 30
 const MIN_DURATION = 15
@@ -33,14 +37,33 @@ const VENTURE_FIELDS = 'name mentor createdAt'
 
 const sameId = (a, b) => String(a) === String(b)
 
+const programmeCheckIn = (req, res, { checkIn, venture, programme }) => {
+  if (!programme) {
+    res.status(409).json({
+      error: 'Programme sessions are changed from the Programme page',
+    })
+    return null
+  }
+  if (!canRunCheckIn(req.user, checkIn.staff)) {
+    res.status(403).json({ error: 'Only the staff running it can do that' })
+    return null
+  }
+  return { checkIn, venture }
+}
+
 const POPULATE = [
   { path: 'venture', select: 'name' },
   { path: 'mentor', select: 'username email' },
+  { path: 'staff', select: 'username email' },
   { path: 'attendees.user', select: 'username' },
 ]
 
+// Lists leave out the transcript itself; GET /:id has it.
 const loadCheckIns = filter =>
-  CheckIn.find(filter).sort({ scheduledAt: 1 }).populate(POPULATE)
+  CheckIn.find(filter)
+    .select('-transcript.entries -transcript.text')
+    .sort({ scheduledAt: 1 })
+    .populate(POPULATE)
 
 // Google failures carry their own status and message; anything else is ours.
 const sendError = (res, error, fallback) => {
@@ -69,11 +92,9 @@ const isTimeZone = value => {
   }
 }
 
-const lastCycleEnds = venture => cycleStart(venture.createdAt, CYCLES + 1)
-
-// Checks the time of a new or moved check-in. Returns { error } or
-// { startAt, durationMinutes, cycle }.
-const parseTime = (body, venture, fallbackDuration = DEFAULT_DURATION) => {
+// Checks the time of a new or moved check-in, against cycles counted from
+// `origin`. Returns { error } or { startAt, durationMinutes, cycle }.
+const parseTime = (body, origin, fallbackDuration = DEFAULT_DURATION) => {
   const startAt = new Date(body.startAt)
   if (typeof body.startAt !== 'string' || Number.isNaN(startAt.getTime())) {
     return { error: 'Choose a date and time' }
@@ -92,11 +113,12 @@ const parseTime = (body, venture, fallbackDuration = DEFAULT_DURATION) => {
       error: `A check-in lasts ${MIN_DURATION} to ${MAX_DURATION} minutes`,
     }
   }
-  const cycle = cycleForDate(venture.createdAt, startAt)
+  const cycle = cycleForDate(origin, startAt)
   if (!cycle) {
     return {
-      error: `Choose a time before the startup's last cycle ends (${lastCycleEnds(
-        venture
+      error: `Choose a time within the programme's ${CYCLES} cycles (they end ${cycleStart(
+        origin,
+        CYCLES + 1
       ).toDateString()})`,
     }
   }
@@ -125,8 +147,10 @@ const findManagedVenture = async (req, res, ventureId) => {
 }
 
 // A check-in the caller may change, with its startup. Sends the error
-// response and returns null otherwise.
-const findManagedCheckIn = async (req, res) => {
+// response and returns null otherwise. A programme meeting is moved and
+// cancelled only through its session; its staff write its notes and check
+// its transcript (`programme: true`).
+const findManagedCheckIn = async (req, res, { programme = false } = {}) => {
   const { id } = req.params
   if (!mongoose.isValidObjectId(id)) {
     res.status(400).json({ error: 'Valid check-in id is required' })
@@ -138,6 +162,9 @@ const findManagedCheckIn = async (req, res) => {
     return null
   }
   const venture = await Venture.findById(checkIn.venture).select(VENTURE_FIELDS)
+  if (checkIn.session) {
+    return programmeCheckIn(req, res, { checkIn, venture, programme })
+  }
   if (!venture || !canManageCheckIns(req.user, venture.mentor)) {
     res
       .status(403)
@@ -198,11 +225,12 @@ const listForFounder = async (req, res, founderId) => {
   })
 }
 
-// Students see their own startup's check-ins. Staff name a startup, or a
-// founder for the check-ins that founder was invited to (their record).
+// Students see their own startup's check-ins. Staff name a startup, a
+// founder for the check-ins that founder was invited to (their record), or
+// `mine` for the programme meetings they run.
 export const listCheckIns = async (req, res) => {
   try {
-    const { ventureId, founderId } = req.query
+    const { ventureId, founderId, mine } = req.query
     if (isStudent(req.user)) {
       return await listForStudent(req, res)
     }
@@ -215,6 +243,14 @@ export const listCheckIns = async (req, res) => {
     if (founderId) {
       return await listForFounder(req, res, founderId)
     }
+    if (mine) {
+      return res.json({
+        checkIns: await loadCheckIns({
+          staff: req.user.id,
+          session: { $ne: null },
+        }),
+      })
+    }
     return res.status(400).json({ error: 'Name a ventureId or founderId' })
   } catch (error) {
     return sendError(res, error, 'Could not load check-ins')
@@ -224,7 +260,8 @@ export const listCheckIns = async (req, res) => {
 // Checks a new check-in for a startup. Returns { status, error } or
 // { time, timeZone, occurrences, attendees }.
 const parseNewCheckIn = async (body, venture) => {
-  const time = parseTime(body, venture)
+  const origin = await cycleOrigin(venture)
+  const time = parseTime(body, origin)
   if (time.error) {
     return { status: 400, error: time.error }
   }
@@ -249,7 +286,7 @@ const parseNewCheckIn = async (body, venture) => {
       error: 'This startup has no active founders to invite',
     }
   }
-  return { time, timeZone: body.timeZone, occurrences, attendees }
+  return { time, timeZone: body.timeZone, occurrences, attendees, origin }
 }
 
 // Schedules one check-in, or with `recurring` one every two weeks through
@@ -266,7 +303,7 @@ export const createCheckIns = async (req, res) => {
     if (parsed.error) {
       return res.status(parsed.status).json({ error: parsed.error })
     }
-    const { time, timeZone, occurrences, attendees } = parsed
+    const { time, timeZone, occurrences, attendees, origin } = parsed
 
     const google = await googleFor(req.user.id)
     const event = await withMeetLink(
@@ -286,6 +323,7 @@ export const createCheckIns = async (req, res) => {
     const fields = ev => ({
       ...checkInFields({
         venture,
+        origin,
         event: { ...ev, hangoutLink: ev.hangoutLink ?? event.hangoutLink },
         durationMinutes: time.durationMinutes,
         timeZone,
@@ -345,7 +383,11 @@ export const rescheduleCheckIn = async (req, res) => {
         .json({ error: 'Only an upcoming check-in can be moved' })
     }
 
-    const time = parseTime(req.body ?? {}, venture, checkIn.durationMinutes)
+    const time = parseTime(
+      req.body ?? {},
+      await cycleOrigin(venture),
+      checkIn.durationMinutes
+    )
     if (time.error) {
       return res.status(400).json({ error: time.error })
     }
@@ -368,6 +410,10 @@ export const rescheduleCheckIn = async (req, res) => {
       durationMinutes: time.durationMinutes,
       cycle_number: time.cycle,
       attendees,
+      'transcript.nextPollAt': transcriptDueAt(
+        time.startAt,
+        time.durationMinutes
+      ),
     })
     await checkIn.save()
     return res.json({ checkIn: (await loadCheckIns({ _id: checkIn._id }))[0] })
@@ -432,5 +478,88 @@ export const endCheckInSeries = async (req, res) => {
     })
   } catch (error) {
     return sendError(res, error, 'Could not end the recurring check-in')
+  }
+}
+
+const MAX_NOTES = 20000
+
+// One check-in with its transcript and notes, for anyone who can read the
+// startup.
+export const getCheckIn = async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'Valid check-in id is required' })
+    }
+    const checkIn = await CheckIn.findById(id).populate(POPULATE)
+    if (!checkIn) {
+      return res.status(404).json({ error: 'Check-in not found' })
+    }
+    const { mentorId, isMember } = await ventureAccess(
+      req.user,
+      checkIn.venture
+    )
+    const runsIt = checkIn.session && canRunCheckIn(req.user, checkIn.staff)
+    if (!runsIt && !canReadCheckIns(req.user, { mentorId, isMember })) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+    return res.json({ checkIn })
+  } catch (error) {
+    return sendError(res, error, 'Could not load the check-in')
+  }
+}
+
+// The mentor's notes: what was discussed, or the record of a meeting Meet
+// made no transcript of.
+export const saveCheckInNotes = async (req, res) => {
+  try {
+    const { notes } = req.body ?? {}
+    if (typeof notes !== 'string' || notes.length > MAX_NOTES) {
+      return res
+        .status(400)
+        .json({ error: `Notes are text of at most ${MAX_NOTES} characters` })
+    }
+    const found = await findManagedCheckIn(req, res, { programme: true })
+    if (!found) {
+      return null
+    }
+    if (found.checkIn.status === 'CANCELLED') {
+      return res
+        .status(409)
+        .json({ error: 'A cancelled check-in has no notes' })
+    }
+    found.checkIn.notes = notes
+    await found.checkIn.save()
+    return res.json({ notes: found.checkIn.notes })
+  } catch (error) {
+    return sendError(res, error, 'Could not save the notes')
+  }
+}
+
+// Asks Meet for the transcript now instead of waiting for the poller.
+export const refreshTranscript = async (req, res) => {
+  try {
+    const found = await findManagedCheckIn(req, res, { programme: true })
+    if (!found) {
+      return null
+    }
+    const { checkIn } = found
+    const ended =
+      checkIn.scheduledAt.getTime() + checkIn.durationMinutes * 60 * 1000 <=
+      Date.now()
+    if (
+      !ended ||
+      checkIn.status === 'CANCELLED' ||
+      checkIn.transcript.status === 'READY'
+    ) {
+      return res
+        .status(409)
+        .json({ error: 'Only a check-in that has ended can be checked' })
+    }
+    const settled = await processCheckIn(checkIn, { manual: true })
+    const updated = await CheckIn.findById(checkIn._id).populate(POPULATE)
+    return res.json({ checkIn: updated, settled })
+  } catch (error) {
+    return sendError(res, error, 'Could not check for a transcript')
   }
 }

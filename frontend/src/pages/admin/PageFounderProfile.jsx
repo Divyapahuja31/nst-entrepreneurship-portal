@@ -102,7 +102,13 @@ export default function PageFounderProfile() {
         // The startup the founder is in now, so its mentor can schedule here.
         <CheckInsSection
           checkIns={biweeklyData?.checkIns}
-          venture={venture && { ...venture, id: venture.id ?? venture._id }}
+          venture={
+            venture && {
+              ...venture,
+              id: venture.id ?? venture._id,
+              cycleOrigin: biweeklyData?.programmeStart,
+            }
+          }
           showVenture
         />
       )}

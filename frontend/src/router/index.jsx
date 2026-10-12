@@ -22,6 +22,7 @@ import PageReportBiWeekly from '../pages/admin/PageReportBiWeekly.jsx'
 import PageVentures from '../pages/admin/PageVentures.jsx'
 import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
 import PageAccounts from '../pages/admin/PageAccounts.jsx'
+import PageProgramme from '../pages/admin/PageProgramme.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -51,6 +52,7 @@ import { biWeeklyLoader } from '../api/biweekly.js'
 import { myCheckInsLoader } from '../api/checkins.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 import { accountsLoader } from '../api/accounts.js'
+import { programmeLoader } from '../api/programme.js'
 import { whenAuthReady } from '../stores/auth.js'
 
 // Runs a route's loader only for the roles RequireRole lets through, once
@@ -223,6 +225,11 @@ export const router = createBrowserRouter([
                 path: '/admin/accounts',
                 Component: PageAccounts,
                 loader: forRoles([ROLES.ADMIN], accountsLoader),
+              },
+              {
+                path: '/admin/programme',
+                Component: PageProgramme,
+                loader: forRoles([ROLES.ADMIN], programmeLoader),
               },
             ],
           },

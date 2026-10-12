@@ -10,6 +10,11 @@ import BiWeeklyObservation from '../models/biWeeklyObservation.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import CheckIn from '../models/checkIn.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
+import {
+  cycleOrigin,
+  getProgramme,
+  programmeStart,
+} from '../utils/programme.js'
 import startupStage from '../models/enums/startupStage.js'
 import {
   validateCycleNumber,
@@ -30,6 +35,11 @@ const withStageLabel = venture =>
     ...venture.toJSON(),
     stageLabel: startupStage[venture.stage] ?? venture.stage,
   }
+
+const currentProgrammeStart = async () => {
+  const programme = await getProgramme().select('startDate timeZone').lean()
+  return programme ? programmeStart(programme) : null
+}
 
 export const getBiWeeklyData = async (req, res) => {
   try {
@@ -77,6 +87,8 @@ export const getBiWeeklyData = async (req, res) => {
       evaluations,
       observations,
       checkIns,
+      // Where every startup's cycles count from, once an admin has set it.
+      programmeStart: await currentProgrammeStart(),
     })
   } catch (err) {
     console.error('Get biweekly error:', err)
@@ -95,7 +107,7 @@ const findVentureForCycle = async (userId, cycleNum) => {
         'You must belong to an active venture to submit bi-weekly progress.',
     }
   }
-  if (!hasCycleStarted(venture.createdAt, cycleNum)) {
+  if (!hasCycleStarted(await cycleOrigin(venture), cycleNum)) {
     return { error: `Cycle ${cycleNum} hasn't opened yet.` }
   }
   return { venture }

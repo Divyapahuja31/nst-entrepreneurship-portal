@@ -288,7 +288,10 @@ export default function PageVentureDetail() {
         ))}
 
       {tabIndex === CHECK_INS_TAB && (
-        <CheckInsSection checkIns={checkIns} venture={venture} />
+        <CheckInsSection
+          checkIns={checkIns}
+          venture={{ ...venture, cycleOrigin: biweekly?.programmeStart }}
+        />
       )}
     </Box>
   )

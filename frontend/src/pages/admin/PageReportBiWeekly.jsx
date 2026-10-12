@@ -267,9 +267,9 @@ function BiWeekly({ data: propData }) {
   const rows = data?.submissions ?? []
   const observations = data?.observations ?? []
   const evaluations = data?.evaluations ?? []
-  const checkIns = data?.checkIns ?? []
   const [selected, setSelected] = React.useState(null)
-  const [message, setMessage] = React.useState('')
+  // { text, severity }: progress and success in green, failures in red.
+  const [message, setMessage] = React.useState(null)
   const detailRef = React.useRef(null)
 
   const cycles = React.useMemo(
@@ -300,6 +300,9 @@ function BiWeekly({ data: propData }) {
   const active = selected ?? currentCycle
   const activeMeta = cycles.find(c => c.n === active)
   const activeRow = rows.find(r => r.cycle_number === active)
+  // Each cycle's own evaluation. (Matching on month_number as well showed
+  // cycle 1's scores on cycle 2, which share a month.)
+  const activeEvaluation = evaluations.find(e => e.checklist_id === active)
   const submittedCount = rows.filter(r => r.submitted_at).length
   const missedCount = cycles.filter(
     c =>
@@ -309,32 +312,38 @@ function BiWeekly({ data: propData }) {
 
   // Each of these calls the API directly and then asks the route loader to
   // refetch, in place of the route action that used to dispatch on an intent.
-  const run = async (pending, operation) => {
-    setMessage(pending)
+  const run = async (pending, done, operation) => {
+    setMessage({ text: pending, severity: 'info' })
 
     try {
       await operation()
-      setMessage('')
+      setMessage({ text: done, severity: 'success' })
       revalidator.revalidate()
     } catch (err) {
-      setMessage(toError(err, 'Action failed').error)
+      setMessage({
+        text: toError(err, 'Action failed').error,
+        severity: 'error',
+      })
     }
   }
 
   const saveSubmission = (payload, submit) =>
-    run(submit ? 'Submitting to faculty...' : 'Saving draft...', () =>
-      submitBiWeeklyCycle({
-        ...payload,
-        isSubmit: submit,
-        ventureId: venture?._id,
-      })
+    run(
+      submit ? 'Submitting to faculty...' : 'Saving draft...',
+      submit ? 'Submitted to faculty.' : 'Draft saved.',
+      () =>
+        submitBiWeeklyCycle({
+          ...payload,
+          isSubmit: submit,
+          ventureId: venture?._id,
+        })
     )
 
   const reopenSubmission = cycleNumber => {
     if (!window.confirm('Unlock to edit? Faculty will see this as re-opened.'))
       return
 
-    return run('Unlocking...', () =>
+    return run('Unlocking...', 'Unlocked for the team.', () =>
       reopenBiWeeklySubmission({
         ventureId: venture?._id,
         cycle_number: cycleNumber,
@@ -343,7 +352,7 @@ function BiWeekly({ data: propData }) {
   }
 
   const saveObservation = payload =>
-    run('Saving observation...', () =>
+    run('Saving observation...', 'Observation saved.', () =>
       saveBiWeeklyObservation({
         ...payload,
         ventureId: venture?._id,
@@ -351,7 +360,7 @@ function BiWeekly({ data: propData }) {
     )
 
   const saveEvaluation = payload =>
-    run('Saving evaluation...', () =>
+    run('Saving evaluation...', 'Evaluation saved.', () =>
       saveBiWeeklyEvaluation({
         ...payload,
         ventureId: venture?._id,
@@ -472,11 +481,10 @@ function BiWeekly({ data: propData }) {
             key={activeMeta.n}
             status={cycleStatus(activeMeta, activeRow)}
             cycleNumber={activeMeta.n}
-            periodStart={activeMeta.start.toISOString().slice(0, 10)}
-            periodEnd={activeMeta.end.toISOString().slice(0, 10)}
+            periodStart={localDate(activeMeta.start)}
+            periodEnd={localDate(activeMeta.end)}
             deadline={activeMeta.deadline}
             existing={activeRow}
-            checkIn={checkIns.find(c => c.cycle_number === activeMeta.n)}
             isStaff={isStaff}
             canReopen={canReopen}
             onSave={saveSubmission}
@@ -495,13 +503,9 @@ function BiWeekly({ data: propData }) {
           />
 
           <EvaluationSection
-            key={`eval-${activeMeta.n}-${evaluations.find(e => e.checklist_id === activeMeta.n || e.month_number === Math.ceil(activeMeta.n / 2))?._id ?? 'none'}`}
+            key={`eval-${activeMeta.n}-${activeEvaluation?._id ?? 'none'}`}
             cycleNumber={activeMeta.n}
-            evaluation={evaluations.find(
-              e =>
-                e.checklist_id === activeMeta.n ||
-                e.month_number === Math.ceil(activeMeta.n / 2)
-            )}
+            evaluation={activeEvaluation}
             canAuthor={canReview}
             onSave={saveEvaluation}
           />
@@ -509,13 +513,16 @@ function BiWeekly({ data: propData }) {
       </Box>
 
       <Snackbar
-        open={!!message}
-        autoHideDuration={2500}
-        onClose={() => setMessage('')}
+        open={Boolean(message)}
+        autoHideDuration={message?.severity === 'error' ? null : 2500}
+        onClose={(_, reason) => reason !== 'clickaway' && setMessage(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity="success" onClose={() => setMessage('')}>
-          {message}
+        <Alert
+          severity={message?.severity ?? 'info'}
+          onClose={() => setMessage(null)}
+        >
+          {message?.text}
         </Alert>
       </Snackbar>
     </Stack>
@@ -864,6 +871,10 @@ const localDate = date => {
     .slice(0, 10)
 }
 
+// A YYYY-MM-DD day as local midnight. new Date('2026-10-17') is UTC
+// midnight, which is still the 16th west of Greenwich.
+const dayOf = ymd => new Date(`${ymd}T00:00`)
+
 function CycleForm({
   status,
   cycleNumber,
@@ -871,25 +882,18 @@ function CycleForm({
   periodEnd,
   deadline,
   existing,
-  checkIn,
   isStaff,
   canReopen,
   onSave,
   onReopen,
 }) {
-  const checkInHappened =
-    checkIn && new Date(checkIn.scheduledAt) <= new Date()
-  const [f, setF] = React.useState(() => {
-    const form = existing
+  const [f, setF] = React.useState(() =>
+    existing
       ? Object.fromEntries(
           Object.keys(BASELINE).map(k => [k, existing[k] ?? BASELINE[k]])
         )
       : BASELINE
-    // The cycle's check-in already says when the meeting was.
-    return !form.mentor_meeting_date && checkInHappened
-      ? { ...form, mentor_meeting_date: localDate(checkIn.scheduledAt) }
-      : form
-  })
+  )
   const [links, setLinks] = React.useState(() =>
     Array.isArray(existing?.evidence_links) ? existing.evidence_links : []
   )
@@ -984,8 +988,7 @@ function CycleForm({
   ]
   const days =
     Math.round(
-      (new Date(periodEnd).getTime() - new Date(periodStart).getTime()) /
-        86400000
+      (dayOf(periodEnd).getTime() - dayOf(periodStart).getTime()) / 86400000
     ) + 1
 
   const sections = [
@@ -1252,18 +1255,6 @@ function CycleForm({
               type="date"
               value={f.mentor_meeting_date ?? ''}
               disabled={locked}
-              helperText={
-                checkIn &&
-                `Check-in ${checkInHappened ? 'was' : 'is'} on ${new Date(
-                  checkIn.scheduledAt
-                ).toLocaleString(undefined, {
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}`
-              }
               slotProps={{ inputLabel: { shrink: true } }}
               onChange={e =>
                 setF({ ...f, mentor_meeting_date: e.target.value })
@@ -1326,8 +1317,7 @@ function CycleForm({
             Cycle {cycleNumber} – Biweekly Report
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-            {dateRange(new Date(periodStart), new Date(periodEnd))} ({days}{' '}
-            days)
+            {dateRange(dayOf(periodStart), dayOf(periodEnd))} ({days} days)
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Due{' '}

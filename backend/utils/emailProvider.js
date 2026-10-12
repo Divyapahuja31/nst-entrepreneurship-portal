@@ -2,7 +2,8 @@ import { Resend } from 'resend'
 
 // A provider sends one email and never throws:
 //   { name, sendEmail({ to, subject, html, text }) => { messageId?, error? } }
-// Resend is the default; tests swap in a fake with setEmailProvider.
+// Resend sends them; under `npm run dev` they are printed instead (see
+// defaultProvider). Tests swap in a fake with setEmailProvider.
 
 // Accepts `Name <a@b.com>`, `Name a@b.com` and `a@b.com`. Returns null when
 // there is no address in it.
@@ -59,10 +60,33 @@ export const createResendProvider = () => ({
   },
 })
 
+// For development: prints each email in the server's terminal instead of
+// sending it, so sign-up and reset codes can be read there.
+export const createConsoleProvider = () => ({
+  name: 'console',
+  sendEmail: async ({ to, subject, text }) => {
+    // The plain-text body without its signature (after the "--" line).
+    const body = String(text ?? '').split('\n--\n')[0]
+    console.log(
+      `\n----- Email (not sent) -----\nTo: ${to}\nSubject: ${subject}\n\n${body}\n----------------------------\n`
+    )
+    return { messageId: null }
+  },
+})
+
+// EMAIL_PROVIDER picks one ("console" or "resend"). Unset, `npm run dev`
+// prints emails and everything else (npm start, production) sends them.
+const defaultProvider = () => {
+  const choice =
+    process.env.EMAIL_PROVIDER?.trim().toLowerCase() ||
+    (process.env.npm_lifecycle_event === 'dev' ? 'console' : 'resend')
+  return choice === 'console' ? createConsoleProvider() : createResendProvider()
+}
+
 let provider = null
 
 export const getEmailProvider = () => {
-  provider ??= createResendProvider()
+  provider ??= defaultProvider()
   return provider
 }
 

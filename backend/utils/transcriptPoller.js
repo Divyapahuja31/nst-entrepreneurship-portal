@@ -17,10 +17,10 @@ const LATER_MS = 4 * HOUR_MS
 // Meet usually has the transcript within the hour. After two days without
 // one it isn't coming.
 export const GIVE_UP_MS = 48 * HOUR_MS
-// A conference belongs to the check-in if it starts this close to the
-// check-in's time. A series' occurrences share a Meet code but are two weeks
-// apart.
-const MATCH_WINDOW_MS = 3 * HOUR_MS
+// A conference belongs to the check-in if it starts within a day of the
+// check-in's time, so a meeting held late or early still counts. A series'
+// occurrences share a Meet code but are two weeks apart.
+const MATCH_WINDOW_MS = 24 * HOUR_MS
 // While one poll works on a check-in, another leaves it alone.
 const LEASE_MS = 10 * MINUTE_MS
 const BATCH = 25

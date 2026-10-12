@@ -8,7 +8,6 @@ import {
 import BiWeeklyEvaluation from '../models/biWeeklyEvaluation.js'
 import BiWeeklyObservation from '../models/biWeeklyObservation.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
-import CheckIn from '../models/checkIn.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   cycleOrigin,
@@ -62,15 +61,7 @@ export const getBiWeeklyData = async (req, res) => {
         .json({ error: 'This startup is not assigned to you' })
     }
 
-    const [submissions, checkIns] = venture
-      ? await Promise.all([
-          loadVentureSubmissions(venture._id),
-          // Each cycle's check-in, shown beside its report.
-          CheckIn.find({ venture: venture._id, status: { $ne: 'CANCELLED' } })
-            .select('cycle_number scheduledAt meetUrl status')
-            .sort({ scheduledAt: 1 }),
-        ])
-      : [[], []]
+    const submissions = venture ? await loadVentureSubmissions(venture._id) : []
 
     const evaluations = submissions
       .map(sub => sub.biWeeklyEvaluation)
@@ -86,7 +77,6 @@ export const getBiWeeklyData = async (req, res) => {
       submissions,
       evaluations,
       observations,
-      checkIns,
       // Where every startup's cycles count from, once an admin has set it.
       programmeStart: await currentProgrammeStart(),
     })

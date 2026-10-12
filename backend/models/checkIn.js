@@ -81,6 +81,13 @@ const checkInSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    // A programme meeting's version: one up each time its time, length or
+    // staff change, so its emails go out again even when a change puts it
+    // back the way it once was.
+    revision: {
+      type: Number,
+      default: 0,
+    },
     // Whose Google Calendar holds the event: the admin for programme
     // sessions, otherwise the mentor.
     host: {

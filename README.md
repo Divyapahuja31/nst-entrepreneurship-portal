@@ -99,6 +99,8 @@ It moves each founder's report onto the startup they are in (or were in most rec
 
 Emails go through Resend ([`backend/utils/emailProvider.js`](backend/utils/emailProvider.js)) and need `RESEND_API_KEY` and `EMAIL_FROM` (on a domain verified in Resend). Without them nothing is sent and each attempt is logged as failed. Links in emails point at `APP_URL`, or `FRONTEND_URL` if it isn't set.
 
+Under `npm run dev` nothing is sent: each email is printed in the backend's terminal with its recipient, subject and text, so you can sign up made-up accounts and read their codes there. `npm start` sends as usual. `EMAIL_PROVIDER=resend` (or `console`) in `backend/.env` overrides the choice.
+
 | When | Who | Email |
 |---|---|---|
 | A KPI's grade is locked | Its founder, or every active founder for a startup-wide KPI | The result, with score and status |
@@ -140,18 +142,19 @@ Programme meetings show on each startup's Check-Ins tab and on founders' pages. 
 
 Besides the programme, a startup's mentor can schedule their own check-ins with it.
 
-A startup's mentor schedules bi-weekly check-ins from the startup's **Check-Ins** tab. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. A check-in is one-off or repeats every two weeks, one per cycle, through cycle 13. Each occurrence can be moved or cancelled on its own, and a recurring check-in can be ended.
+A startup's mentor holds check-ins from the startup's **Check-Ins** tab: **Meet Now** starts one at once and opens Meet, and **Schedule** puts one at any future time. Check-ins are the mentor's own meetings, apart from the bi-weekly cycles and reports. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. Each check-in is a single meeting that can be moved or cancelled. Check-ins that repeated, from before repeating was removed, can still be moved, cancelled or ended.
 
-- Only the startup's mentor schedules, because the events live on their calendar. Founders see their check-ins at `/checkins` and on their overview. Staff see them on the startup and on each founder's profile. Each cycle's check-in also shows beside its bi-weekly report.
+- Only the startup's mentor schedules, because the events live on their calendar. Founders see their check-ins at `/checkins` and on their overview. Staff see them on the startup and on each founder's profile, and a mentor sees all of theirs on their Overview.
 - Google is written first. If it refuses a change, the portal saves nothing and shows Google's reason.
 - When a startup's mentor changes, or the mentor is deactivated or loses the mentor role, their upcoming check-ins for it are cancelled. Removing them from Google is best effort.
-- The invitees are the active founders when a check-in is scheduled or moved. A founder who joins later is invited from the next one that is scheduled or moved.
+- The invitees are the startup's active founders. When a founder joins or leaves, the startup's upcoming check-ins and drawn programme sessions are updated to match ([`meetingInvites.js`](backend/utils/meetingInvites.js)); this is best effort.
 
 ### Transcripts and notes
 
 After each check-in the server looks for its Google Meet transcript through the mentor's connection ([`transcriptPoller.js`](backend/utils/transcriptPoller.js)). It first looks 15 minutes after the check-in should end, then again with longer gaps, and stops after two days. Each check-in then reads as held (someone joined) or not held, and its transcript as ready or unavailable. Anyone who can read the startup can read the transcript, with speaker names, under **Transcript** on a past check-in. The mentor can also write notes there, and press **Check Now** instead of waiting.
 
-- Meet only makes a transcript when someone turns transcription on during the meeting (Activities, then Transcripts), or when the Workspace turns it on by default. That needs a Google Workspace edition with Meet transcripts. Without one, every check-in ends up with no transcript, and the mentor's notes are the record.
+- The portal sets every meeting it schedules to transcribe itself, so Meet starts a transcript as soon as someone allowed to transcribe joins. Meetings scheduled earlier are set the same way when the host connects Google again. This needs a Google Workspace edition with Meet transcripts and the `meetings.space.settings` scope. Without them the meeting is still scheduled, someone has to turn transcription on during the meeting (Activities, then Transcripts), and without transcripts at all the mentor's notes are the record.
+- A meeting counts as a check-in's if it starts within a day of the check-in's time.
 - Meet keeps a meeting's records for 30 days, so a transcript that arrives later than that is never collected.
 - A very long transcript is cut at about 1 MB of text. The full one stays in the mentor's Google Drive.
 - With more than one server, each check-in is claimed before it is fetched, so it is only fetched once.
@@ -159,7 +162,7 @@ After each check-in the server looks for its Google Meet transcript through the 
 ### Setting up Google
 
 1. In the Google Cloud project, enable the **Google Calendar API** and the **Google Meet REST API**.
-2. Create an OAuth client (Web application) for mentors, with the redirect URI `<API origin>/api/google/callback` (for example `http://localhost:4000/api/google/callback`). Set its consent screen to **Internal** in the newtonschool.co Workspace if you can. Mentors are all Newton School staff, and an internal app needs no Google verification for these scopes. The scopes are `openid`, `email`, `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/meetings.space.readonly` (for transcripts).
+2. Create an OAuth client (Web application) for mentors, with the redirect URI `<API origin>/api/google/callback` (for example `http://localhost:4000/api/google/callback`). Set its consent screen to **Internal** in the newtonschool.co Workspace if you can. Mentors are all Newton School staff, and an internal app needs no Google verification for these scopes. The scopes are `openid`, `email`, `https://www.googleapis.com/auth/calendar.events`, `https://www.googleapis.com/auth/meetings.space.readonly` (for transcripts) and `https://www.googleapis.com/auth/meetings.space.settings` (to turn on each meeting's automatic transcription; mentors may decline it).
 3. Set `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` and `GOOGLE_WORKSPACE_REDIRECT_URI` in `backend/.env`. Without them the sign-in client (`GOOGLE_CLIENT_*`) is used, which then needs the scopes and redirect URI above. Students would see a consent screen asking for calendar access only if they reached the connect route, which is for mentors only.
 4. Set `GOOGLE_TOKEN_KEY` to 32 random bytes (`openssl rand -base64 32`, or `-hex 32`). Mentors' refresh tokens are encrypted with it. Changing it means every mentor connects again.
 
@@ -175,7 +178,7 @@ npm test
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
 - `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and cycles counted from the programme start.
-- `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, recurring check-ins, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
+- `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, Meet Now, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 
 The first run downloads a MongoDB binary for the tests.
 

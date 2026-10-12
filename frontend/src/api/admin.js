@@ -7,9 +7,13 @@ export const foundersLoader = async () => {
   return data
 }
 
+// The overview, and the programme meetings the signed-in staff member runs.
 export const foundersCount = async () => {
-  const { data } = await api.get('/admin/overview')
-  return data
+  const [{ data }, programmeMeetings] = await Promise.all([
+    api.get('/admin/overview'),
+    loadCheckIns({ mine: 1 }),
+  ])
+  return { ...data, programmeMeetings }
 }
 
 export const addFounderLoader = async () => {

@@ -61,7 +61,15 @@ export const findAttendees = async ventureId =>
     .filter(user => user.email)
     .map(user => ({ user: user._id, email: user.email }))
 
-const eventTimes = (startAt, durationMinutes, timeZone) => ({
+// Asks Google to add a new Meet link to the event.
+export const newMeet = () => ({
+  createRequest: {
+    requestId: randomUUID(),
+    conferenceSolutionKey: { type: 'hangoutsMeet' },
+  },
+})
+
+export const eventTimes = (startAt, durationMinutes, timeZone) => ({
   start: { dateTime: startAt.toISOString(), timeZone },
   end: {
     dateTime: new Date(
@@ -88,12 +96,7 @@ export const checkInEvent = ({
   ...eventTimes(startAt, durationMinutes, timeZone),
   attendees: eventAttendees(attendees),
   guestsCanModify: false,
-  conferenceData: {
-    createRequest: {
-      requestId: randomUUID(),
-      conferenceSolutionKey: { type: 'hangoutsMeet' },
-    },
-  },
+  conferenceData: newMeet(),
   ...(occurrences > 1 && {
     recurrence: [`RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=${occurrences}`],
   }),
@@ -119,7 +122,7 @@ export const withMeetLink = async (google, event) => {
   return google('getEvent', event.id)
 }
 
-const meetFields = event => ({
+export const meetFields = event => ({
   meetUrl: event.hangoutLink ?? null,
   meetingCode: event.conferenceData?.conferenceId ?? null,
 })
@@ -137,8 +140,11 @@ export const transcriptDueAt = (scheduledAt, durationMinutes) =>
   )
 
 // The CheckIn fields for an event or for one occurrence of a series.
+// `origin` is where the startup's cycles count from (utils/programme.js
+// cycleOrigin).
 export const checkInFields = ({
   venture,
+  origin,
   event,
   durationMinutes,
   timeZone,
@@ -147,7 +153,7 @@ export const checkInFields = ({
   return {
     venture: venture._id,
     mentor: venture.mentor,
-    cycle_number: cycleForDate(venture.createdAt, scheduledAt),
+    cycle_number: cycleForDate(origin, scheduledAt),
     scheduledAt,
     originalStartAt: event.originalStartTime
       ? new Date(event.originalStartTime.dateTime)
@@ -240,13 +246,15 @@ const googleOrNull = async mentorId => {
   }
 }
 
-// Cancels the upcoming check-ins matching `filter` (e.g. a startup whose
-// mentor changed, or a mentor who left). Removing them from Google is best
+// Cancels the upcoming mentor check-ins matching `filter` (e.g. a startup
+// whose mentor changed, or a mentor who left). Removing them from Google is best
 // effort: the portal's record is cancelled either way.
 export const cancelFutureCheckIns = async filter => {
   const now = new Date()
+  // Programme sessions don't depend on who mentors a startup.
   const upcoming = await CheckIn.find({
     ...filter,
+    session: null,
     status: 'SCHEDULED',
     scheduledAt: { $gt: now },
   })

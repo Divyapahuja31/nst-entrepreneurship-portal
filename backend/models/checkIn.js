@@ -1,9 +1,9 @@
 import mongoose from 'mongoose'
 import { CYCLES } from '@nst/shared/biweeklyCycles.js'
 
-// One bi-weekly check-in between a startup's mentor and its founders: an
-// event with a Google Meet link on the mentor's calendar, to which every
-// active founder is invited.
+// One bi-weekly check-in for a startup: an event with a Google Meet link,
+// to which its founders are invited. Either a mentor's own check-in, on
+// their calendar, or a meeting of a programme session, on the admin's.
 const attendeeSchema = new mongoose.Schema(
   {
     user: {
@@ -14,6 +14,12 @@ const attendeeSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
+    },
+    // When this person was (last) invited, so someone removed and added
+    // back is told again.
+    invitedAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   { _id: false }
@@ -68,6 +74,28 @@ const checkInSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Set for a programme session's meeting (see models/programmeSession).
+    session: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ProgrammeSession',
+      default: null,
+      index: true,
+    },
+    // Whose Google Calendar holds the event: the admin for programme
+    // sessions, otherwise the mentor.
+    host: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    // A group session: one event shared by every invited startup, each with
+    // its own CheckIn.
+    group: {
+      type: Boolean,
+      default: false,
+    },
+    // Everyone running the meeting. `mentor` is the first of them.
+    staff: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     // Set when this is one occurrence of a recurring check-in.
     series: {
       type: mongoose.Schema.Types.ObjectId,
@@ -138,6 +166,8 @@ const checkInSchema = new mongoose.Schema(
 checkInSchema.index({ venture: 1, scheduledAt: 1 })
 // A founder's check-ins, for their profile.
 checkInSchema.index({ 'attendees.user': 1, scheduledAt: 1 })
+// The programme meetings a staff member runs.
+checkInSchema.index({ staff: 1, scheduledAt: 1 })
 // The check-ins whose transcript is due to be looked for.
 checkInSchema.index({ 'transcript.status': 1, 'transcript.nextPollAt': 1 })
 

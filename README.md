@@ -99,6 +99,8 @@ It moves each founder's report onto the startup they are in (or were in most rec
 
 Emails go through Resend ([`backend/utils/emailProvider.js`](backend/utils/emailProvider.js)) and need `RESEND_API_KEY` and `EMAIL_FROM` (on a domain verified in Resend). Without them nothing is sent and each attempt is logged as failed. Links in emails point at `APP_URL`, or `FRONTEND_URL` if it isn't set.
 
+Under `npm run dev` nothing is sent: each email is printed in the backend's terminal with its recipient, subject and text, so you can sign up made-up accounts and read their codes there. `npm start` sends as usual. `EMAIL_PROVIDER=resend` (or `console`) in `backend/.env` overrides the choice.
+
 | When | Who | Email |
 |---|---|---|
 | A KPI's grade is locked | Its founder, or every active founder for a startup-wide KPI | The result, with score and status |

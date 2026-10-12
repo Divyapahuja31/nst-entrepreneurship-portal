@@ -1,6 +1,6 @@
 import { OAuth2Client } from 'google-auth-library'
 
-// Google Calendar for one mentor at a time, over REST with the OAuth client
+// Google Calendar and Meet for one mentor at a time, over REST with the OAuth client
 // we already have (no googleapis package). Every call after sign-in takes
 // the mentor's refresh token first. Tests swap in a fake with
 // setGoogleWorkspace.
@@ -75,19 +75,22 @@ const eventUrl = id => `${EVENTS_URL}/${encodeURIComponent(id)}`
 // Attendees hear about every change, so their calendars stay in step.
 const NOTIFY = { sendUpdates: 'all' }
 
-const listInstances = async (refreshToken, eventId) => {
-  const instances = []
+// Every item of a paged list.
+const listAll = async (refreshToken, url, key, params = {}) => {
+  const items = []
   let pageToken
   do {
     const page = await call(refreshToken, {
-      url: `${eventUrl(eventId)}/instances`,
-      params: { maxResults: 50, pageToken },
+      url,
+      params: { ...params, pageToken },
     })
-    instances.push(...(page.items ?? []))
+    items.push(...(page[key] ?? []))
     pageToken = page.nextPageToken
   } while (pageToken)
-  return instances
+  return items
 }
+
+const MEET_URL = 'https://meet.googleapis.com/v2'
 
 export const createGoogleWorkspace = () => ({
   name: 'google',
@@ -166,7 +169,41 @@ export const createGoogleWorkspace = () => ({
     }
   },
 
-  listInstances,
+  listInstances: (refreshToken, eventId) =>
+    listAll(refreshToken, `${eventUrl(eventId)}/instances`, 'items', {
+      maxResults: 50,
+    }),
+
+  // Meet keeps a conference record for each time a meeting is joined, for
+  // 30 days. Every occurrence of a recurring event shares one meeting code.
+  conferenceRecords: (refreshToken, meetingCode) =>
+    listAll(
+      refreshToken,
+      `${MEET_URL}/conferenceRecords`,
+      'conferenceRecords',
+      {
+        filter: `space.meeting_code = "${meetingCode}"`,
+      }
+    ),
+
+  // A conference's transcripts; state FILE_GENERATED means it is complete.
+  transcripts: (refreshToken, recordName) =>
+    listAll(
+      refreshToken,
+      `${MEET_URL}/${recordName}/transcripts`,
+      'transcripts'
+    ),
+
+  transcriptEntries: (refreshToken, transcriptName) =>
+    listAll(
+      refreshToken,
+      `${MEET_URL}/${transcriptName}/entries`,
+      'transcriptEntries',
+      { pageSize: 100 }
+    ),
+
+  participant: (refreshToken, participantName) =>
+    call(refreshToken, { url: `${MEET_URL}/${participantName}` }),
 })
 
 let workspace = null

@@ -19,6 +19,42 @@ const attendeeSchema = new mongoose.Schema(
   { _id: false }
 )
 
+const transcriptEntrySchema = new mongoose.Schema(
+  {
+    speaker: String,
+    text: String,
+    startTime: Date,
+  },
+  { _id: false }
+)
+
+// The Google Meet transcript, collected after the meeting by
+// utils/transcriptPoller.js. PENDING until Meet has made it (or it is clear
+// it never will); READY with the transcript, or UNAVAILABLE.
+const transcriptSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ['PENDING', 'READY', 'UNAVAILABLE'],
+      default: 'PENDING',
+    },
+    entries: [transcriptEntrySchema],
+    // The entries as plain text, "[10:02] Mo Mentor: ..." per line.
+    text: String,
+    // A very long transcript is cut to fit; the full one stays in Google Docs.
+    truncated: Boolean,
+    conferenceRecord: String,
+    fetchedAt: Date,
+    // When the poller next looks, and how many times it has.
+    nextPollAt: Date,
+    attempts: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false }
+)
+
 const checkInSchema = new mongoose.Schema(
   {
     venture: {
@@ -86,6 +122,15 @@ const checkInSchema = new mongoose.Schema(
     cancelledAt: {
       type: Date,
     },
+    transcript: {
+      type: transcriptSchema,
+      default: () => ({}),
+    },
+    // The mentor's notes, and the record when Meet made no transcript.
+    notes: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 )
@@ -93,6 +138,8 @@ const checkInSchema = new mongoose.Schema(
 checkInSchema.index({ venture: 1, scheduledAt: 1 })
 // A founder's check-ins, for their profile.
 checkInSchema.index({ 'attendees.user': 1, scheduledAt: 1 })
+// The check-ins whose transcript is due to be looked for.
+checkInSchema.index({ 'transcript.status': 1, 'transcript.nextPollAt': 1 })
 
 export const modelName = 'CheckIn'
 

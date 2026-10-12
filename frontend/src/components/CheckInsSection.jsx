@@ -20,6 +20,7 @@ import EmptyState from './EmptyState'
 import ScheduleCheckInDialog from './ScheduleCheckInDialog'
 import SectionCard from './SectionCard'
 import StatusPill from './StatusPill'
+import TranscriptDialog from './TranscriptDialog'
 import { ChatIcon } from './icons'
 
 // What Google said when the mentor came back from connecting their
@@ -79,13 +80,29 @@ const formatWhen = date =>
     minute: '2-digit',
   })
 
-function CheckInRow({ checkIn, showVenture, canManage, onMove, onCancel }) {
+const TRANSCRIPT_LABELS = {
+  PENDING: 'Transcript pending',
+  READY: 'Transcript ready',
+  UNAVAILABLE: 'No transcript',
+}
+
+function CheckInRow({
+  checkIn,
+  showVenture,
+  canManage,
+  onMove,
+  onCancel,
+  onOpen,
+}) {
   const upcoming = isUpcoming(checkIn)
+  const happened = !upcoming && checkIn.status !== 'CANCELLED'
   const details = [
     checkIn.cycle_number && `Cycle ${checkIn.cycle_number}`,
     `${checkIn.durationMinutes} min`,
     showVenture && checkIn.venture?.name,
     checkIn.series && 'Repeats',
+    happened && TRANSCRIPT_LABELS[checkIn.transcript?.status],
+    happened && checkIn.notes && 'Notes',
   ].filter(Boolean)
 
   return (
@@ -109,6 +126,11 @@ function CheckInRow({ checkIn, showVenture, canManage, onMove, onCancel }) {
         </Typography>
       </Box>
       <StatusPill {...statusOf(checkIn)} />
+      {happened && (
+        <Button variant="outlined" onClick={() => onOpen(checkIn)}>
+          Transcript
+        </Button>
+      )}
       {upcoming && (
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           {checkIn.meetUrl && (
@@ -214,6 +236,7 @@ export default function CheckInsSection({ checkIns, venture, showVenture }) {
       : null
   )
   const [confirm, setConfirm] = useState(null)
+  const [open, setOpen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -268,6 +291,7 @@ export default function CheckInsSection({ checkIns, venture, showVenture }) {
       }
       onMove={c => setDialog({ checkIn: c })}
       onCancel={c => setConfirm({ kind: 'one', id: c._id })}
+      onOpen={c => setOpen(c._id)}
     />
   )
 
@@ -339,6 +363,14 @@ export default function CheckInsSection({ checkIns, venture, showVenture }) {
           venture={venture}
           onClose={() => setDialog(null)}
           onDone={done}
+        />
+      )}
+      {open && (
+        <TranscriptDialog
+          checkInId={open}
+          canManage={canManage}
+          onClose={() => setOpen(null)}
+          onChanged={() => revalidator.revalidate()}
         />
       )}
       <ConfirmDialog

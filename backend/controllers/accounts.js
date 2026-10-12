@@ -16,6 +16,7 @@ import { validateAccountInput } from '../utils/accountValidator.js'
 import { cancelFutureCheckIns } from '../utils/checkInHelper.js'
 import { normalizeEmail } from '../utils/authHelper.js'
 import { deactivateFounder } from '../utils/founderHelper.js'
+import { refreshMeetingInvites } from '../utils/meetingInvites.js'
 import { validateBatchAndCampus } from '../utils/validator.js'
 
 // Account administration, for admins only (the route checks the role; the
@@ -295,10 +296,13 @@ export const deactivateAccount = async (req, res) => {
       return res.status(409).json({ error: LAST_ADMIN_MESSAGE })
     }
 
-    await Promise.all([
+    const [founder] = await Promise.all([
       deactivateFounder(target._id),
       releaseMentoredVentures(target._id),
     ])
+    if (founder?.venture) {
+      await refreshMeetingInvites(founder.venture._id)
+    }
     await writeAudit(req, target, {
       action: 'ACCOUNT_DEACTIVATED',
       previousRole: target.role?.name ?? null,

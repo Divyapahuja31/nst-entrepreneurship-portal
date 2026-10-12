@@ -7,13 +7,14 @@ export const foundersLoader = async () => {
   return data
 }
 
-// The overview, and the programme meetings the signed-in staff member runs.
+// The overview, and the meetings the signed-in staff member holds:
+// programme meetings they run and their own check-ins.
 export const foundersCount = async () => {
-  const [{ data }, programmeMeetings] = await Promise.all([
+  const [{ data }, myMeetings] = await Promise.all([
     api.get('/admin/overview'),
     loadCheckIns({ mine: 1 }),
   ])
-  return { ...data, programmeMeetings }
+  return { ...data, myMeetings }
 }
 
 export const addFounderLoader = async () => {

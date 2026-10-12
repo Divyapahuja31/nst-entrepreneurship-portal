@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { CYCLES, cycleForDate } from '@nst/shared/biweeklyCycles.js'
-
 import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import GoogleCredential from '../models/googleCredential.js'
@@ -81,25 +79,20 @@ export const eventTimes = (startAt, durationMinutes, timeZone) => ({
 
 const eventAttendees = attendees => attendees.map(({ email }) => ({ email }))
 
-// The calendar event for a check-in, with a new Meet link. `occurrences`
-// above 1 repeats it every two weeks.
+// The calendar event for a check-in, with a new Meet link.
 export const checkInEvent = ({
   venture,
   startAt,
   durationMinutes,
   timeZone,
   attendees,
-  occurrences = 1,
 }) => ({
-  summary: `${venture.name}: bi-weekly check-in`,
-  description: `Bi-weekly mentor check-in for ${venture.name}.\n\nSee every check-in: ${appUrl()}/checkins`,
+  summary: `${venture.name}: check-in`,
+  description: `Mentor check-in for ${venture.name}.\n\nSee every check-in: ${appUrl()}/checkins`,
   ...eventTimes(startAt, durationMinutes, timeZone),
   attendees: eventAttendees(attendees),
   guestsCanModify: false,
   conferenceData: newMeet(),
-  ...(occurrences > 1 && {
-    recurrence: [`RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=${occurrences}`],
-  }),
 })
 
 // The new times (and current founders) for an occurrence being moved.
@@ -139,12 +132,9 @@ export const transcriptDueAt = (scheduledAt, durationMinutes) =>
       TRANSCRIPT_GRACE_MS
   )
 
-// The CheckIn fields for an event or for one occurrence of a series.
-// `origin` is where the startup's cycles count from (utils/programme.js
-// cycleOrigin).
+// The CheckIn fields for a check-in's event.
 export const checkInFields = ({
   venture,
-  origin,
   event,
   durationMinutes,
   timeZone,
@@ -153,7 +143,6 @@ export const checkInFields = ({
   return {
     venture: venture._id,
     mentor: venture.mentor,
-    cycle_number: cycleForDate(origin, scheduledAt),
     scheduledAt,
     originalStartAt: event.originalStartTime
       ? new Date(event.originalStartTime.dateTime)
@@ -166,10 +155,6 @@ export const checkInFields = ({
   }
 }
 
-// How many occurrences a series started in `cycle` gets: one per cycle
-// through the last.
-export const occurrencesFrom = cycle => CYCLES - cycle + 1
-
 // Google's UNTIL format: 20261012T043000Z.
 const rruleUntil = date =>
   date
@@ -177,9 +162,10 @@ const rruleUntil = date =>
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}/, '')
 
-// Stops a series before its next occurrence. Earlier occurrences stay on the
-// calendars as a record; attendees get one update, not one per occurrence.
-// Returns the ids of the check-ins it cancelled.
+// Series are no longer created; those made before repeating was removed
+// can still be ended. Stops a series before its next occurrence. Earlier
+// occurrences stay on the calendars as a record; attendees get one update,
+// not one per occurrence. Returns the ids of the check-ins it cancelled.
 export const endSeries = async (series, google, now = new Date()) => {
   const upcoming = await CheckIn.find({
     series: series._id,

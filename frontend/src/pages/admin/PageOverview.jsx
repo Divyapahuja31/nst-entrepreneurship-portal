@@ -57,7 +57,7 @@ function Index() {
     overview,
     stages = [],
     campuses = [],
-    programmeMeetings,
+    myMeetings,
   } = useLoaderData()
   const ventureCount = overview?.ventures ?? 0
   const hasScores = Object.values(kpi ?? {}).some(score => score != null)
@@ -88,12 +88,12 @@ function Index() {
       >
         <ActionQueue actions={actions} />
 
-        {programmeMeetings?.length > 0 && (
+        {myMeetings?.some(c => c.status !== 'CANCELLED') && (
           <CheckInsSection
-            checkIns={programmeMeetings}
+            checkIns={myMeetings}
             showVenture
-            title="Your Programme Sessions"
-            subtitle="The meetings you run. Open a past one for its transcript and notes."
+            title="Your Meetings"
+            subtitle="Programme sessions you run and your own check-ins. Open a past one for its transcript and notes."
           />
         )}
 

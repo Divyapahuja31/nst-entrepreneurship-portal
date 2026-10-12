@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { CYCLES, cycleForDate } from '@nst/shared/biweeklyCycles.js'
 
 import {
   Alert,
@@ -11,14 +10,13 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  FormControlLabel,
   MenuItem,
-  Switch,
   TextField,
   Typography,
 } from '@mui/material'
 
 import {
+  GOOGLE_CODES,
   calendarConnectUrl,
   disconnectCalendar,
   getCalendarStatus,
@@ -27,7 +25,6 @@ import {
 } from '../api/checkins'
 
 const DURATIONS = [15, 30, 45, 60, 90]
-const GOOGLE_CODES = ['GOOGLE_NOT_CONNECTED', 'GOOGLE_RECONNECT']
 
 // A Date as the value of a datetime-local field, in the browser's time zone.
 const toLocalInput = date => {
@@ -46,16 +43,13 @@ const defaultStart = () => {
 }
 
 // Why the time can't be used, or '' when it can.
-const timeProblem = (value, origin) => {
+const timeProblem = value => {
   const date = new Date(value)
   if (!value || Number.isNaN(date.getTime())) {
     return 'Choose a date and time.'
   }
   if (date <= new Date()) {
     return 'Choose a time in the future.'
-  }
-  if (!cycleForDate(origin, date)) {
-    return `Choose a time within the programme's ${CYCLES} cycles.`
   }
   return ''
 }
@@ -67,7 +61,7 @@ function ConnectCalendar({ status }) {
       <DialogContentText sx={{ mb: 2 }}>
         {status?.needsReconnect
           ? 'Google no longer accepts the portal’s access to your calendar. Connect it again to schedule or change check-ins.'
-          : 'Check-ins go on your Google Calendar with a Meet link, and every founder gets the invite on theirs. Connect your Newton School Google account to start.'}
+          : 'Check-ins go on your Google Calendar with a Meet link, and every founder gets the invite on theirs. Connect the Google account you sign in to the portal with.'}
       </DialogContentText>
       <Button
         variant="contained"
@@ -80,14 +74,37 @@ function ConnectCalendar({ status }) {
   )
 }
 
+const MINUTE_MS = 60 * 1000
+
+const formatWhen = date =>
+  new Date(date).toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+
+// The startup's programme session the chosen time clashes with, if any.
+const programmeClash = (sessions, startAt, duration) => {
+  const start = new Date(startAt).getTime()
+  const end = start + duration * MINUTE_MS
+  return sessions.find(s => {
+    const from = new Date(s.scheduledAt).getTime()
+    return from < end && start < from + s.durationMinutes * MINUTE_MS
+  })
+}
+
 // Schedules a check-in for a startup, or moves `checkIn` when given. Asks
 // the mentor to connect their Google Calendar first if they haven't. Mount
-// it only while open, so each opening starts fresh.
+// it only while open, so each opening starts fresh. `programmeSessions` are
+// the startup's upcoming programme meetings, to point out a clash.
 export default function ScheduleCheckInDialog({
   onClose,
   onDone,
   venture,
   checkIn,
+  programmeSessions = [],
 }) {
   const moving = Boolean(checkIn)
   const [status, setStatus] = useState(null)
@@ -95,7 +112,6 @@ export default function ScheduleCheckInDialog({
     checkIn ? toLocalInput(checkIn.scheduledAt) : defaultStart()
   )
   const [duration, setDuration] = useState(checkIn?.durationMinutes ?? 30)
-  const [recurring, setRecurring] = useState(false)
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -106,12 +122,11 @@ export default function ScheduleCheckInDialog({
     )
   }, [])
 
-  // Cycles count from the programme start, or the startup's creation.
-  const origin = venture.cycleOrigin ?? venture.createdAt
-  const problem = timeProblem(startAt, origin)
-  const startCycle = problem ? null : cycleForDate(origin, startAt)
-  const occurrences = startCycle ? CYCLES - startCycle + 1 : 0
+  const problem = timeProblem(startAt)
   const connected = status?.connected && !status.needsReconnect
+  const clash = problem
+    ? null
+    : programmeClash(programmeSessions, startAt, duration)
 
   const save = async () => {
     setTouched(true)
@@ -126,14 +141,13 @@ export default function ScheduleCheckInDialog({
     }
     const result = moving
       ? await moveCheckIn(checkIn._id, payload)
-      : await scheduleCheckIn({
-          ...payload,
-          ventureId: venture.id,
-          recurring: recurring && occurrences > 1,
-        })
+      : await scheduleCheckIn({ ...payload, ventureId: venture.id })
     setSaving(false)
     if (GOOGLE_CODES.includes(result.code)) {
-      setStatus({ connected: false, needsReconnect: true })
+      setStatus({
+        connected: false,
+        needsReconnect: result.code === 'GOOGLE_RECONNECT',
+      })
       return
     }
     if (result.error) {
@@ -181,13 +195,15 @@ export default function ScheduleCheckInDialog({
               onChange={event => setStartAt(event.target.value)}
               onBlur={() => setTouched(true)}
               error={touched && Boolean(problem)}
-              helperText={
-                touched && problem
-                  ? problem
-                  : startCycle && `Falls in cycle ${startCycle} of ${CYCLES}.`
-              }
+              helperText={touched && problem}
               slotProps={{ inputLabel: { shrink: true } }}
             />
+            {clash && (
+              <Alert severity="warning">
+                This clashes with the startup’s programme session on{' '}
+                {formatWhen(clash.scheduledAt)}.
+              </Alert>
+            )}
             <TextField
               select
               label="Length"
@@ -200,28 +216,6 @@ export default function ScheduleCheckInDialog({
                 </MenuItem>
               ))}
             </TextField>
-            {!moving && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={recurring}
-                    disabled={occurrences < 2}
-                    onChange={event => setRecurring(event.target.checked)}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">Repeat every 2 weeks</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {occurrences > 1
-                        ? `${occurrences} check-ins, one per cycle through cycle ${CYCLES}. You can move or cancel any of them later.`
-                        : 'This is the last cycle, so there is nothing to repeat.'}
-                    </Typography>
-                  </Box>
-                }
-                sx={{ alignItems: 'flex-start', mx: 0, gap: 1 }}
-              />
-            )}
             <Typography variant="body2" color="text.secondary">
               {moving
                 ? 'The founders get the new time on their calendars.'

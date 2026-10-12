@@ -140,12 +140,12 @@ Programme meetings show on each startup's Check-Ins tab and on founders' pages. 
 
 Besides the programme, a startup's mentor can schedule their own check-ins with it.
 
-A startup's mentor schedules bi-weekly check-ins from the startup's **Check-Ins** tab. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. A check-in is one-off or repeats every two weeks, one per cycle, through cycle 13. Each occurrence can be moved or cancelled on its own, and a recurring check-in can be ended.
+A startup's mentor holds check-ins from the startup's **Check-Ins** tab: **Meet Now** starts one at once and opens Meet, and **Schedule** puts one at any future time. Check-ins are the mentor's own meetings, apart from the bi-weekly cycles and reports. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. Each check-in is a single meeting that can be moved or cancelled. Check-ins that repeated, from before repeating was removed, can still be moved, cancelled or ended.
 
-- Only the startup's mentor schedules, because the events live on their calendar. Founders see their check-ins at `/checkins` and on their overview. Staff see them on the startup and on each founder's profile. Each cycle's check-in also shows beside its bi-weekly report.
+- Only the startup's mentor schedules, because the events live on their calendar. Founders see their check-ins at `/checkins` and on their overview. Staff see them on the startup and on each founder's profile, and a mentor sees all of theirs on their Overview.
 - Google is written first. If it refuses a change, the portal saves nothing and shows Google's reason.
 - When a startup's mentor changes, or the mentor is deactivated or loses the mentor role, their upcoming check-ins for it are cancelled. Removing them from Google is best effort.
-- The invitees are the active founders when a check-in is scheduled or moved. A founder who joins later is invited from the next one that is scheduled or moved.
+- The invitees are the startup's active founders. When a founder joins or leaves, the startup's upcoming check-ins and drawn programme sessions are updated to match ([`meetingInvites.js`](backend/utils/meetingInvites.js)); this is best effort.
 
 ### Transcripts and notes
 
@@ -175,7 +175,7 @@ npm test
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
 - `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and cycles counted from the programme start.
-- `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, recurring check-ins, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
+- `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, Meet Now, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 
 The first run downloads a MongoDB binary for the tests.
 

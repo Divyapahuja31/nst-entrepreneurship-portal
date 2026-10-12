@@ -15,6 +15,7 @@ import {
   addFounderToVenture,
   deactivateFounder,
 } from '../utils/founderHelper.js'
+import { refreshMeetingInvites } from '../utils/meetingInvites.js'
 import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
 import { resolveNewVentureMentor, ventureScope } from '../utils/access.js'
 
@@ -165,6 +166,7 @@ const createFounderAndVenture = async ({
     })
 
     await addFounderToVenture(user._id, venture._id)
+    await refreshMeetingInvites(venture._id)
 
     return { user, venture }
   } catch (err) {
@@ -230,6 +232,9 @@ const removeFounderFromVentureById = async founderId => {
   }
 
   const founder = await deactivateFounder(founderId)
+  if (founder?.venture) {
+    await refreshMeetingInvites(founder.venture._id)
+  }
 
   if (!founder) {
     return {

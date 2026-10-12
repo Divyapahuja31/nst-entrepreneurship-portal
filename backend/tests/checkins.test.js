@@ -42,6 +42,52 @@ const schedule = (user, fields = {}) =>
 
 const callsTo = method => google.calls.filter(call => call.method === method)
 
+// Repeating check-ins can no longer be made, but series made before can
+// still be moved, cancelled and ended. This makes one the way the portal
+// used to: one recurring event, a CheckIn per occurrence.
+const SERIES_LENGTH = 4
+const legacySeries = async () => {
+  const { checkInEvent, checkInFields, googleFor } =
+    await import('../utils/checkInHelper.js')
+  const venture = data.ventures.alpha
+  const attendees = [{ user: data.users.owner._id, email: 'olu@adypu.edu.in' }]
+  const startAt = new Date(inDays(2))
+  const timeZone = 'Asia/Kolkata'
+  const calendar = await googleFor(data.users.mentor._id)
+  const event = await calendar('createEvent', {
+    ...checkInEvent({
+      venture,
+      startAt,
+      durationMinutes: 30,
+      timeZone,
+      attendees,
+    }),
+    recurrence: [`RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=${SERIES_LENGTH}`],
+  })
+  const series = await CheckInSeries.create({
+    venture: venture._id,
+    mentor: venture.mentor,
+    googleEventId: event.id,
+    startAt,
+    durationMinutes: 30,
+    timeZone,
+  })
+  const checkIns = await CheckIn.insertMany(
+    (await calendar('listInstances', event.id)).map(instance => ({
+      ...checkInFields({
+        venture,
+        event: { ...instance, hangoutLink: event.hangoutLink },
+        durationMinutes: 30,
+        timeZone,
+      }),
+      attendees,
+      series: series._id,
+    }))
+  )
+  google.calls.length = 0
+  return { series, checkIns }
+}
+
 before(startDatabase)
 after(stopDatabase)
 beforeEach(async () => {
@@ -55,7 +101,8 @@ describe('scheduling check-ins', () => {
     assert.equal(res.status, 201)
 
     const [checkIn] = res.body.checkIns
-    assert.equal(checkIn.cycle_number, 1)
+    // A check-in is the mentor's own meeting, apart from the cycles.
+    assert.equal(checkIn.cycle_number, null)
     assert.equal(checkIn.status, 'SCHEDULED')
     assert.equal(checkIn.durationMinutes, 45)
     assert.match(checkIn.meetUrl, /^https:\/\/meet\.google\.com\//)
@@ -75,6 +122,46 @@ describe('scheduling check-ins', () => {
       'hangoutsMeet'
     )
     assert.equal(event.recurrence, undefined)
+    assert.equal(event.summary, 'Alpha: check-in')
+  })
+
+  it('any future time works, after the last bi-weekly cycle too', async () => {
+    const res = await schedule(data.users.mentor, {
+      startAt: inDays(14 * CYCLES + 30),
+    })
+    assert.equal(res.status, 201)
+  })
+
+  it('Meet Now starts one at once, inviting the founders', async () => {
+    const before = Date.now()
+    const res = await schedule(data.users.mentor, {
+      startAt: undefined,
+      startNow: true,
+    })
+    assert.equal(res.status, 201)
+    const [checkIn] = res.body.checkIns
+    const startsAt = new Date(checkIn.scheduledAt).getTime()
+    assert.ok(startsAt >= before - 1000 && startsAt <= Date.now())
+    assert.equal(checkIn.durationMinutes, 30)
+    assert.ok(checkIn.meetUrl)
+    const [{ args }] = callsTo('createEvent')
+    assert.deepEqual(args[0].attendees, [{ email: 'olu@adypu.edu.in' }])
+
+    // Moving one can't make it start now.
+    const later = await schedule(data.users.mentor, { startAt: inDays(3) })
+    const moved = await as(data.users.mentor).patch(
+      `/api/checkins/${later.body.checkIns[0]._id}`,
+      { startNow: true }
+    )
+    assert.equal(moved.status, 400)
+  })
+
+  it('Meet Now is for the startup mentor only', async () => {
+    const res = await schedule(data.users.board, {
+      startAt: undefined,
+      startNow: true,
+    })
+    assert.equal(res.status, 403)
   })
 
   it('nobody else schedules them, not even the board', async () => {
@@ -95,12 +182,12 @@ describe('scheduling check-ins', () => {
     assert.equal(res.body.code, 'GOOGLE_NOT_CONNECTED')
   })
 
-  it('rejects times in the past, after the last cycle or without a time zone', async () => {
+  it('rejects times in the past or without a time zone', async () => {
     const { mentor } = data.users
     const cases = [
       { startAt: inDays(-1) },
-      { startAt: inDays(14 * CYCLES + 1) },
       { startAt: 'tomorrow' },
+      { startNow: 'yes', startAt: undefined },
       { timeZone: 'Mars/Olympus' },
       { durationMinutes: 5 },
       { durationMinutes: '30' },
@@ -142,49 +229,26 @@ describe('scheduling check-ins', () => {
   })
 })
 
-describe('recurring check-ins', () => {
-  it('repeat every two weeks, one per cycle through the last', async () => {
+describe('repeating check-ins', () => {
+  it('are gone: asking for one makes a single meeting', async () => {
     const res = await schedule(data.users.mentor, { recurring: true })
     assert.equal(res.status, 201)
-
-    const checkIns = res.body.checkIns
-    assert.equal(checkIns.length, CYCLES)
-    assert.deepEqual(
-      checkIns.map(c => c.cycle_number),
-      Array.from({ length: CYCLES }, (_, i) => i + 1)
-    )
-    assert.equal(new Set(checkIns.map(c => c.series)).size, 1)
-    assert.equal(new Set(checkIns.map(c => c.meetingCode)).size, 1)
-    assert.equal(new Set(checkIns.map(c => c.googleEventId)).size, CYCLES)
-
+    assert.equal(res.body.checkIns.length, 1)
+    assert.equal(res.body.checkIns[0].series, null)
     const [{ args }] = callsTo('createEvent')
-    assert.deepEqual(args[0].recurrence, [
-      `RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=${CYCLES}`,
-    ])
+    assert.equal(args[0].recurrence, undefined)
   })
 
-  it('a startup has one recurring check-in at a time', async () => {
-    await schedule(data.users.mentor, { recurring: true })
-    const res = await schedule(data.users.mentor, {
-      recurring: true,
-      startAt: inDays(3),
-    })
-    assert.equal(res.status, 409)
-    // A one-off alongside it is fine.
-    const once = await schedule(data.users.mentor, { startAt: inDays(3) })
-    assert.equal(once.status, 201)
-  })
-
-  it('an occurrence moves on its own and lands in its new cycle', async () => {
-    const { body } = await schedule(data.users.mentor, { recurring: true })
-    const first = body.checkIns[0]
+  it('an occurrence of an earlier series moves on its own', async () => {
+    const { checkIns } = await legacySeries()
+    const [first] = checkIns
 
     const res = await as(data.users.mentor).patch(
       `/api/checkins/${first._id}`,
       { startAt: inDays(15) }
     )
     assert.equal(res.status, 200)
-    assert.equal(res.body.checkIn.cycle_number, 2)
+    assert.equal(res.body.checkIn.cycle_number, null)
     assert.equal(res.body.checkIn.durationMinutes, 30)
 
     const [{ args }] = callsTo('patchEvent')
@@ -194,8 +258,8 @@ describe('recurring check-ins', () => {
   })
 
   it('an occurrence is cancelled on its own', async () => {
-    const { body } = await schedule(data.users.mentor, { recurring: true })
-    const second = body.checkIns[1]
+    const { checkIns } = await legacySeries()
+    const second = checkIns[1]
 
     const res = await as(data.users.mentor).delete(
       `/api/checkins/${second._id}`
@@ -205,7 +269,7 @@ describe('recurring check-ins', () => {
     assert.deepEqual(callsTo('deleteEvent')[0].args, [second.googleEventId])
     assert.equal(
       await CheckIn.countDocuments({ status: 'SCHEDULED' }),
-      CYCLES - 1
+      SERIES_LENGTH - 1
     )
 
     const again = await as(data.users.mentor).delete(
@@ -215,55 +279,52 @@ describe('recurring check-ins', () => {
   })
 
   it('ending a series before it starts deletes the event', async () => {
-    const { body } = await schedule(data.users.mentor, { recurring: true })
+    const { series } = await legacySeries()
     const res = await as(data.users.mentor).delete(
-      `/api/checkins/series/${body.checkIns[0].series}`
+      `/api/checkins/series/${series._id}`
     )
     assert.equal(res.status, 200)
-    assert.equal(res.body.checkIns.length, CYCLES)
-    assert.deepEqual(callsTo('deleteEvent')[0].args, ['event1'])
+    assert.equal(res.body.checkIns.length, SERIES_LENGTH)
+    assert.deepEqual(callsTo('deleteEvent')[0].args, [series.googleEventId])
     assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 0)
-    const series = await CheckInSeries.findById(body.checkIns[0].series)
-    assert.equal(series.status, 'ENDED')
+    assert.equal((await CheckInSeries.findById(series._id)).status, 'ENDED')
   })
 
   it('ending a series under way keeps what has happened', async () => {
-    const { body } = await schedule(data.users.mentor, { recurring: true })
+    const { series, checkIns } = await legacySeries()
     // The first occurrence has taken place.
     await CheckIn.updateOne(
-      { _id: body.checkIns[0]._id },
+      { _id: checkIns[0]._id },
       { $set: { scheduledAt: inDays(-1), status: 'HELD' } }
     )
 
     const res = await as(data.users.mentor).delete(
-      `/api/checkins/series/${body.checkIns[0].series}`
+      `/api/checkins/series/${series._id}`
     )
     assert.equal(res.status, 200)
-    assert.equal(res.body.checkIns.length, CYCLES - 1)
+    assert.equal(res.body.checkIns.length, SERIES_LENGTH - 1)
 
     const [{ args }] = callsTo('patchEvent')
-    assert.equal(args[0], 'event1')
+    assert.equal(args[0], series.googleEventId)
     assert.match(
       args[1].recurrence[0],
       /^RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=\d{8}T\d{6}Z$/
     )
     assert.equal(callsTo('deleteEvent').length, 0)
-    const held = await CheckIn.findById(body.checkIns[0]._id)
+    const held = await CheckIn.findById(checkIns[0]._id)
     assert.equal(held.status, 'HELD')
   })
 
   it('only the startup mentor moves, cancels or ends them', async () => {
-    const { body } = await schedule(data.users.mentor, { recurring: true })
-    const [first] = body.checkIns
+    const { series, checkIns } = await legacySeries()
+    const [first] = checkIns
     const { otherMentor, board, owner } = data.users
     for (const user of [otherMentor, board, owner]) {
       const moved = await as(user).patch(`/api/checkins/${first._id}`, {
         startAt: inDays(3),
       })
       const cancelled = await as(user).delete(`/api/checkins/${first._id}`)
-      const ended = await as(user).delete(
-        `/api/checkins/series/${first.series}`
-      )
+      const ended = await as(user).delete(`/api/checkins/series/${series._id}`)
       assert.deepEqual(
         [moved.status, cancelled.status, ended.status],
         [403, 403, 403],
@@ -318,22 +379,18 @@ describe('reading check-ins', () => {
 })
 
 describe('the bi-weekly report', () => {
-  it("shows each cycle's check-in, not cancelled ones", async () => {
-    const { body } = await schedule(data.users.mentor, { recurring: true })
-    await as(data.users.mentor).delete(`/api/checkins/${body.checkIns[1]._id}`)
-
+  it('stays apart from check-ins', async () => {
+    await schedule(data.users.mentor)
     const res = await as(data.users.owner).get('/api/biweekly')
     assert.equal(res.status, 200)
-    assert.equal(res.body.checkIns.length, CYCLES - 1)
-    assert.equal(res.body.checkIns[0].cycle_number, 1)
-    assert.ok(res.body.checkIns[0].meetUrl)
-    assert.ok(!res.body.checkIns.some(c => c.cycle_number === 2))
+    assert.equal(res.body.checkIns, undefined)
   })
 })
 
 describe('when a startup loses its mentor', () => {
   it('reassigning the mentor cancels upcoming check-ins on the old calendar', async () => {
-    await schedule(data.users.mentor, { recurring: true })
+    const { series } = await legacySeries()
+    await schedule(data.users.mentor)
     const res = await as(data.users.board).patch(
       `/api/admin/ventures/${data.ventures.alpha._id}/mentor`,
       {
@@ -344,9 +401,9 @@ describe('when a startup loses its mentor', () => {
     assert.equal(res.body.mentor.email, 'max@newtonschool.co')
 
     assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 0)
-    assert.deepEqual(callsTo('deleteEvent')[0].args, ['event1'])
-    const [series] = await CheckInSeries.find()
-    assert.equal(series.status, 'ENDED')
+    assert.deepEqual(callsTo('deleteEvent')[0].args, [series.googleEventId])
+    assert.equal(callsTo('deleteEvent').length, 2)
+    assert.equal((await CheckInSeries.findById(series._id)).status, 'ENDED')
   })
 
   it('reassigning the same mentor leaves them alone', async () => {
@@ -366,5 +423,85 @@ describe('when a startup loses its mentor', () => {
     )
     assert.equal(res.status, 200)
     assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 0)
+  })
+})
+
+describe('when founders join or leave', () => {
+  const join = async user => {
+    const { default: VentureJoinRequest } =
+      await import('../models/ventureJoinRequest.js')
+    const joinRequest = await VentureJoinRequest.create({
+      venture: data.ventures.alpha._id,
+      requestedBy: user._id,
+      status: 'PENDING',
+    })
+    return as(data.users.mentor).patch(
+      `/api/admin/join-requests/${joinRequest._id}/review`,
+      { status: 'APPROVED' }
+    )
+  }
+  const upcomingEmails = async () =>
+    (
+      await CheckIn.find({
+        venture: data.ventures.alpha._id,
+        status: 'SCHEDULED',
+      })
+    ).map(c =>
+      c.attendees
+        .map(a => a.email)
+        .sort()
+        .join(',')
+    )
+
+  it('upcoming check-ins invite the founders as they are now, a series in one update', async () => {
+    const { applicant } = data.users
+    const { series, checkIns } = await legacySeries()
+    const [, second] = checkIns
+    const single = (await schedule(data.users.mentor, { startAt: inDays(5) }))
+      .body.checkIns[0]
+    // One occurrence was moved on its own, so it carries its own invite.
+    await as(data.users.mentor).patch(`/api/checkins/${second._id}`, {
+      startAt: new Date(
+        new Date(second.scheduledAt).getTime() + 60 * 60 * 1000
+      ).toISOString(),
+    })
+    google.calls.length = 0
+
+    assert.equal((await join(applicant)).status, 200)
+    const patched = callsTo('patchEvent').map(call => call.args[0])
+    assert.deepEqual(
+      patched.sort(),
+      [series.googleEventId, second.googleEventId, single.googleEventId].sort()
+    )
+    assert.ok(
+      (await upcomingEmails()).every(
+        e => e === 'ana@adypu.edu.in,olu@adypu.edu.in'
+      )
+    )
+
+    google.calls.length = 0
+    const left = await as(data.users.board)
+      .delete('/api/admin/founders/delete')
+      .send({ founders: [String(applicant._id)] })
+    assert.equal(left.status, 200)
+    assert.equal(callsTo('patchEvent').length, 3)
+    assert.ok((await upcomingEmails()).every(e => e === 'olu@adypu.edu.in'))
+  })
+
+  it("a founder joining doesn't fail when the mentor's calendar is gone", async () => {
+    await schedule(data.users.mentor)
+    await GoogleCredential.deleteMany({})
+    assert.equal((await join(data.users.applicant)).status, 200)
+  })
+})
+
+describe("a staff member's own meetings", () => {
+  it('a mentor sees their own check-ins beside the programme meetings they run', async () => {
+    await schedule(data.users.mentor)
+    const mine = await as(data.users.mentor).get('/api/checkins?mine=1')
+    assert.equal(mine.status, 200)
+    assert.equal(mine.body.checkIns.length, 1)
+    const other = await as(data.users.otherMentor).get('/api/checkins?mine=1')
+    assert.equal(other.body.checkIns.length, 0)
   })
 })

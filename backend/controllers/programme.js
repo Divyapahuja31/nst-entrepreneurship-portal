@@ -15,6 +15,7 @@ import {
 } from '../utils/programme.js'
 import {
   cancelSession,
+  clearSessions,
   runSession,
   syncSessions,
   withSession,
@@ -182,7 +183,7 @@ const onSession =
           .status(409)
           .json({ error: 'This session has already started' })
       }
-      const refusal = when?.(session)
+      const refusal = await when?.(session)
       if (refusal) {
         return res.status(409).json({ error: refusal })
       }
@@ -209,13 +210,20 @@ export const scheduleSessionNow = onSession(session => {
   return runSession(session, { fresh })
 })
 
-// Draws who meets whom again.
+// Draws who meets whom again. A group session has no draw.
 export const redrawSession = onSession(
   session => runSession(session, { fresh: true }),
   {
-    when: session =>
-      session.status !== 'SCHEDULED' &&
-      'Only a scheduled session can be drawn again',
+    when: async session => {
+      if (session.status !== 'SCHEDULED') {
+        return 'Only a scheduled session can be drawn again'
+      }
+      const programme = await getProgramme()
+      return (
+        programme?.mode === 'GROUP' &&
+        'A group session has no draw: everyone meets together'
+      )
+    },
   }
 )
 
@@ -223,3 +231,22 @@ export const cancelProgrammeSession = onSession(cancelSession, {
   when: session =>
     session.status === 'CANCELLED' && 'This session is already cancelled',
 })
+
+// Clears every meeting and starts the sessions again from the settings.
+export const clearProgrammeSessions = async (req, res) => {
+  try {
+    const programme = await getProgramme()
+    if (!programme) {
+      return res.status(409).json({ error: 'Set up the programme first' })
+    }
+    if (!(await clearSessions(programme))) {
+      return res.status(409).json({
+        error: 'A session is being updated. Try again in a moment.',
+      })
+    }
+    return res.json(await overview(req.user))
+  } catch (error) {
+    console.error('Programme clear error:', error)
+    return res.status(500).json({ error: 'Could not clear the meetings' })
+  }
+}

@@ -7,9 +7,19 @@ export const CYCLE_DAYS = 14
 const DAY_MS = 24 * 60 * 60 * 1000
 const CYCLE_MS = CYCLE_DAYS * DAY_MS
 
+// A cycle's report is due this many days after its last day.
+export const GRACE_DAYS = 3
+
 // When cycle n starts.
 export const cycleStart = (createdAt, n) =>
   new Date(new Date(createdAt).getTime() + (n - 1) * CYCLE_MS)
+
+// When cycle n's report is due: its last day plus the grace days, as the
+// bi-weekly page shows it.
+export const cycleDeadline = (createdAt, n) =>
+  new Date(
+    cycleStart(createdAt, n).getTime() + (CYCLE_DAYS - 1 + GRACE_DAYS) * DAY_MS
+  )
 
 // The cycle a date falls in, or null when it is before the first cycle or
 // after the last.

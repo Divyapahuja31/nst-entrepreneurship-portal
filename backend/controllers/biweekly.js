@@ -19,6 +19,7 @@ import {
   validateCycleNumber,
   parseStudentSubmission,
   hasCycleStarted,
+  isPastDeadline,
   parseEvaluationScores,
   parseObservation,
   resolveVentureAndContext,
@@ -97,10 +98,52 @@ const findVentureForCycle = async (userId, cycleNum) => {
         'You must belong to an active venture to submit bi-weekly progress.',
     }
   }
-  if (!hasCycleStarted(await cycleOrigin(venture), cycleNum)) {
+  const origin = await cycleOrigin(venture)
+  if (!hasCycleStarted(origin, cycleNum)) {
     return { error: `Cycle ${cycleNum} hasn't opened yet.` }
   }
-  return { venture }
+  return { venture, origin }
+}
+
+// After the deadline only a cycle the board reopened can be changed.
+const isClosed = (existing, origin, cycleNum) =>
+  isPastDeadline(origin, cycleNum) && !existing?.reopened_at
+
+// Why a student can't save this cycle now, as { status, error }, or null.
+const submissionRefusal = ({ existing, origin, cycleNum, data, isSubmit }) => {
+  if (existing?.submitted_at) {
+    return {
+      status: 403,
+      error: 'This cycle has already been submitted and is locked.',
+    }
+  }
+  if (isClosed(existing, origin, cycleNum)) {
+    return {
+      status: 403,
+      error: `The deadline for cycle ${cycleNum} has passed. Ask faculty to reopen it.`,
+    }
+  }
+  const summary = data.progress_summary ?? existing?.progress_summary
+  if (isSubmit && !String(summary ?? '').trim()) {
+    return { status: 400, error: 'Add a progress summary before submitting.' }
+  }
+  return null
+}
+
+// The student and their cycle, or { status, error }.
+const studentCycle = async req => {
+  if (!isStudent(req.user)) {
+    return { status: 403, error: 'Only students submit bi-weekly progress' }
+  }
+  const parsed = parseStudentSubmission(req.body)
+  if (parsed.error) {
+    return { status: 400, error: parsed.error }
+  }
+  const found = await findVentureForCycle(req.user.id, parsed.cycleNum)
+  if (found.error) {
+    return { status: 400, error: found.error }
+  }
+  return { ...parsed, ...found }
 }
 
 export const submitBiWeeklyCycle = async (req, res) => {
@@ -109,30 +152,24 @@ export const submitBiWeeklyCycle = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    if (!isStudent(req.user)) {
-      return res
-        .status(403)
-        .json({ error: 'Only students submit bi-weekly progress' })
+    const target = await studentCycle(req)
+    if (target.error) {
+      return res.status(target.status).json({ error: target.error })
     }
-
-    const parsed = parseStudentSubmission(req.body)
-    if (parsed.error) {
-      return res.status(400).json({ error: parsed.error })
-    }
-    const { cycleNum, data, isSubmit } = parsed
-
-    const { venture, error } = await findVentureForCycle(req.user.id, cycleNum)
-    if (error) {
-      return res.status(400).json({ error })
-    }
+    const { cycleNum, data, isSubmit, venture, origin } = target
 
     const existing = await BiWeeklySubmission.findOne({
       custom_id: ventureCycleKey(venture._id, cycleNum),
     })
-    if (existing?.submitted_at) {
-      return res.status(403).json({
-        error: 'This cycle has already been submitted and is locked.',
-      })
+    const refusal = submissionRefusal({
+      existing,
+      origin,
+      cycleNum,
+      data,
+      isSubmit,
+    })
+    if (refusal) {
+      return res.status(refusal.status).json({ error: refusal.error })
     }
 
     const submission = await updateOrCreateVentureSubmission({
@@ -195,6 +232,12 @@ const getOrCreateSubmissionForStaff = async (
     res.status(403).json({
       error: "Only this startup's mentor or the academic board can do this",
     })
+    return null
+  }
+
+  // Nothing to review or reopen before the cycle has begun.
+  if (!hasCycleStarted(await cycleOrigin(venture), cycleNum)) {
+    res.status(400).json({ error: `Cycle ${cycleNum} hasn't opened yet.` })
     return null
   }
 
@@ -301,6 +344,7 @@ export const reopenBiWeeklySubmission = async (req, res) => {
 
     const { submission } = target
     submission.submitted_at = null
+    submission.reopened_at = new Date()
     await submission.save()
 
     return res.status(200).json({

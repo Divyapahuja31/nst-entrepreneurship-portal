@@ -5,6 +5,7 @@ import GoogleCredential from '../models/googleCredential.js'
 import Programme from '../models/programme.js'
 import ProgrammeSession from '../models/programmeSession.js'
 import User from '../models/user.js'
+import { canAutoTranscribe } from '../utils/googleWorkspace.js'
 import {
   activeStaff,
   capacityProblem,
@@ -81,6 +82,7 @@ const hostOf = async (programme, user) => {
     username: host?.username ?? null,
     email: host?.email ?? null,
     connected: Boolean(credential) && !credential.needsReconnect,
+    autoTranscripts: canAutoTranscribe(credential),
     isYou: String(hostId) === String(user.id),
   }
 }

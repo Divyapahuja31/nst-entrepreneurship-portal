@@ -17,8 +17,10 @@ import {
 
 import {
   GOOGLE_CODES,
+  calendarConnectUrl,
   cancelCheckIn,
   endCheckInSeries,
+  getCalendarStatus,
   scheduleCheckIn,
 } from '../api/checkins'
 import useAccess from '../hooks/useAccess'
@@ -247,6 +249,27 @@ export default function CheckInsSection({
     }
   }, [searchParams, setSearchParams])
 
+  // A connection made before the portal could turn transcription on.
+  const [needsTranscriptAccess, setNeedsTranscriptAccess] = useState(false)
+  useEffect(() => {
+    if (!canManage) {
+      return undefined
+    }
+    let current = true
+    getCalendarStatus().then(status => {
+      if (current) {
+        setNeedsTranscriptAccess(
+          Boolean(status?.connected) &&
+            !status.needsReconnect &&
+            status.autoTranscripts === false
+        )
+      }
+    })
+    return () => {
+      current = false
+    }
+  }, [canManage])
+
   const [showCancelled, setShowCancelled] = useState(false)
 
   const all = checkIns ?? []
@@ -364,6 +387,23 @@ export default function CheckInsSection({
       <Box sx={{ display: 'grid', gap: 3 }}>
         {outcome && canManage && (
           <Alert severity={outcome.severity}>{outcome.text}</Alert>
+        )}
+        {needsTranscriptAccess && (
+          <Alert
+            severity="info"
+            action={
+              <Button
+                size="small"
+                component="a"
+                href={calendarConnectUrl(window.location.pathname)}
+              >
+                Reconnect
+              </Button>
+            }
+          >
+            Reconnect Google so your check-ins transcribe themselves. Until
+            then, turn transcripts on in each meeting.
+          </Alert>
         )}
         {error && (
           <Alert severity="error" onClose={() => setError('')}>

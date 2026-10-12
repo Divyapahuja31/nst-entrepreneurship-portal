@@ -13,6 +13,14 @@ export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
 export const MEET_SCOPE =
   'https://www.googleapis.com/auth/meetings.space.readonly'
 export const REQUIRED_SCOPES = Object.freeze([CALENDAR_SCOPE, MEET_SCOPE])
+// Lets the portal switch on a meeting's automatic transcription. Asked for
+// but not required: without it, someone in the call turns transcripts on.
+export const MEET_SETTINGS_SCOPE =
+  'https://www.googleapis.com/auth/meetings.space.settings'
+
+// Whether a connection lets the portal turn transcription on.
+export const canAutoTranscribe = credential =>
+  Boolean(credential?.scopes?.includes(MEET_SETTINGS_SCOPE))
 
 const EVENTS_URL =
   'https://www.googleapis.com/calendar/v3/calendars/primary/events'
@@ -101,7 +109,7 @@ export const createGoogleWorkspace = () => ({
       // Always ask, so Google sends a refresh token even on a reconnect.
       prompt: 'consent',
       include_granted_scopes: true,
-      scope: ['openid', 'email', ...REQUIRED_SCOPES],
+      scope: ['openid', 'email', ...REQUIRED_SCOPES, MEET_SETTINGS_SCOPE],
       state,
       login_hint: loginHint,
     }),
@@ -204,6 +212,34 @@ export const createGoogleWorkspace = () => ({
 
   participant: (refreshToken, participantName) =>
     call(refreshToken, { url: `${MEET_URL}/${participantName}` }),
+
+  // Has Meet start transcribing on its own as soon as someone who may
+  // transcribe joins, so nobody has to press Start. The meeting code is an
+  // alias for reading the space; changing it takes the space's own name.
+  autoTranscribe: async (refreshToken, meetingCode) => {
+    const space = await call(refreshToken, {
+      url: `${MEET_URL}/spaces/${encodeURIComponent(meetingCode)}`,
+    })
+    const config = space.config?.artifactConfig?.transcriptionConfig
+    if (config?.autoTranscriptionGeneration === 'ON') {
+      return space
+    }
+    return call(refreshToken, {
+      url: `${MEET_URL}/${space.name}`,
+      method: 'PATCH',
+      params: {
+        updateMask:
+          'config.artifactConfig.transcriptionConfig.autoTranscriptionGeneration',
+      },
+      data: {
+        config: {
+          artifactConfig: {
+            transcriptionConfig: { autoTranscriptionGeneration: 'ON' },
+          },
+        },
+      },
+    })
+  },
 })
 
 let workspace = null

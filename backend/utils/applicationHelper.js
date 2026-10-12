@@ -6,6 +6,7 @@ import VentureProposal from '../models/ventureProposal.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { addFounderToVenture, findVentureForUser } from './founderHelper.js'
 import { refreshMeetingInvites } from './meetingInvites.js'
+import { DUPLICATE_STARTUP_NAME, isStartupNameTaken } from './ventureName.js'
 
 export const validateReviewPayload = (id, status, typeName) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -124,6 +125,10 @@ export const handleProposalApproval = async (proposal, mentorId) => {
       status: 409,
       error: 'This student is already part of an active venture',
     }
+  }
+
+  if (await isStartupNameTaken(proposal.startupName)) {
+    return { status: 409, error: DUPLICATE_STARTUP_NAME }
   }
 
   const industryId = await resolveIndustryId(

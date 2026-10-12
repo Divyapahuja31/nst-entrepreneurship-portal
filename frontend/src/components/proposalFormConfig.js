@@ -208,7 +208,8 @@ export const validateField = (name, value, allData = {}) => {
     case 'assumption3': {
       const num = name.slice(-1)
       const v = value?.trim() || ''
-      if (!v) return `Assumption ${num} is required`
+      // One is enough; the others are optional.
+      if (!v && num === '1') return 'Add at least one assumption'
       if (v.length > FIELD_LIMITS[name].maxChars) {
         return `Assumption ${num} cannot exceed ${FIELD_LIMITS[name].maxChars} characters`
       }
@@ -219,7 +220,7 @@ export const validateField = (name, value, allData = {}) => {
     case 'risk3': {
       const num = name.slice(-1)
       const v = value?.trim() || ''
-      if (!v) return `Risk ${num} is required`
+      if (!v && num === '1') return 'Add at least one risk'
       if (v.length > FIELD_LIMITS[name].maxChars) {
         return `Risk ${num} cannot exceed ${FIELD_LIMITS[name].maxChars} characters`
       }

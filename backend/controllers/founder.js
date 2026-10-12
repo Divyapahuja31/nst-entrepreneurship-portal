@@ -10,7 +10,15 @@ import Role from '../models/role.js'
 import User from '../models/user.js'
 import startupStage from '../models/enums/startupStage.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
-import { validateEmail, validateName } from '../utils/validator.js'
+import {
+  normalizeName,
+  validateEmail,
+  validateName,
+} from '../utils/validator.js'
+import {
+  DUPLICATE_STARTUP_NAME,
+  isStartupNameTaken,
+} from '../utils/ventureName.js'
 import {
   addFounderToVenture,
   deactivateFounder,
@@ -109,13 +117,16 @@ const validateAndResolveFounderReferences = async ({
   email,
   industry,
   batch,
+  startup,
 }) => {
-  const [batchDoc, industryDoc, studentRole, existingUser] = await Promise.all([
-    Batch.findById(batch),
-    Industry.findById(industry),
-    Role.findOne({ name: ROLES.STUDENT }),
-    User.findOne({ email }),
-  ])
+  const [batchDoc, industryDoc, studentRole, existingUser, nameTaken] =
+    await Promise.all([
+      Batch.findById(batch),
+      Industry.findById(industry),
+      Role.findOne({ name: ROLES.STUDENT }),
+      User.findOne({ email }),
+      isStartupNameTaken(startup),
+    ])
 
   if (!studentRole) {
     console.error('Student role does not exist in database')
@@ -133,6 +144,9 @@ const validateAndResolveFounderReferences = async ({
       error: { email: 'An account already exists with this email' },
     }
   }
+  if (nameTaken) {
+    return { status: 409, error: { startup: DUPLICATE_STARTUP_NAME } }
+  }
 
   return { batchDoc, industryDoc, studentRole }
 }
@@ -148,7 +162,7 @@ const createFounderAndVenture = async ({
   mentorId,
 }) => {
   const user = await User.create({
-    username: founder,
+    username: normalizeName(founder),
     email,
     password: randomUUID(),
     role: studentRole._id,

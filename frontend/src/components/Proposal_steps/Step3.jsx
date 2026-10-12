@@ -61,7 +61,7 @@ export default function Step3({ formData, setFormData, errors = {}, setErrors })
             }
             inputProps={{ maxLength: FIELD_LIMITS[`assumption${num}`].maxChars }}
             fullWidth
-            required
+            required={num === 1}
           />
         ))}
 
@@ -80,7 +80,7 @@ export default function Step3({ formData, setFormData, errors = {}, setErrors })
             }
             inputProps={{ maxLength: FIELD_LIMITS[`risk${num}`].maxChars }}
             fullWidth
-            required
+            required={num === 1}
           />
         ))}
 

@@ -3,14 +3,26 @@ import Batch from '../models/batch.js'
 import Campus from '../models/campus.js'
 import Role from '../models/role.js'
 
-const validateName = name => {
+// A name as it is stored: trimmed, single spaces, and a typographic
+// apostrophe (O’Neil, which phones and Macs type) made plain.
+const normalizeName = name =>
+  typeof name === 'string'
+    ? name.normalize('NFC').trim().replace(/\s+/g, ' ').replace(/[’‘]/g, "'")
+    : name
+
+// Letters in any script, accented ones included, joined by single spaces,
+// hyphens or apostrophes.
+const NAME_PATTERN = /^\p{L}[\p{L}\p{M}]*(?:[ '-]\p{L}[\p{L}\p{M}]*)*$/u
+
+const validateName = value => {
+  const name = normalizeName(value)
   if (!name) {
     return 'Username is required'
   }
-  if (name.length <= 1) {
-    return 'Username length is too small, it should be greater than 2 character'
+  if (name.length < 2) {
+    return 'Username must be at least 2 characters long'
   }
-  if (!/^[a-zA-Z]+([ '-][a-zA-Z]+)*$/.test(name)) {
+  if (!NAME_PATTERN.test(name)) {
     return 'Username is invalid, please use a valid name only containing character and no special character'
   }
 
@@ -83,6 +95,7 @@ const validateBatchAndCampus = async ({ batch, campus }, { required }) => {
 }
 
 export {
+  normalizeName,
   validateName,
   validateBatchAndCampus,
   validateEmail,

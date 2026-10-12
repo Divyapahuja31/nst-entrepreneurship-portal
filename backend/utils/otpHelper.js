@@ -96,6 +96,17 @@ const sendCode = async (user, flow) => {
   return { sent: true, retryAfter: 0 }
 }
 
+// The limit a user has reached, if any.
+const limitReached = (user, flow) => {
+  if (user[flow.failuresField] >= MAX_DAILY_FAILURES) {
+    return 'Too many failed verification attempts today. Please try again tomorrow.'
+  }
+  if (user[flow.attemptsField] >= MAX_OTP_ATTEMPTS) {
+    return 'Too many failed verification attempts. Please request a new verification code.'
+  }
+  return null
+}
+
 // Why a code check matched nothing, read from the user's current state.
 const explainRejection = (user, flow, now) => {
   if (!user?.[flow.otpField]) {
@@ -104,11 +115,9 @@ const explainRejection = (user, flow, now) => {
   if (user[flow.expiresField] <= now) {
     return 'Verification code has expired. Please request a new code.'
   }
-  if (user[flow.failuresField] >= MAX_DAILY_FAILURES) {
-    return 'Too many failed verification attempts today. Please try again tomorrow.'
-  }
-  if (user[flow.attemptsField] >= MAX_OTP_ATTEMPTS) {
-    return 'Too many failed verification attempts. Please request a new verification code.'
+  const limit = limitReached(user, flow)
+  if (limit) {
+    return limit
   }
   // The code changed while this request was in flight.
   return 'This code is no longer valid. Please use the latest code sent to your email.'
@@ -161,12 +170,18 @@ const checkCode = async (user, otp, flow, { consume = false } = {}) => {
     }
   }
 
-  const failed = await User.updateOne(
+  const failed = await User.findOneAndUpdate(
     { ...usable, [otpField]: { $nin: [null, hash] } },
-    { $inc: { [attemptsField]: 1, [failuresField]: 1 } }
+    { $inc: { [attemptsField]: 1, [failuresField]: 1 } },
+    {
+      returnDocument: 'after',
+      projection: { [attemptsField]: 1, [failuresField]: 1 },
+    }
   )
-  if (failed.modifiedCount) {
-    return INVALID_CODE
+  if (failed) {
+    // The guess that uses up the last attempt says so, rather than leaving
+    // the next one to find out.
+    return limitReached(failed, flow) ?? INVALID_CODE
   }
 
   return explainRejection(await User.findById(user._id), flow, now)

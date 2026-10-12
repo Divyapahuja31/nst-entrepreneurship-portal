@@ -48,7 +48,11 @@ export const completeGoogleSignup = async payload => {
     const { data } = await api.post('/auth/google/complete-signup', payload)
     return { user: data.user }
   } catch (err) {
-    return toError(err, 'Failed to create account.')
+    return {
+      ...toError(err, 'Failed to create account.'),
+      // The sign-up link is invalid or has run out.
+      expired: err.response?.status === 401,
+    }
   }
 }
 

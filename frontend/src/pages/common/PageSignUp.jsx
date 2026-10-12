@@ -243,9 +243,9 @@ function SignUp() {
                 ))}
               </Select>
 
-              {fieldErrors.batch && (
-                <FormHelperText>{fieldErrors.batch}</FormHelperText>
-              )}
+              <FormHelperText>
+                {fieldErrors.batch || 'Students choose their campus and batch.'}
+              </FormHelperText>
             </FormControl>
 
             <Button

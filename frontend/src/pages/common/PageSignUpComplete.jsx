@@ -9,6 +9,18 @@ import AuthScreen from '../../components/AuthScreen'
 import { useAuthStore } from '../../stores/auth'
 import { completeGoogleSignup } from '../../api/auth'
 
+// Whether the sign-up link's token can still be used. The server checks it
+// properly; reading its expiry here just avoids a form that can't succeed.
+const isUsable = token => {
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const { type, exp } = JSON.parse(atob(part))
+    return type === 'google-signup' && exp * 1000 > Date.now()
+  } catch {
+    return false
+  }
+}
+
 function CompleteSignup() {
   const navigate = useNavigate()
   const login = useAuthStore(state => state.login)
@@ -28,6 +40,7 @@ function CompleteSignup() {
   })
 
   const [error, setError] = useState('')
+  const [expired, setExpired] = useState(() => !token || !isUsable(token))
   const [loading, setLoading] = useState(false)
   const [loadingOptions, setLoadingOptions] = useState(true)
 
@@ -92,6 +105,10 @@ function CompleteSignup() {
 
     setLoading(false)
 
+    if (result.expired) {
+      setExpired(true)
+      return
+    }
     if (result.error) {
       setError(result.error)
       return
@@ -101,7 +118,7 @@ function CompleteSignup() {
     navigate('/', { replace: true })
   }
 
-  if (!token) {
+  if (expired) {
     return (
       <AuthScreen
         title="Session Expired"

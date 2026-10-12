@@ -9,6 +9,7 @@ import {
 } from '../../api/biweekly'
 import toError from '../../api/toError'
 
+import { CYCLES, CYCLE_DAYS } from '@nst/shared/biweeklyCycles.js'
 import {
   canAuthorBiweeklyReview,
   canReopenBiweekly,
@@ -56,7 +57,6 @@ import StatTile from '../../components/StatTile'
 import StatusPill from '../../components/StatusPill'
 import { tints, tokens } from '../../theme'
 
-const CYCLES = 13 // 26 weeks = 13 bi-weekly cycles
 const GRACE_DAYS = 3
 
 /* ---------- Evidence checklist per cycle (stage-aware) ---------- */
@@ -206,9 +206,9 @@ function computeCycles(startISO) {
   const start = new Date(startISO)
   return Array.from({ length: CYCLES }, (_, i) => {
     const s = new Date(start)
-    s.setDate(start.getDate() + i * 14)
+    s.setDate(start.getDate() + i * CYCLE_DAYS)
     const e = new Date(s)
-    e.setDate(s.getDate() + 13)
+    e.setDate(s.getDate() + CYCLE_DAYS - 1)
     const deadline = new Date(e)
     deadline.setDate(deadline.getDate() + GRACE_DAYS)
     return { n: i + 1, start: s, end: e, deadline }
@@ -267,6 +267,7 @@ function BiWeekly({ data: propData }) {
   const rows = data?.submissions ?? []
   const observations = data?.observations ?? []
   const evaluations = data?.evaluations ?? []
+  const checkIns = data?.checkIns ?? []
   const [selected, setSelected] = React.useState(null)
   const [message, setMessage] = React.useState('')
   const detailRef = React.useRef(null)
@@ -473,6 +474,7 @@ function BiWeekly({ data: propData }) {
             periodEnd={activeMeta.end.toISOString().slice(0, 10)}
             deadline={activeMeta.deadline}
             existing={activeRow}
+            checkIn={checkIns.find(c => c.cycle_number === activeMeta.n)}
             isStaff={isStaff}
             canReopen={canReopen}
             onSave={saveSubmission}
@@ -852,6 +854,14 @@ const BASELINE = {
   ask_for_help: '',
 }
 
+// A date as a date field's value (YYYY-MM-DD), in the browser's time zone.
+const localDate = date => {
+  const d = new Date(date)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10)
+}
+
 function CycleForm({
   status,
   cycleNumber,
@@ -859,18 +869,25 @@ function CycleForm({
   periodEnd,
   deadline,
   existing,
+  checkIn,
   isStaff,
   canReopen,
   onSave,
   onReopen,
 }) {
-  const [f, setF] = React.useState(() =>
-    existing
+  const checkInHappened =
+    checkIn && new Date(checkIn.scheduledAt) <= new Date()
+  const [f, setF] = React.useState(() => {
+    const form = existing
       ? Object.fromEntries(
           Object.keys(BASELINE).map(k => [k, existing[k] ?? BASELINE[k]])
         )
       : BASELINE
-  )
+    // The cycle's check-in already says when the meeting was.
+    return !form.mentor_meeting_date && checkInHappened
+      ? { ...form, mentor_meeting_date: localDate(checkIn.scheduledAt) }
+      : form
+  })
   const [links, setLinks] = React.useState(() =>
     Array.isArray(existing?.evidence_links) ? existing.evidence_links : []
   )
@@ -1233,6 +1250,18 @@ function CycleForm({
               type="date"
               value={f.mentor_meeting_date ?? ''}
               disabled={locked}
+              helperText={
+                checkIn &&
+                `Check-in ${checkInHappened ? 'was' : 'is'} on ${new Date(
+                  checkIn.scheduledAt
+                ).toLocaleString(undefined, {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}`
+              }
               slotProps={{ inputLabel: { shrink: true } }}
               onChange={e =>
                 setF({ ...f, mentor_meeting_date: e.target.value })

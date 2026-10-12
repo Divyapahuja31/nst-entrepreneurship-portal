@@ -1,4 +1,5 @@
 import { api } from './client'
+import { loadCheckIns } from './checkins'
 import toError from './toError'
 
 export const foundersLoader = async () => {
@@ -16,18 +17,20 @@ export const addFounderLoader = async () => {
   return data
 }
 
-// The founder, their KPIs and the bi-weekly reports of the startup they
-// are in now.
+// The founder, their KPIs, the bi-weekly reports of the startup they are
+// in now and the check-ins they were invited to.
 export const founderProfileLoader = async ({ params }) => {
-  const [{ data: biweekly }, kpisRes] = await Promise.all([
+  const [{ data: biweekly }, kpisRes, checkIns] = await Promise.all([
     api.get('/biweekly', { params: { founderId: params?.userid } }),
     api
       .get(`/kpis/founder/${params?.userid}`)
       .catch(() => ({ data: { data: [] } })),
+    loadCheckIns({ founderId: params?.userid }),
   ])
   return {
     ...biweekly,
     kpis: kpisRes.data?.data || [],
+    checkIns,
   }
 }
 

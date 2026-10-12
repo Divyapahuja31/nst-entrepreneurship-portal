@@ -1,4 +1,4 @@
-import { Link as RouterLink } from 'react-router'
+import { Link as RouterLink, useLoaderData } from 'react-router'
 
 import {
   Avatar,
@@ -18,6 +18,7 @@ import SectionCard from '../../components/SectionCard.jsx'
 import {
   CalendarIcon,
   ChartIcon,
+  ChatIcon,
   KpiIcon,
   PeopleIcon,
 } from '../../components/icons.jsx'
@@ -26,6 +27,29 @@ import { useAuthStore } from '../../stores/auth'
 import { tints } from '../../theme'
 
 const firstName = user => user.username?.split(' ')[0] || 'there'
+
+// The next check-in, in a line for its card.
+const nextCheckInText = checkIns => {
+  if (!checkIns) {
+    return 'Your meetings with your mentor, with their Meet links.'
+  }
+  const next = checkIns.find(
+    c =>
+      c.status === 'SCHEDULED' &&
+      new Date(c.scheduledAt).getTime() + c.durationMinutes * 60000 >
+        Date.now()
+  )
+  if (!next) {
+    return 'Your mentor hasn’t scheduled the next one yet.'
+  }
+  return `Next: ${new Date(next.scheduledAt).toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`
+}
 
 function PageHeader({ title, subtitle }) {
   return (
@@ -59,6 +83,7 @@ function initials(name = '') {
 
 function VentureDashboard({ user, venture }) {
   const founders = venture.founders || []
+  const checkIns = useLoaderData()?.checkIns
 
   return (
     <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
@@ -79,7 +104,7 @@ function VentureDashboard({ user, venture }) {
       />
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <ActionCard
             component={RouterLink}
             to="/kpis"
@@ -90,14 +115,25 @@ function VentureDashboard({ user, venture }) {
             cta="Open KPIs"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <ActionCard
             component={RouterLink}
             to="/biweekly"
             icon={CalendarIcon}
             tint="green"
-            title="Bi-weekly check-in"
+            title="Bi-weekly report"
             description="Report what changed in the last two weeks."
+            cta="Open report"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <ActionCard
+            component={RouterLink}
+            to="/checkins"
+            icon={ChatIcon}
+            tint="blue"
+            title="Mentor check-ins"
+            description={nextCheckInText(checkIns)}
             cta="Open check-ins"
           />
         </Grid>

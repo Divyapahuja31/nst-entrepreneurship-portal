@@ -14,6 +14,7 @@ import {
   BookIcon,
   BriefcaseIcon,
   CalendarIcon,
+  ChatIcon,
   ChevronLeftIcon,
   KpiIcon,
   OverviewIcon,
@@ -111,6 +112,11 @@ const menuFor = (user, { isStaff, isMentor, isAdmin, isStudent }) => {
         menu: 'Bi-Weekly',
         icon: CalendarIcon,
         path: '/biweekly',
+      },
+      {
+        menu: 'Check-Ins',
+        icon: ChatIcon,
+        path: '/checkins',
       },
       ...commonMenuItems,
     ]

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { isStaff, isStudent } from '@nst/shared/permissions.js'
+import { CYCLES, cycleStart } from '@nst/shared/biweeklyCycles.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import Founder from '../models/founder.js'
@@ -36,11 +37,10 @@ export const pickStudentSubmissionFields = body =>
 
 export const validateCycleNumber = n => {
   const num = Number(n)
-  return Number.isInteger(num) && num >= 1 && num <= 13 ? num : null
+  return Number.isInteger(num) && num >= 1 && num <= CYCLES ? num : null
 }
 
 const MAX_EVIDENCE_LINKS = 20
-const CYCLE_DAYS = 14
 const DAY_MS = 24 * 60 * 60 * 1000
 
 // Evidence URLs are typed by students and shown to faculty as links, so only
@@ -77,9 +77,7 @@ export const validateEvidenceLinks = links => {
 // Cycles open every 14 days from the venture's creation, as on the bi-weekly
 // page. A day of slack covers the student's time zone.
 export const hasCycleStarted = (ventureCreatedAt, cycleNum, now = Date.now()) =>
-  new Date(ventureCreatedAt).getTime() +
-    ((cycleNum - 1) * CYCLE_DAYS - 1) * DAY_MS <=
-  now
+  cycleStart(ventureCreatedAt, cycleNum).getTime() - DAY_MS <= now
 
 // Checks a student's submit or save request. Returns { error } or the
 // cleaned { cycleNum, data, isSubmit }.

@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./permissions.js": "./permissions.js"
+    "./permissions.js": "./permissions.js",
+    "./biweeklyCycles.js": "./biweeklyCycles.js"
   },
   "scripts": {
     "test": "node --test",

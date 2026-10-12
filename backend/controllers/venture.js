@@ -14,6 +14,7 @@ import User from '../models/user.js'
 import Role from '../models/role.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import { isActiveMentor, ventureAccess, ventureScope } from '../utils/access.js'
+import { cancelFutureCheckIns } from '../utils/checkInHelper.js'
 
 // Readable label ("Fund Raising"), not the stored key.
 const stageLabel = stage => startupStage[stage] ?? stage
@@ -260,14 +261,21 @@ export const setVentureMentor = async (req, res) => {
       return res.status(400).json({ error: 'Choose an active mentor account' })
     }
 
-    const venture = await Venture.findByIdAndUpdate(
-      ventureId,
-      { $set: { mentor: mentorId } },
-      { returnDocument: 'after' }
-    ).populate('mentor', 'username email')
-    if (!venture) {
+    const previous = await Venture.findByIdAndUpdate(ventureId, {
+      $set: { mentor: mentorId },
+    }).select('mentor')
+    if (!previous) {
       return res.status(404).json({ error: 'Venture not found' })
     }
+    // Check-ins live on the old mentor's calendar; the new one schedules
+    // their own.
+    if (String(previous.mentor) !== String(mentorId)) {
+      await cancelFutureCheckIns({ venture: previous._id })
+    }
+    const venture = await Venture.findById(ventureId).populate(
+      'mentor',
+      'username email'
+    )
 
     return res.status(200).json({ mentor: mentorSummary(venture.mentor) })
   } catch (error) {

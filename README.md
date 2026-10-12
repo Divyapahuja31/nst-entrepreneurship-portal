@@ -47,7 +47,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Unlock a KPI | ✅ | ✅ | ❌ | ❌ |
 | Add progress or upload evidence | ❌ | ❌ | ❌ | own KPI, while not locked, graded or past due |
 | Remove evidence | ✅ | ✅ | ❌ | own KPI, under the same conditions |
-| Submit a bi-weekly report | ❌ | ❌ | ❌ | own startup, until submitted |
+| Submit a bi-weekly report | ❌ | ❌ | ❌ | own startup, until submitted or past its deadline (unless reopened) |
 | Write bi-weekly observations and evaluations | ✅ | ✅ | assigned startups | ❌ |
 | Reopen a submitted bi-weekly report | ✅ | ✅ | ❌ | ❌ |
 | Set up the programme: calendar, staff, who is invited, sessions | ✅ | ❌ | ❌ | ❌ |
@@ -94,6 +94,15 @@ npm run migrate:biweekly -w backend
 ```
 
 It moves each founder's report onto the startup they are in (or were in most recently). When a startup ends up with two reports for one cycle, it keeps the submitted one, which takes over any review only the other had. A report it can't keep, such as a second report for a cycle or one from a founder who never joined a startup, is copied to `biweeklysubmissions_archive` instead of being deleted. It's safe to run again.
+
+## Bi-weekly reports
+
+A startup's report for each 14-day cycle is due 3 days after the cycle's last day. The API enforces the same rules as the page:
+
+- A report can be saved once its cycle has started, and not after its deadline. A cycle the board reopens, submitted or missed, can be edited and submitted again whatever its deadline.
+- Submitting needs a progress summary. The numbers (hours, interviews, revenue and so on) must be 0 or more.
+- Observations need notes, and faculty review only cycles that have started.
+- The monthly evaluation scores four pillars from 0 to 100 and weighs them 40/25/20/15 (Execution, Customer, Business, Behaviour) into a total out of 100, as on the Methodology page ([`shared/evaluationScore.js`](shared/evaluationScore.js)). It is on track at 70 or more with no pillar under 50, needs attention at 50 to 69 or with one pillar under 50, and is at risk below 50 or with two pillars under 50.
 
 ## Email notifications
 
@@ -179,6 +188,7 @@ npm test
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
 - `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and cycles counted from the programme start.
 - `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, Meet Now, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
+- `signup.test.js`, `startups.test.js`, `kpiReview.test.js`, `biweeklyRules.test.js` and `staffChanges.test.js` cover names and codes at sign-up, proposals and startup names, reviews from out-of-date pages, the bi-weekly rules above, and what happens when someone's role changes or they are deactivated.
 
 The first run downloads a MongoDB binary for the tests.
 

@@ -15,10 +15,11 @@ import {
   isStudent,
   kpiLockReason,
 } from '@nst/shared/permissions.js'
+import { EVIDENCE_TYPES_MESSAGE } from '@nst/shared/evidenceFiles.js'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
 import Founder from '../models/founder.js'
-import { validateCreateKPI } from '../utils/kpiValidator.js'
+import { dueDateError, validateCreateKPI } from '../utils/kpiValidator.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   resolveKPIScope,
@@ -158,6 +159,7 @@ export const createKPI = async (req, res) => {
       description,
       venture,
       userId: req.user.id,
+      dueDate,
     })
 
     if (validationError) {
@@ -458,6 +460,13 @@ const populateForReview = query =>
     .populate('lockedBy', 'username email')
     .populate('subKPIs')
 
+const STALE_REVIEW =
+  'This KPI changed while you were reviewing it. Reload and try again.'
+
+// The reviewer's page showed another status: someone else acted first.
+const isStaleReview = (body, kpi) =>
+  body.expectedStatus !== undefined && body.expectedStatus !== kpi.status
+
 // Accept, reject, grade or re-grade. The board may do this to any KPI, even a
 // locked one; the startup's mentor only until the KPI is locked.
 export const evaluateKPI = async (req, res) => {
@@ -476,6 +485,10 @@ export const evaluateKPI = async (req, res) => {
     const { kpi, ctx } = found
     if (!canEvaluateKpi(req.user, ctx)) {
       return refuse(res, ctx, 'You are not authorized to review this KPI')
+    }
+
+    if (isStaleReview(req.body, kpi)) {
+      return res.status(409).json({ success: false, message: STALE_REVIEW })
     }
 
     const transitionError = evaluationError(kpi, {
@@ -512,8 +525,7 @@ export const evaluateKPI = async (req, res) => {
     if (!updatedKPI) {
       return res.status(409).json({
         success: false,
-        message:
-          'This KPI changed while you were reviewing it. Reload and try again.',
+        message: STALE_REVIEW,
       })
     }
 
@@ -693,6 +705,11 @@ export const updateKPI = async (req, res) => {
       return refuse(res, ctx, 'This KPI can no longer be edited')
     }
 
+    const dateError = dueDateError(req.body?.dueDate)
+    if (dateError) {
+      return res.status(400).json({ success: false, message: dateError })
+    }
+
     const updateError = await kpiUpdateError(req.user, kpi, req.body)
     if (updateError) {
       return res.status(403).json({ success: false, message: updateError })
@@ -761,8 +778,7 @@ export const uploadKPIEvidence = async (req, res) => {
     if (req.file && !isAllowedEvidenceFile(req.file.originalname)) {
       return res.status(400).json({
         success: false,
-        message:
-          'Upload a PDF, Office document, CSV, text file, image, MP4/MOV video or ZIP',
+        message: EVIDENCE_TYPES_MESSAGE,
       })
     }
 

@@ -224,7 +224,13 @@ export default function KPIReview({
     setEvalDialogOpen(false)
 
     try {
-      await evaluateKPI({ kpiId, score, status, feedback })
+      await evaluateKPI({
+        kpiId,
+        score,
+        status,
+        feedback,
+        expectedStatus: selectedKpi?.status,
+      })
     } catch (err) {
       setSavingEval(false)
       setErrorMsg(err.message || 'Failed to evaluate KPI')

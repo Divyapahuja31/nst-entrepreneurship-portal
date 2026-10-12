@@ -1,6 +1,21 @@
 import mongoose from 'mongoose'
 
-export const validateCreateKPI = ({ title, description, venture, userId }) => {
+// Empty means no due date; anything else must be a date.
+export const dueDateError = dueDate =>
+  dueDate === undefined ||
+  dueDate === null ||
+  dueDate === '' ||
+  !Number.isNaN(new Date(dueDate).getTime())
+    ? null
+    : 'Choose a valid due date'
+
+export const validateCreateKPI = ({
+  title,
+  description,
+  venture,
+  userId,
+  dueDate,
+}) => {
   if (!title?.trim()) {
     return {
       statusCode: 400,
@@ -13,6 +28,10 @@ export const validateCreateKPI = ({ title, description, venture, userId }) => {
       statusCode: 400,
       message: 'KPI description is required',
     }
+  }
+
+  if (dueDateError(dueDate)) {
+    return { statusCode: 400, message: dueDateError(dueDate) }
   }
 
   if (!venture) {

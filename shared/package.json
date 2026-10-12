@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     "./permissions.js": "./permissions.js",
-    "./biweeklyCycles.js": "./biweeklyCycles.js"
+    "./biweeklyCycles.js": "./biweeklyCycles.js",
+    "./evidenceFiles.js": "./evidenceFiles.js"
   },
   "scripts": {
     "test": "node --test",

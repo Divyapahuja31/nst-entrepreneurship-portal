@@ -151,7 +151,12 @@ export default function PageKPIs() {
               color="success"
               loading={isBusy}
               disabled={Boolean(busyId) && !isBusy}
-              onClick={() => review(row.id, { status: 'ACCEPTED' })}
+              onClick={() =>
+                review(row.id, {
+                  status: 'ACCEPTED',
+                  expectedStatus: kpi.status,
+                })
+              }
             >
               Approve
             </Button>
@@ -327,6 +332,7 @@ export default function PageKPIs() {
             status: payload.status,
             score: payload.score,
             feedback: payload.feedback,
+            expectedStatus: evaluating?.status,
           })
         }}
       />

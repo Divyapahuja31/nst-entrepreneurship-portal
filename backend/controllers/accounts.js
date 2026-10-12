@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import mongoose from 'mongoose'
 import {
   ROLES,
+  STAFF_ROLES,
   canChangeRoleOf,
   canDeleteAccountOf,
   isRole,
@@ -17,7 +18,8 @@ import { cancelFutureCheckIns } from '../utils/checkInHelper.js'
 import { normalizeEmail } from '../utils/authHelper.js'
 import { deactivateFounder } from '../utils/founderHelper.js'
 import { refreshMeetingInvites } from '../utils/meetingInvites.js'
-import { validateBatchAndCampus } from '../utils/validator.js'
+import { removeProgrammeStaff } from '../utils/programmeScheduler.js'
+import { normalizeName, validateBatchAndCampus } from '../utils/validator.js'
 
 // Account administration, for admins only (the route checks the role; the
 // self and last-admin rules are checked here). Every change is written to
@@ -55,6 +57,15 @@ const releaseMentoredVentures = userId =>
     Venture.updateMany({ mentor: userId }, { $set: { mentor: null } }),
     cancelFutureCheckIns({ mentor: userId }),
   ])
+
+// A founder leaves their startup, and its upcoming meetings stop inviting
+// them.
+const leaveStartup = async userId => {
+  const founder = await deactivateFounder(userId)
+  if (founder?.venture) {
+    await refreshMeetingInvites(founder.venture._id)
+  }
+}
 
 export const listAccounts = async (req, res) => {
   try {
@@ -125,7 +136,7 @@ export const createAccount = async (req, res) => {
 
     const isStudent = body.role === ROLES.STUDENT
     const user = await User.create({
-      username: body.username.trim(),
+      username: normalizeName(body.username),
       email: normalizeEmail(body.email),
       password: randomUUID(),
       role: role._id,
@@ -226,6 +237,14 @@ const applyRoleChange = async (target, previousRole, newRole) => {
   if (previousRole === ROLES.MENTOR) {
     await releaseMentoredVentures(target._id)
   }
+  // Staff don't belong to a startup: a founder given a staff role leaves it.
+  if (previousRole === ROLES.STUDENT && STAFF_ROLES.includes(newRole.name)) {
+    await leaveStartup(target._id)
+  }
+  // Only staff run programme sessions.
+  if (!STAFF_ROLES.includes(newRole.name)) {
+    await removeProgrammeStaff(target._id)
+  }
   return { updated }
 }
 
@@ -296,13 +315,11 @@ export const deactivateAccount = async (req, res) => {
       return res.status(409).json({ error: LAST_ADMIN_MESSAGE })
     }
 
-    const [founder] = await Promise.all([
-      deactivateFounder(target._id),
+    await Promise.all([
+      leaveStartup(target._id),
       releaseMentoredVentures(target._id),
     ])
-    if (founder?.venture) {
-      await refreshMeetingInvites(founder.venture._id)
-    }
+    await removeProgrammeStaff(target._id)
     await writeAudit(req, target, {
       action: 'ACCOUNT_DEACTIVATED',
       previousRole: target.role?.name ?? null,

@@ -96,6 +96,10 @@ const overview = async user => {
     ProgrammeSession.find().sort({ number: 1 }),
     hostOf(programme, user),
   ])
+  // Only people who can still run sessions: a deactivated account left in
+  // the settings would otherwise be counted but not shown, and block saving.
+  const active = new Set(staffOptions.map(s => String(s._id)))
+  settings.staff = settings.staff.filter(id => active.has(id))
   const meetings = await meetingsBySession(sessions)
   const invited = invites.filter(
     s => s.included && s.founders.some(f => f.included)

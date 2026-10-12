@@ -16,6 +16,8 @@ import {
   WarningIcon,
 } from '../../components/icons'
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 // Health is per startup, so the four tiles add up to the startup count.
 const HEALTH = [
   {
@@ -76,7 +78,7 @@ function Index() {
     <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
       <PageHeader
         title="Overview"
-        subtitle={`${ventureCount} startups · ${overview?.founders ?? 0} founders`}
+        subtitle={`${plural(ventureCount, 'startup')} · ${plural(overview?.founders ?? 0, 'founder')}`}
       />
 
       <Box

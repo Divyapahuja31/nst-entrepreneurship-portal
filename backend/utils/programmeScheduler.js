@@ -1,4 +1,5 @@
 import CheckIn from '../models/checkIn.js'
+import Programme from '../models/programme.js'
 import ProgrammeSession from '../models/programmeSession.js'
 import {
   googleFor,
@@ -113,6 +114,7 @@ const founderLeaving = (row, attendee) => ({
 })
 
 const staffLeaving = (row, member) => ({
+  staff: true,
   email: member.email,
   userId: member._id,
   name: member.username,
@@ -454,9 +456,23 @@ export const runSession = async (session, { fresh = false } = {}) => {
     problem: null,
   })
   await session.save()
-  await sendCancellations(tell, programme)
+  await sendCancellations(await stillLeaving(session, tell), programme)
   await sendSessionEmails(session, programme)
   return {}
+}
+
+// A staff member taken off one meeting but still running another in the
+// session isn't told it's cancelled: their session email lists what they
+// run now, and replaces the last one.
+const stillLeaving = async (session, tell) => {
+  const running = new Set(
+    (await loadRows(session)).flatMap(row =>
+      row.staff.map(member => String(member._id ?? member))
+    )
+  )
+  return tell.filter(
+    person => !(person.staff && running.has(String(person.userId)))
+  )
 }
 
 // Cancels a session: its events come off the calendars and everyone in it
@@ -528,6 +544,37 @@ export const withSession = async (sessionId, work, now = new Date()) => {
       { $set: { claimedUntil: null } }
     )
   }
+}
+
+// Someone who can no longer run sessions (deactivated, or no longer staff)
+// leaves the programme's staff, and the upcoming sessions they were in move
+// their startups to the others, emailing only the people whose meeting
+// changed.
+export const removeProgrammeStaff = async (userId, now = new Date()) => {
+  const programme = await Programme.findOneAndUpdate(
+    { key: 'programme', staff: userId },
+    { $pull: { staff: userId } },
+    { returnDocument: 'after' }
+  )
+  if (!programme) {
+    return 0
+  }
+  const affected = await CheckIn.distinct('session', {
+    session: { $ne: null },
+    staff: userId,
+    status: 'SCHEDULED',
+    scheduledAt: { $gt: now },
+  })
+  let moved = 0
+  for (const sessionId of affected) {
+    const result = await withSession(sessionId, session =>
+      session.status === 'SCHEDULED' ? runSession(session) : null
+    )
+    if (result && !result.problem) {
+      moved += 1
+    }
+  }
+  return moved
 }
 
 // Schedules the sessions now within their lead time, and retries scheduled

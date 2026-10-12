@@ -3,7 +3,11 @@ import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import GoogleCredential from '../models/googleCredential.js'
 import { findCoFounders } from './biweeklyHelper.js'
-import { GoogleError, getGoogleWorkspace } from './googleWorkspace.js'
+import {
+  GoogleError,
+  canAutoTranscribe,
+  getGoogleWorkspace,
+} from './googleWorkspace.js'
 import { appUrl } from './kpiLockEmails.js'
 import { decryptToken } from './tokenCrypto.js'
 
@@ -34,7 +38,7 @@ export const googleFor = async mentorId => {
   const refreshToken = decryptToken(credential.refreshToken)
   const workspace = getGoogleWorkspace()
 
-  return async (method, ...args) => {
+  const google = async (method, ...args) => {
     try {
       return await workspace[method](refreshToken, ...args)
     } catch (error) {
@@ -51,6 +55,9 @@ export const googleFor = async mentorId => {
       throw error
     }
   }
+  // Whether this connection lets the portal turn transcription on.
+  google.autoTranscripts = canAutoTranscribe(credential)
+  return google
 }
 
 // The startup's active founders, as check-in attendees.
@@ -108,11 +115,58 @@ export const rescheduledEvent = ({
 
 // Google usually adds the Meet link while creating the event; when it is
 // still pending, read the event back once.
+// Each new meeting is set to transcribe itself.
 export const withMeetLink = async (google, event) => {
-  if (event.hangoutLink) {
-    return event
+  const withLink = event.hangoutLink
+    ? event
+    : await google('getEvent', event.id)
+  await turnOnTranscription(google, withLink.conferenceData?.conferenceId)
+  return withLink
+}
+
+// Best effort: the meeting is still scheduled when Google refuses, as it
+// does for a Google account whose plan has no transcripts. A connection made
+// before the portal asked for Meet settings isn't asked at all; it carries
+// on as before until its owner reconnects.
+export const turnOnTranscription = async (google, meetingCode) => {
+  if (!meetingCode || !google.autoTranscripts) {
+    return false
   }
-  return google('getEvent', event.id)
+  try {
+    await google('autoTranscribe', meetingCode)
+    return true
+  } catch (error) {
+    console.warn(
+      `Automatic transcription not turned on for ${meetingCode}:`,
+      error.message
+    )
+    return false
+  }
+}
+
+// After someone connects Google, sets every upcoming meeting they host to
+// transcribe itself, including those scheduled before they connected.
+export const turnOnTranscriptionForHost = async (userId, now = new Date()) => {
+  const upcoming = await CheckIn.find({
+    status: 'SCHEDULED',
+    meetingCode: { $ne: null },
+    scheduledAt: { $gt: new Date(now.getTime() - 3 * 60 * MINUTE_MS) },
+    $or: [{ host: userId }, { host: null, mentor: userId }],
+  }).distinct('meetingCode')
+  if (!upcoming.length) {
+    return 0
+  }
+  const google = await googleFor(userId)
+  if (!google.autoTranscripts) {
+    return 0
+  }
+  let turnedOn = 0
+  for (const meetingCode of upcoming) {
+    if (await turnOnTranscription(google, meetingCode)) {
+      turnedOn += 1
+    }
+  }
+  return turnedOn
 }
 
 export const meetFields = event => ({

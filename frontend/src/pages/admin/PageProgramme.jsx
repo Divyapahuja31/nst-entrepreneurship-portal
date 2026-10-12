@@ -167,8 +167,31 @@ const toggle = (set, id, on) => {
 // ------------------------------------------------------------ settings
 
 function HostNotice({ host }) {
-  if (host.connected) {
+  if (host.connected && host.autoTranscripts) {
     return null
+  }
+  if (host.connected) {
+    return (
+      <Alert
+        severity="info"
+        action={
+          host.isYou && (
+            <Button
+              variant="outlined"
+              component="a"
+              href={calendarConnectUrl('/admin/programme')}
+            >
+              Reconnect
+            </Button>
+          )
+        }
+      >
+        {host.isYou
+          ? 'Reconnect your Google Calendar so every session transcribes itself.'
+          : `Ask ${host.username} to reconnect their Google Calendar so every session transcribes itself.`}{' '}
+        Until then, someone has to turn transcripts on in each meeting.
+      </Alert>
+    )
   }
   return (
     <Alert

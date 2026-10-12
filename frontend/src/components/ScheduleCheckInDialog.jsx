@@ -230,6 +230,22 @@ export default function ScheduleCheckInDialog({
                 Disconnect
               </Button>
             </Typography>
+            {!status.autoTranscripts && (
+              <Alert
+                severity="info"
+                action={
+                  <Button
+                    size="small"
+                    component="a"
+                    href={calendarConnectUrl(window.location.pathname)}
+                  >
+                    Reconnect
+                  </Button>
+                }
+              >
+                Reconnect Google so check-ins transcribe themselves.
+              </Alert>
+            )}
           </Box>
         )}
       </DialogContent>

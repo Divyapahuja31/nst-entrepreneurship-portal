@@ -7,7 +7,7 @@ import app from '../app.js'
 import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import GoogleCredential from '../models/googleCredential.js'
-import { GoogleError } from '../utils/googleWorkspace.js'
+import { GoogleError, REQUIRED_SCOPES } from '../utils/googleWorkspace.js'
 import {
   connectCalendar,
   cookieFor,
@@ -123,6 +123,37 @@ describe('scheduling check-ins', () => {
     )
     assert.equal(event.recurrence, undefined)
     assert.equal(event.summary, 'Alpha: check-in')
+  })
+
+  it('sets the new meeting to transcribe itself', async () => {
+    const res = await schedule(data.users.mentor)
+    assert.equal(res.status, 201)
+    assert.deepEqual(
+      callsTo('autoTranscribe').map(call => call.args),
+      [['abc-defg-001']]
+    )
+  })
+
+  it('leaves a connection made before Meet settings were asked for as it was', async () => {
+    await GoogleCredential.updateOne(
+      { user: data.users.mentor._id },
+      { $set: { scopes: [...REQUIRED_SCOPES] } }
+    )
+    const res = await schedule(data.users.mentor)
+    assert.equal(res.status, 201)
+    assert.equal(callsTo('autoTranscribe').length, 0)
+  })
+
+  it('still schedules when Google refuses to turn transcription on', async () => {
+    google.failures.set(
+      'autoTranscribe',
+      new GoogleError('Request had insufficient authentication scopes.', {
+        status: 403,
+      })
+    )
+    const res = await schedule(data.users.mentor)
+    assert.equal(res.status, 201)
+    assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 1)
   })
 
   it('any future time works, after the last bi-weekly cycle too', async () => {

@@ -18,7 +18,12 @@ import {
   sessionDates,
   slotTimes,
 } from './programme.js'
-import { sendCancellations, sendSessionEmails } from './programmeEmails.js'
+import {
+  digest,
+  revisionOf,
+  sendCancellations,
+  sendSessionEmails,
+} from './programmeEmails.js'
 
 // Puts programme sessions on the calendars. A session is scheduled
 // `leadDays` before it: its meetings are drawn, created as events on the
@@ -114,7 +119,7 @@ const staffLeaving = (row, member) => ({
   ventureName: row.venture?.name,
   startsAt: row.scheduledAt,
   endsAt: new Date(row.scheduledAt.getTime() + row.durationMinutes * MINUTE_MS),
-  key: `${row._id}:${member._id}:${row.scheduledAt.toISOString()}:cancelled`,
+  key: `${row._id}:${member._id}:${row.scheduledAt.toISOString()}${revisionOf(row)}:cancelled`,
 })
 
 // Keeps when each founder was first invited, so only new ones are new.
@@ -159,15 +164,19 @@ const createEvent = async (google, body) => {
   return { googleEventId: event.id, ...meetFields(event) }
 }
 
-const isChanged = (row, meeting, attendees) =>
+// Whether the meeting itself moves: its time, length or staff.
+const isMoved = (row, meeting) =>
   row.scheduledAt.getTime() !== meeting.startsAt.getTime() ||
   row.durationMinutes !== minutesBetween(meeting.startsAt, meeting.endsAt) ||
-  idsOf(row.staff) !== idsOf(meeting.staff) ||
-  idsOf(row.attendees) !== idsOf(attendees)
+  idsOf(row.staff) !== idsOf(meeting.staff)
 
-const updateRow = async (row, fields) => {
+const isChanged = (row, meeting, attendees) =>
+  isMoved(row, meeting) || idsOf(row.attendees) !== idsOf(attendees)
+
+const updateRow = async (row, meeting, fields) => {
   row.set({
     ...fields,
+    revision: row.revision + (isMoved(row, meeting) ? 1 : 0),
     'transcript.nextPollAt': transcriptDueAt(
       fields.scheduledAt,
       fields.durationMinutes
@@ -245,7 +254,7 @@ const applySlots = async (ctx, rows) => {
         .map(s => staffLeaving(row, s))
     )
     await google('patchEvent', row.googleEventId, body)
-    await updateRow(row, fields)
+    await updateRow(row, meeting, fields)
   }
   await removeRows([...byVenture.values()], { ...ctx, deleteEvents: true })
 }
@@ -312,7 +321,7 @@ const applyGroup = async (ctx, rows) => {
       ...removedFounders(row, attendees).map(a => founderLeaving(row, a))
     )
     if (isChanged(row, meeting, attendees)) {
-      await updateRow(row, fields)
+      await updateRow(row, meeting, fields)
     }
   }
   // Startups no longer invited leave; the event stays for the rest.
@@ -346,6 +355,29 @@ const hostGoogle = async programme => {
   }
 }
 
+// The draw as one string: each staff member's startups, in order.
+const drawKey = assignment =>
+  [...assignment]
+    .filter(([, ventureIds]) => ventureIds.length)
+    .map(([staffId, ventureIds]) => `${staffId}=${ventureIds.join(',')}`)
+    .sort()
+    .join(';')
+
+const DRAW_TRIES = 20
+
+// A new draw that differs from the previous one whenever another is
+// possible, so Redraw always visibly redraws.
+const redraw = (previous, ventureIds, staffIds) => {
+  let draw
+  for (let i = 0; i < DRAW_TRIES; i++) {
+    draw = drawAssignment(ventureIds, staffIds)
+    if (drawKey(draw) !== drawKey(previous)) {
+      break
+    }
+  }
+  return draw
+}
+
 // Everything needed to apply a session's plan, or { problem }.
 const prepare = async (session, rows, fresh) => {
   const programme = await getProgramme()
@@ -362,10 +394,14 @@ const prepare = async (session, rows, fresh) => {
   const ventureIds = startups.map(s => String(s.venture._id))
   const staffIds = staff.map(s => String(s._id))
   const previous = previousAssignment(rows)
-  const assignment =
-    fresh || !previous.size
-      ? drawAssignment(ventureIds, staffIds)
-      : keepAssignment(previous, ventureIds, staffIds)
+  let assignment
+  if (!previous.size) {
+    assignment = drawAssignment(ventureIds, staffIds)
+  } else if (fresh) {
+    assignment = redraw(previous, ventureIds, staffIds)
+  } else {
+    assignment = keepAssignment(previous, ventureIds, staffIds)
+  }
   const plan = planSession({ session, programme, startups, staff, assignment })
   if (plan.some(meeting => meeting.endsAt > session.endsAt)) {
     return {
@@ -442,6 +478,14 @@ export const cancelSession = async session => {
   const staff = new Map(
     rows.flatMap(r => r.staff).map(member => [String(member._id), member])
   )
+  // The meetings in the key: cancelled again after Schedule Now, the new
+  // meetings are new news.
+  const meetings = digest(
+    rows
+      .map(r => String(r._id))
+      .sort()
+      .join(',')
+  )
   for (const member of staff.values()) {
     tell.push({
       email: member.email,
@@ -449,7 +493,7 @@ export const cancelSession = async session => {
       name: member.username,
       startsAt: session.startsAt,
       endsAt: session.endsAt,
-      key: `${session._id}:${member._id}:${session.startsAt.toISOString()}:cancelled`,
+      key: `${session._id}:${member._id}:${session.startsAt.toISOString()}:${meetings}:cancelled`,
     })
   }
   session.set({ status: 'CANCELLED', problem: null })
@@ -521,17 +565,31 @@ export const scheduleDueSessions = async (now = new Date()) => {
 export const syncSessions = async (programme, now = new Date()) => {
   const toUpdate = []
   for (const date of sessionDates(programme)) {
-    const session = await ProgrammeSession.findOne({ number: date.number })
+    let session = await ProgrammeSession.findOne({ number: date.number })
+    // A session already over stays as it was, unless the new dates put it
+    // ahead (cycle 1 moved later): then the old one belonged to the old
+    // calendar and a new one takes its place. Its meetings stay in the
+    // startups' check-ins.
+    if (session && session.startsAt <= now) {
+      if (date.startsAt <= now) {
+        continue
+      }
+      await ProgrammeSession.deleteOne({ _id: session._id })
+      session = null
+    }
     if (!session) {
       await ProgrammeSession.create(date)
       continue
     }
-    if (session.startsAt <= now) {
-      continue
-    }
     session.set(date)
     await session.save()
-    if (session.status === 'SCHEDULED') {
+    if (session.status !== 'SCHEDULED') {
+      continue
+    }
+    // Moved into the past (cycle 1 moved earlier), it can't take place.
+    if (date.startsAt <= now) {
+      await withSession(session._id, cancelSession, now)
+    } else {
       toUpdate.push(session._id)
     }
   }
@@ -539,4 +597,28 @@ export const syncSessions = async (programme, now = new Date()) => {
     await withSession(id, session => runSession(session), now)
   }
   await scheduleDueSessions(now)
+}
+
+// Takes every upcoming meeting off the calendars, telling their people, and
+// starts the sessions again from the settings, all planned. Meetings already
+// held stay in the startups' check-ins. Returns false while a session is
+// being updated; sessions cancelled by then stay cancelled, and clearing
+// again finishes the job.
+export const clearSessions = async (programme, now = new Date()) => {
+  const busy = await ProgrammeSession.exists({ claimedUntil: { $gt: now } })
+  if (busy) {
+    return false
+  }
+  const scheduled = await ProgrammeSession.find({
+    startsAt: { $gt: now },
+    status: 'SCHEDULED',
+  }).sort({ startsAt: 1 })
+  for (const { _id } of scheduled) {
+    if ((await withSession(_id, cancelSession, now)) === null) {
+      return false
+    }
+  }
+  await ProgrammeSession.deleteMany({})
+  await ProgrammeSession.insertMany(sessionDates(programme))
+  return true
 }

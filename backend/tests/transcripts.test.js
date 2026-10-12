@@ -182,6 +182,17 @@ describe('collecting transcripts', () => {
     assert.equal(saved.transcript.status, 'UNAVAILABLE')
   })
 
+  it('finds a meeting held hours after its time', async () => {
+    const checkIn = await pastCheckIn(30)
+    addRecord(checkIn, 'conferenceRecords/late', { minutesAfter: 23 * 60 })
+    addTranscript('conferenceRecords/late')
+
+    await pollTranscripts()
+    const saved = await CheckIn.findById(checkIn._id)
+    assert.equal(saved.status, 'HELD')
+    assert.equal(saved.transcript.status, 'READY')
+  })
+
   it("finds each occurrence's own conference in a series", async () => {
     const earlier = await pastCheckIn(14 * 24 + 2, { transcript: {} })
     const latest = await pastCheckIn(2)

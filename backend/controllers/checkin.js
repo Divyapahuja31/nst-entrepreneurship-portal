@@ -7,7 +7,6 @@ import {
   isStaff,
   isStudent,
 } from '@nst/shared/permissions.js'
-import { CYCLES, cycleForDate, cycleStart } from '@nst/shared/biweeklyCycles.js'
 
 import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
@@ -20,13 +19,11 @@ import {
   endSeriesIfFinished,
   findAttendees,
   googleFor,
-  occurrencesFrom,
   rescheduledEvent,
   transcriptDueAt,
   withMeetLink,
 } from '../utils/checkInHelper.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
-import { cycleOrigin } from '../utils/programme.js'
 import { processCheckIn } from '../utils/transcriptPoller.js'
 
 const DEFAULT_DURATION = 30
@@ -92,15 +89,28 @@ const isTimeZone = value => {
   }
 }
 
-// Checks the time of a new or moved check-in, against cycles counted from
-// `origin`. Returns { error } or { startAt, durationMinutes, cycle }.
-const parseTime = (body, origin, fallbackDuration = DEFAULT_DURATION) => {
+// When a new or moved check-in starts: now for `startNow` (Meet Now),
+// otherwise a future `startAt`. Returns { error } or { startAt }.
+const parseStart = body => {
+  if (body.startNow === true) {
+    return { startAt: new Date() }
+  }
   const startAt = new Date(body.startAt)
   if (typeof body.startAt !== 'string' || Number.isNaN(startAt.getTime())) {
     return { error: 'Choose a date and time' }
   }
   if (startAt.getTime() <= Date.now()) {
     return { error: 'Choose a time in the future' }
+  }
+  return { startAt }
+}
+
+// Checks the time of a new or moved check-in. Returns { error } or
+// { startAt, durationMinutes }.
+const parseTime = (body, fallbackDuration = DEFAULT_DURATION) => {
+  const start = parseStart(body)
+  if (start.error) {
+    return start
   }
   const durationMinutes =
     body.durationMinutes === undefined ? fallbackDuration : body.durationMinutes
@@ -113,16 +123,7 @@ const parseTime = (body, origin, fallbackDuration = DEFAULT_DURATION) => {
       error: `A check-in lasts ${MIN_DURATION} to ${MAX_DURATION} minutes`,
     }
   }
-  const cycle = cycleForDate(origin, startAt)
-  if (!cycle) {
-    return {
-      error: `Choose a time within the programme's ${CYCLES} cycles (they end ${cycleStart(
-        origin,
-        CYCLES + 1
-      ).toDateString()})`,
-    }
-  }
-  return { startAt, durationMinutes, cycle }
+  return { startAt: start.startAt, durationMinutes }
 }
 
 // The startup the caller names, if they may manage its check-ins. Sends the
@@ -227,7 +228,8 @@ const listForFounder = async (req, res, founderId) => {
 
 // Students see their own startup's check-ins. Staff name a startup, a
 // founder for the check-ins that founder was invited to (their record), or
-// `mine` for the programme meetings they run.
+// `mine` for the meetings they hold: programme meetings they run and, for a
+// mentor, their own check-ins.
 export const listCheckIns = async (req, res) => {
   try {
     const { ventureId, founderId, mine } = req.query
@@ -246,8 +248,10 @@ export const listCheckIns = async (req, res) => {
     if (mine) {
       return res.json({
         checkIns: await loadCheckIns({
-          staff: req.user.id,
-          session: { $ne: null },
+          $or: [
+            { staff: req.user.id, session: { $ne: null } },
+            { mentor: req.user.id, session: null },
+          ],
         }),
       })
     }
@@ -258,26 +262,14 @@ export const listCheckIns = async (req, res) => {
 }
 
 // Checks a new check-in for a startup. Returns { status, error } or
-// { time, timeZone, occurrences, attendees }.
+// { time, timeZone, attendees }.
 const parseNewCheckIn = async (body, venture) => {
-  const origin = await cycleOrigin(venture)
-  const time = parseTime(body, origin)
+  const time = parseTime(body)
   if (time.error) {
     return { status: 400, error: time.error }
   }
   if (!isTimeZone(body.timeZone)) {
     return { status: 400, error: 'A valid timeZone is required' }
-  }
-  const occurrences = body.recurring === true ? occurrencesFrom(time.cycle) : 1
-  if (
-    occurrences > 1 &&
-    (await CheckInSeries.exists({ venture: venture._id, status: 'ACTIVE' }))
-  ) {
-    return {
-      status: 409,
-      error:
-        'This startup already has recurring check-ins. End them before starting new ones.',
-    }
   }
   const attendees = await findAttendees(venture._id)
   if (!attendees.length) {
@@ -286,12 +278,12 @@ const parseNewCheckIn = async (body, venture) => {
       error: 'This startup has no active founders to invite',
     }
   }
-  return { time, timeZone: body.timeZone, occurrences, attendees, origin }
+  return { time, timeZone: body.timeZone, attendees }
 }
 
-// Schedules one check-in, or with `recurring` one every two weeks through
-// the startup's last cycle. Google is written first: if it refuses, nothing
-// is saved.
+// Schedules a check-in, or with `startNow` starts one at once (Meet Now).
+// Check-ins are the mentor's own meetings, apart from the bi-weekly cycles.
+// Google is written first: if it refuses, nothing is saved.
 export const createCheckIns = async (req, res) => {
   try {
     const body = req.body ?? {}
@@ -303,64 +295,32 @@ export const createCheckIns = async (req, res) => {
     if (parsed.error) {
       return res.status(parsed.status).json({ error: parsed.error })
     }
-    const { time, timeZone, occurrences, attendees, origin } = parsed
+    const { time, timeZone, attendees } = parsed
 
     const google = await googleFor(req.user.id)
     const event = await withMeetLink(
       google,
       await google(
         'createEvent',
-        checkInEvent({
-          venture,
-          ...time,
-          timeZone,
-          attendees,
-          occurrences,
-        })
+        checkInEvent({ venture, ...time, timeZone, attendees })
       )
     )
-
-    const fields = ev => ({
-      ...checkInFields({
-        venture,
-        origin,
-        event: { ...ev, hangoutLink: ev.hangoutLink ?? event.hangoutLink },
-        durationMinutes: time.durationMinutes,
-        timeZone,
-      }),
-      meetingCode: event.conferenceData?.conferenceId ?? null,
-      attendees,
-    })
-
-    let series = null
     try {
-      let created
-      if (occurrences > 1) {
-        const instances = await google('listInstances', event.id)
-        series = await CheckInSeries.create({
-          venture: venture._id,
-          mentor: venture.mentor,
-          googleEventId: event.id,
-          startAt: time.startAt,
+      const checkIn = await CheckIn.create({
+        ...checkInFields({
+          venture,
+          event,
           durationMinutes: time.durationMinutes,
           timeZone,
-        })
-        created = await CheckIn.insertMany(
-          instances.map(instance => ({
-            ...fields(instance),
-            series: series._id,
-          }))
-        )
-      } else {
-        created = [await CheckIn.create(fields(event))]
-      }
+        }),
+        attendees,
+      })
       return res.status(201).json({
-        checkIns: await loadCheckIns({ _id: { $in: created.map(c => c._id) } }),
+        checkIns: await loadCheckIns({ _id: checkIn._id }),
       })
     } catch (error) {
       // Don't leave an event on the calendars the portal doesn't know about.
       await google('deleteEvent', event.id).catch(() => {})
-      await series?.deleteOne()
       throw error
     }
   } catch (error) {
@@ -383,9 +343,9 @@ export const rescheduleCheckIn = async (req, res) => {
         .json({ error: 'Only an upcoming check-in can be moved' })
     }
 
+    const { startAt, durationMinutes } = req.body ?? {}
     const time = parseTime(
-      req.body ?? {},
-      await cycleOrigin(venture),
+      { startAt, durationMinutes },
       checkIn.durationMinutes
     )
     if (time.error) {
@@ -408,7 +368,8 @@ export const rescheduleCheckIn = async (req, res) => {
     checkIn.set({
       scheduledAt: time.startAt,
       durationMinutes: time.durationMinutes,
-      cycle_number: time.cycle,
+      // Check-ins have no cycle; older ones were given one.
+      cycle_number: null,
       attendees,
       'transcript.nextPollAt': transcriptDueAt(
         time.startAt,

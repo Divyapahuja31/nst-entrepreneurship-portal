@@ -5,6 +5,7 @@ import Founder from '../models/founder.js'
 import VentureProposal from '../models/ventureProposal.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { addFounderToVenture, findVentureForUser } from './founderHelper.js'
+import { refreshMeetingInvites } from './meetingInvites.js'
 
 export const validateReviewPayload = (id, status, typeName) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -89,6 +90,7 @@ export const createVentureFromProposal = async (
     await Venture.deleteOne({ _id: venture._id })
     throw err
   }
+  await refreshMeetingInvites(venture._id)
 
   return venture._id
 }
@@ -199,6 +201,7 @@ export const handleJoinRequestApproval = async joinRequest => {
   }
 
   await addFounderToVenture(joinRequest.requestedBy, venture._id)
+  await refreshMeetingInvites(venture._id)
   return null
 }
 

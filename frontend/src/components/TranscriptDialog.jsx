@@ -73,16 +73,16 @@ function Transcript({ transcript }) {
       {transcript.truncated && (
         <Typography variant="caption" color="text.secondary">
           This transcript is long, so only the start is kept here. The full one
-          is in the mentor’s Google Drive.
+          is in the Google Drive of whoever hosted the meeting.
         </Typography>
       )}
     </Box>
   )
 }
 
-// A past check-in's Meet transcript and the mentor's notes. The mentor can
-// edit the notes and ask Meet for a transcript that hasn't arrived. Mount
-// it only while open.
+// A past check-in's Meet transcript and notes. Whoever ran it (the mentor,
+// or a programme meeting's staff) edits the notes and can ask Meet for a
+// transcript that hasn't arrived. Mount it only while open.
 export default function TranscriptDialog({
   checkInId,
   canManage,
@@ -194,7 +194,7 @@ export default function TranscriptDialog({
 
             <Box sx={{ display: 'grid', gap: 1.5 }}>
               <Typography variant="subtitle1" component="h3">
-                Mentor Notes
+                Notes
               </Typography>
               {canManage ? (
                 <TextField
@@ -211,7 +211,7 @@ export default function TranscriptDialog({
                   color={checkIn.notes ? 'text.primary' : 'text.secondary'}
                   sx={{ whiteSpace: 'pre-wrap' }}
                 >
-                  {checkIn.notes || 'No notes from the mentor yet.'}
+                  {checkIn.notes || 'No notes yet.'}
                 </Typography>
               )}
             </Box>

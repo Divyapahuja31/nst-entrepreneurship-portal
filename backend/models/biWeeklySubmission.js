@@ -56,6 +56,12 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Set when the board reopens the cycle, so the team can edit and submit
+    // it again even after its deadline. Cleared when it is submitted.
+    reopened_at: {
+      type: Date,
+      default: null,
+    },
     progress_summary: {
       type: String,
       default: '',

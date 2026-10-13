@@ -1,4 +1,8 @@
 import mongoose from 'mongoose'
+import {
+  evaluationStatus,
+  evaluationTotal,
+} from '@nst/shared/evaluationScore.js'
 
 const biWeeklyEvaluationSchema = new mongoose.Schema(
   {
@@ -31,24 +35,13 @@ const biWeeklyEvaluationSchema = new mongoose.Schema(
   }
 )
 
+// Out of 100, weighted as on the Methodology page (shared/evaluationScore).
 biWeeklyEvaluationSchema.virtual('total_score').get(function () {
-  return (
-    (this.execution_score || 0) +
-    (this.customer_score || 0) +
-    (this.business_score || 0) +
-    (this.behavior_score || 0)
-  )
+  return Math.round(evaluationTotal(this))
 })
 
 biWeeklyEvaluationSchema.virtual('status').get(function () {
-  const score = this.total_score
-  if (score >= 75) {
-    return 'green'
-  }
-  if (score >= 50) {
-    return 'yellow'
-  }
-  return 'red'
+  return evaluationStatus(this)
 })
 
 export const modelName = 'BiWeeklyEvaluation'

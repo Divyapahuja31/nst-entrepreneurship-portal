@@ -233,7 +233,8 @@ export default function Kpis() {
     file,
     fileName,
   }) => {
-    if (!kpi?._id) return
+    // Returns why it wasn't saved, for the dialog to show, or null.
+    if (!kpi?._id) return null
     try {
       if (file) {
         const formData = new FormData()
@@ -245,24 +246,22 @@ export default function Kpis() {
           formData.append('actualValue', actualValue)
         }
         await uploadKPIEvidence(kpi._id, formData)
-        revalidator.revalidate()
       } else {
-        await run(() =>
-          submitKPIEvidence({
-            kpiId: kpi._id,
-            actualValue,
-            supportingText,
-            fileName: fileName || kpi.evidence?.fileName || '',
-            fileUrl: kpi.evidence?.fileUrl || '',
-          })
-        )
+        await submitKPIEvidence({
+          kpiId: kpi._id,
+          actualValue,
+          supportingText,
+          fileName: fileName || kpi.evidence?.fileName || '',
+          fileUrl: kpi.evidence?.fileUrl || '',
+        })
       }
     } catch (err) {
-      console.error('Failed to save evidence:', err)
-      setActionErrorMsg(err.message || 'Failed to save evidence')
+      return err.message || 'Failed to save evidence'
     }
+    revalidator.revalidate()
     setEvidenceDialogOpen(false)
     setSelectedKpiForEvidence(null)
+    return null
   }
 
   const handleDeleteEvidence = async ({ kpi }) => {

@@ -3,8 +3,12 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 
 import app from '../app.js'
+import CheckIn from '../models/checkIn.js'
 import GoogleCredential from '../models/googleCredential.js'
-import { REQUIRED_SCOPES } from '../utils/googleWorkspace.js'
+import {
+  MEET_SETTINGS_SCOPE,
+  REQUIRED_SCOPES,
+} from '../utils/googleWorkspace.js'
 import { decryptToken, encryptToken } from '../utils/tokenCrypto.js'
 import {
   cookieFor,
@@ -44,6 +48,8 @@ const callback = ({ state, cookies }, query) =>
 const outcome = res =>
   new URL(res.headers.location, 'http://localhost').searchParams.get('calendar')
 
+const callsOf = method => google.calls.filter(call => call.method === method)
+
 const grant = (email, scopes = REQUIRED_SCOPES) =>
   google.grants.set('code', { email, scopes, refreshToken: 'refresh-1' })
 
@@ -71,7 +77,64 @@ describe('connecting a Google Calendar', () => {
       connected: true,
       googleEmail: mentor.email,
       needsReconnect: false,
+      autoTranscripts: false,
     })
+  })
+
+  it('sets upcoming meetings to transcribe themselves', async () => {
+    const { mentor } = data.users
+    const meeting = (code, hoursFromNow, fields = {}) =>
+      CheckIn.create({
+        venture: data.ventures.alpha._id,
+        mentor: mentor._id,
+        scheduledAt: new Date(Date.now() + hoursFromNow * 60 * 60 * 1000),
+        durationMinutes: 30,
+        timeZone: 'Asia/Kolkata',
+        googleEventId: `event-${code}`,
+        meetingCode: code,
+        ...fields,
+      })
+    await meeting('aaa-bbbb-ccc', 24)
+    await meeting('ddd-eeee-fff', 24, { status: 'CANCELLED' })
+    await meeting('ggg-hhhh-iii', -48)
+
+    grant(mentor.email, [...REQUIRED_SCOPES, MEET_SETTINGS_SCOPE])
+    await callback(await startConnect(mentor), { code: 'code' })
+    // It runs after the redirect.
+    for (let i = 0; i < 50 && !callsOf('autoTranscribe').length; i += 1) {
+      await new Promise(resolve => {
+        setTimeout(resolve, 10)
+      })
+    }
+    assert.deepEqual(
+      callsOf('autoTranscribe').map(call => call.args),
+      [['aaa-bbbb-ccc']]
+    )
+  })
+
+  it('connects without Meet settings, leaving meetings as they are', async () => {
+    const { mentor } = data.users
+    await CheckIn.create({
+      venture: data.ventures.alpha._id,
+      mentor: mentor._id,
+      scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      durationMinutes: 30,
+      timeZone: 'Asia/Kolkata',
+      googleEventId: 'event-1',
+      meetingCode: 'aaa-bbbb-ccc',
+    })
+    grant(mentor.email)
+    const res = await callback(await startConnect(mentor), { code: 'code' })
+    assert.equal(outcome(res), 'connected')
+    await new Promise(resolve => {
+      setTimeout(resolve, 50)
+    })
+    assert.equal(callsOf('autoTranscribe').length, 0)
+
+    const status = await request(app)
+      .get('/api/google/status')
+      .set('Cookie', cookieFor(mentor))
+    assert.equal(status.body.autoTranscripts, false)
   })
 
   it('refuses a callback this browser did not start', async () => {

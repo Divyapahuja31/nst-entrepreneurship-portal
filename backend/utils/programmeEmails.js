@@ -42,8 +42,12 @@ const idsOf = list =>
     .sort()
     .join(',')
 
-const digest = value =>
+export const digest = value =>
   crypto.createHash('sha1').update(value).digest('hex').slice(0, 16)
+
+// A meeting's revision for its email keys. Revision 0 adds nothing, so
+// meetings invited before revisions existed aren't emailed again.
+export const revisionOf = row => (row.revision ? `:r${row.revision}` : '')
 
 // One failed email doesn't stop the rest; the log records it as failed.
 const quietly = async send => {
@@ -67,14 +71,15 @@ const founderEmails = (rows, timeZone) =>
       attendee => () =>
         sendFounderSession({
           recipient: { email: attendee.email, userId: attendee.user?._id },
-          dedupeKey: [
-            row._id,
-            row.scheduledAt.toISOString(),
-            row.durationMinutes,
-            idsOf(row.staff),
-            row.meetUrl,
-            attendee.invitedAt?.getTime(),
-          ].join(':'),
+          dedupeKey:
+            [
+              row._id,
+              row.scheduledAt.toISOString(),
+              row.durationMinutes,
+              idsOf(row.staff),
+              row.meetUrl,
+              attendee.invitedAt?.getTime(),
+            ].join(':') + revisionOf(row),
           recipientName: attendee.user?.username ?? attendee.email,
           group: row.group,
           ventureName: row.venture?.name ?? 'Your startup',
@@ -105,7 +110,8 @@ const staffEmails = (session, rows, timeZone) => {
       dedupeKey: `${session._id}:${digest(
         own
           .map(
-            r => `${r._id}@${r.scheduledAt.toISOString()}+${r.durationMinutes}`
+            r =>
+              `${r._id}@${r.scheduledAt.toISOString()}+${r.durationMinutes}${revisionOf(r)}`
           )
           .join(';')
       )}`,

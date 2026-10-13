@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   Box,
   Divider,
@@ -5,9 +6,26 @@ import {
   Typography,
 } from '@mui/material'
 
+import { getStages } from '../../api/stage'
 import { normalizeWebsite } from '../proposalFormConfig.js'
 
 export default function Step5({ formData }) {
+  // The stage is stored as its key ("VALIDATION"); show its name.
+  const [stageNames, setStageNames] = useState({})
+  useEffect(() => {
+    let current = true
+    getStages()
+      .then(stages => {
+        if (current) {
+          setStageNames(Object.fromEntries(stages.map(s => [s.key, s.label])))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      current = false
+    }
+  }, [])
+
   return (
     <Box>
       <Typography variant="h5" fontWeight={600} gutterBottom>
@@ -48,7 +66,7 @@ export default function Step5({ formData }) {
 
         <Typography>
           <strong>Stage:</strong>{' '}
-          {formData.stage || '-'}
+          {stageNames[formData.stage] ?? (formData.stage || '-')}
         </Typography>
 
         <Typography>

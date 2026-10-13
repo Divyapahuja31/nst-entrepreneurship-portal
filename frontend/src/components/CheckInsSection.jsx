@@ -6,6 +6,7 @@ import {
   Alert,
   Box,
   Button,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -14,7 +15,14 @@ import {
   Typography,
 } from '@mui/material'
 
-import { cancelCheckIn, endCheckInSeries } from '../api/checkins'
+import {
+  GOOGLE_CODES,
+  calendarConnectUrl,
+  cancelCheckIn,
+  endCheckInSeries,
+  getCalendarStatus,
+  scheduleCheckIn,
+} from '../api/checkins'
 import useAccess from '../hooks/useAccess'
 import EmptyState from './EmptyState'
 import ScheduleCheckInDialog from './ScheduleCheckInDialog'
@@ -41,7 +49,8 @@ const statusOf = checkIn => {
     return { label: 'In progress', tint: 'green' }
   if (isUpcoming(checkIn)) return { label: 'Scheduled', tint: 'blue' }
   if (checkIn.status === 'HELD') return { label: 'Held', tint: 'green' }
-  if (checkIn.status === 'NOT_HELD') return { label: 'Not held', tint: 'orange' }
+  if (checkIn.status === 'NOT_HELD')
+    return { label: 'Not held', tint: 'orange' }
   if (checkIn.status === 'CANCELLED')
     return { label: 'Cancelled', tint: 'gray', plain: true }
   return { label: 'Past', tint: 'gray', plain: true }
@@ -73,7 +82,8 @@ function CheckInRow({
   const upcoming = isUpcoming(checkIn)
   const happened = !upcoming && checkIn.status !== 'CANCELLED'
   const details = [
-    checkIn.cycle_number && `Cycle ${checkIn.cycle_number}`,
+    // Only programme sessions follow the bi-weekly cycles.
+    checkIn.session && checkIn.cycle_number && `Cycle ${checkIn.cycle_number}`,
     `${checkIn.durationMinutes} min`,
     showVenture && checkIn.venture?.name,
     checkIn.session &&
@@ -187,12 +197,12 @@ function ConfirmDialog({ confirm, busy, onClose, onConfirm }) {
 
 const emptyText = (canManage, isStaff) => {
   if (canManage) {
-    return 'Schedule one and it goes on your Google Calendar, with a Meet link, and on every founder’s calendar.'
+    return 'Meet now, or schedule one for later. It goes on your Google Calendar with a Meet link, and every founder gets the invite.'
   }
   if (isStaff) {
     return 'Check-ins appear here once a programme session or the startup’s mentor schedules them.'
   }
-  return 'Nothing is scheduled yet. Your bi-weekly sessions will appear here, and on your Google Calendar, once they are.'
+  return 'Nothing is scheduled yet. Meetings with your mentor and programme sessions appear here, and on your Google Calendar.'
 }
 
 // A startup's check-ins (or, without `venture`, a founder's across
@@ -203,7 +213,7 @@ export default function CheckInsSection({
   venture,
   showVenture,
   title = 'Check-Ins',
-  subtitle = 'Bi-weekly meetings on Google Meet.',
+  subtitle = 'Meetings on Google Meet.',
 }) {
   const { actor, isStaff } = useAccess()
   const revalidator = useRevalidator()
@@ -223,6 +233,7 @@ export default function CheckInsSection({
   const [confirm, setConfirm] = useState(null)
   const [open, setOpen] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
 
   // Shown once; a reload shouldn't repeat it.
@@ -238,13 +249,77 @@ export default function CheckInsSection({
     }
   }, [searchParams, setSearchParams])
 
+  // A connection made before the portal could turn transcription on.
+  const [needsTranscriptAccess, setNeedsTranscriptAccess] = useState(false)
+  useEffect(() => {
+    if (!canManage) {
+      return undefined
+    }
+    let current = true
+    getCalendarStatus().then(status => {
+      if (current) {
+        setNeedsTranscriptAccess(
+          Boolean(status?.connected) &&
+            !status.needsReconnect &&
+            status.autoTranscripts === false
+        )
+      }
+    })
+    return () => {
+      current = false
+    }
+  }, [canManage])
+
+  const [showCancelled, setShowCancelled] = useState(false)
+
   const all = checkIns ?? []
   const upcoming = all.filter(isUpcoming)
-  const past = all.filter(c => !isUpcoming(c)).reverse()
+  // Cancelled ones, even those that would have been next month, are kept out
+  // of the way: they aren't happening and they haven't happened.
+  const past = all
+    .filter(c => !isUpcoming(c) && c.status !== 'CANCELLED')
+    .reverse()
+  const cancelled = all.filter(c => c.status === 'CANCELLED').reverse()
   const activeSeries = upcoming.find(c => c.series)?.series
+  // The startup's programme sessions, so the mentor can see when scheduling
+  // one of their own lands in a cycle that already has one.
+  const programmeSessions = upcoming.filter(c => c.session)
 
   const done = () => {
     setDialog(null)
+    revalidator.revalidate()
+  }
+
+  // Meet Now: a check-in starting this minute. Meet opens in a new tab, which
+  // is opened before the request so the browser doesn't block it as a
+  // pop-up; founders get the invite from Google Calendar.
+  const meetNow = async () => {
+    const tab = window.open('', '_blank')
+    setStarting(true)
+    setError('')
+    const result = await scheduleCheckIn({
+      ventureId: venture.id,
+      startNow: true,
+      durationMinutes: 30,
+    })
+    setStarting(false)
+    if (result.error) {
+      tab?.close()
+      if (GOOGLE_CODES.includes(result.code)) {
+        // The dialog asks them to connect their calendar.
+        setDialog({ checkIn: null })
+      } else {
+        setError(result.error)
+      }
+      return
+    }
+    const meetUrl = result.checkIns?.[0]?.meetUrl
+    if (tab && meetUrl) {
+      tab.opener = null
+      tab.location.href = meetUrl
+    } else {
+      tab?.close()
+    }
     revalidator.revalidate()
   }
 
@@ -274,7 +349,7 @@ export default function CheckInsSection({
   const runsRow = checkIn =>
     checkIn.session
       ? canRunCheckIn(actor, checkIn.staff ?? [])
-      : managesRow(checkIn)
+      : canManageCheckIns(actor, checkIn.mentor?._id ?? checkIn.mentor)
 
   const row = checkIn => (
     <CheckInRow
@@ -295,18 +370,40 @@ export default function CheckInsSection({
       subtitle={subtitle}
       action={
         canManage && (
-          <Button
-            variant="contained"
-            onClick={() => setDialog({ checkIn: null })}
-          >
-            Schedule Check-In
-          </Button>
+          <>
+            <Button
+              variant="outlined"
+              onClick={() => setDialog({ checkIn: null })}
+            >
+              Schedule
+            </Button>
+            <Button variant="contained" loading={starting} onClick={meetNow}>
+              Meet Now
+            </Button>
+          </>
         )
       }
     >
       <Box sx={{ display: 'grid', gap: 3 }}>
         {outcome && canManage && (
           <Alert severity={outcome.severity}>{outcome.text}</Alert>
+        )}
+        {needsTranscriptAccess && (
+          <Alert
+            severity="info"
+            action={
+              <Button
+                size="small"
+                component="a"
+                href={calendarConnectUrl(window.location.pathname)}
+              >
+                Reconnect
+              </Button>
+            }
+          >
+            Reconnect Google so your check-ins transcribe themselves. Until
+            then, turn transcripts on in each meeting.
+          </Alert>
         )}
         {error && (
           <Alert severity="error" onClose={() => setError('')}>
@@ -319,7 +416,7 @@ export default function CheckInsSection({
           </Alert>
         )}
 
-        {checkIns && !all.length && (
+        {checkIns && !upcoming.length && !past.length && (
           <EmptyState
             icon={ChatIcon}
             title="No check-ins yet"
@@ -336,7 +433,9 @@ export default function CheckInsSection({
                   variant="text"
                   color="error"
                   size="small"
-                  onClick={() => setConfirm({ kind: 'series', id: activeSeries })}
+                  onClick={() =>
+                    setConfirm({ kind: 'series', id: activeSeries })
+                  }
                   sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }}
                 >
                   End Series
@@ -348,12 +447,31 @@ export default function CheckInsSection({
         )}
 
         {past.length > 0 && <Group title="Past">{past.map(row)}</Group>}
+
+        {cancelled.length > 0 && (
+          <Box sx={{ display: 'grid', gap: 1.5 }}>
+            <Box>
+              <Button
+                variant="text"
+                onClick={() => setShowCancelled(!showCancelled)}
+              >
+                {showCancelled
+                  ? 'Hide Cancelled'
+                  : `Show ${cancelled.length} Cancelled`}
+              </Button>
+            </Box>
+            <Collapse in={showCancelled}>
+              <Box sx={{ display: 'grid', gap: 1.5 }}>{cancelled.map(row)}</Box>
+            </Collapse>
+          </Box>
+        )}
       </Box>
 
       {canManage && dialog && (
         <ScheduleCheckInDialog
           checkIn={dialog.checkIn}
           venture={venture}
+          programmeSessions={programmeSessions}
           onClose={() => setDialog(null)}
           onDone={done}
         />

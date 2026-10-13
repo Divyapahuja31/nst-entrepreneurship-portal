@@ -348,6 +348,28 @@ describe('scheduling a session in slots', () => {
     )
   })
 
+  it('a founder who joins after the draw is invited to the session', async () => {
+    const { applicant, mentor } = data.users
+    await save()
+    const { default: VentureJoinRequest } =
+      await import('../models/ventureJoinRequest.js')
+    const joinRequest = await VentureJoinRequest.create({
+      venture: data.ventures.alpha._id,
+      requestedBy: applicant._id,
+      status: 'PENDING',
+    })
+    const res = await as(mentor).patch(
+      `/api/admin/join-requests/${joinRequest._id}/review`,
+      { status: 'APPROVED' }
+    )
+    assert.equal(res.status, 200)
+    const alpha = (await meetingsOf(await firstSession())).find(
+      m => m.venture.name === 'Alpha'
+    )
+    assert.ok(alpha.attendees.some(a => a.email === applicant.email))
+    assert.equal(emailsTo(applicant.email, /check-in/).length, 1)
+  })
+
   it('a startup taken off loses its slot', async () => {
     await save()
     sentEmails.length = 0
@@ -499,6 +521,118 @@ describe('session actions', () => {
       `/api/admin/programme/sessions/${third._id}/redraw`
     )
     assert.equal(notYet.status, 409)
+  })
+
+  it('a redraw always changes the draw, and emails whoever moved, even back to an earlier time', async () => {
+    const { admin, owner, outsider } = data.users
+    await save() // admin alone: one startup at 18:00, the other at 18:15
+    const session = await firstSession()
+    const order = async () =>
+      (await meetingsOf(session)).map(m => m.venture.name).join(',')
+    const first = await order()
+
+    for (const expected of [first.split(',').reverse().join(','), first]) {
+      sentEmails.length = 0
+      const res = await as(admin).post(
+        `/api/admin/programme/sessions/${session._id}/redraw`
+      )
+      assert.equal(res.status, 200)
+      assert.equal(await order(), expected)
+      assert.equal(emailsTo(owner.email, /check-in/).length, 1)
+      assert.equal(emailsTo(outsider.email, /check-in/).length, 1)
+      assert.equal(emailsTo(admin.email, /session/).length, 1)
+    }
+  })
+
+  it('a group session has nothing to redraw', async () => {
+    await save({ mode: 'GROUP' })
+    const res = await as(data.users.admin).post(
+      `/api/admin/programme/sessions/${(await firstSession())._id}/redraw`
+    )
+    assert.equal(res.status, 409)
+    assert.match(res.body.error, /group/)
+  })
+
+  it('cancelled a second time, the staff hear about it again', async () => {
+    const { admin } = data.users
+    await save()
+    const session = await firstSession()
+    const url = action =>
+      `/api/admin/programme/sessions/${session._id}/${action}`
+    await as(admin).post(url('cancel'))
+    await as(admin).post(url('schedule'))
+    sentEmails.length = 0
+    await as(admin).post(url('cancel'))
+    assert.equal(emailsTo(admin.email, /Cancelled/).length, 1)
+  })
+
+  it('clearing takes every meeting off and starts the sessions again', async () => {
+    const { admin, owner, outsider } = data.users
+    const notYet = await as(admin).post('/api/admin/programme/sessions/clear')
+    assert.equal(notYet.status, 409)
+
+    await save()
+    const before = await firstSession()
+    sentEmails.length = 0
+    google.calls.length = 0
+
+    const forbidden = await as(data.users.mentor).post(
+      '/api/admin/programme/sessions/clear'
+    )
+    assert.equal(forbidden.status, 403)
+
+    const res = await as(admin).post('/api/admin/programme/sessions/clear')
+    assert.equal(res.status, 200)
+    assert.equal(res.body.sessions.length, CYCLES)
+    assert.ok(res.body.sessions.every(s => s.status === 'PLANNED'))
+    assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 0)
+    assert.equal(callsTo('deleteEvent').length, 2)
+    assert.equal(emailsTo(owner.email, /Cancelled/).length, 1)
+    assert.equal(emailsTo(outsider.email, /Cancelled/).length, 1)
+    // Nothing is drawn again until the job or an admin schedules it.
+    assert.equal(callsTo('createEvent').length, 0)
+    const after = await firstSession()
+    assert.notEqual(String(after._id), String(before._id))
+    assert.equal(after.startsAt.getTime(), before.startsAt.getTime())
+  })
+})
+
+describe('moving cycle 1', () => {
+  const daysAgo = days => ymdIn(new Date(Date.now() - days * DAY_MS))
+
+  it('later: sessions already over make way for the new dates', async () => {
+    // Sessions 1 and 2 are over; 3 is eight days away.
+    const started = daysAgo(20)
+    await save({ startDate: started, weekday: weekdayOf(started) })
+
+    await save()
+    const sessions = await ProgrammeSession.find().sort({ number: 1 })
+    assert.equal(sessions.length, CYCLES)
+    const expected = sessionDates({
+      ...settings(),
+    }).map(s => s.startsAt.getTime())
+    assert.deepEqual(
+      sessions.map(s => s.startsAt.getTime()),
+      expected
+    )
+    assert.equal(sessions[0].status, 'SCHEDULED')
+    assert.equal(sessions[0].cycle_number, 1)
+  })
+
+  it('earlier: a scheduled session moved into the past is cancelled', async () => {
+    await save()
+    assert.equal((await firstSession()).status, 'SCHEDULED')
+    sentEmails.length = 0
+    google.calls.length = 0
+
+    const started = daysAgo(20)
+    await save({ startDate: started, weekday: weekdayOf(started) })
+    const session = await firstSession()
+    assert.equal(session.status, 'CANCELLED')
+    assert.ok(session.startsAt < new Date())
+    assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 0)
+    assert.equal(callsTo('createEvent').length, 0)
+    assert.equal(emailsTo(data.users.owner.email, /Cancelled/).length, 1)
   })
 })
 

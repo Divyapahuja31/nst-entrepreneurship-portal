@@ -27,12 +27,21 @@ export const getFounderKPIs = async founderId => {
   }
 }
 
-export const evaluateKPI = async ({ kpiId, score, status, feedback }) => {
+// `expectedStatus` is the status the reviewer was looking at, so a review
+// made on a page that is out of date is refused instead of misapplied.
+export const evaluateKPI = async ({
+  kpiId,
+  score,
+  status,
+  feedback,
+  expectedStatus,
+}) => {
   try {
     const { data } = await api.put(`/kpis/${kpiId}/evaluate`, {
       score,
       status,
       feedback,
+      expectedStatus,
     })
     return data
   } catch (error) {

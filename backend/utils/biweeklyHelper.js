@@ -1,6 +1,10 @@
 import mongoose from 'mongoose'
 import { isStaff, isStudent } from '@nst/shared/permissions.js'
-import { CYCLES, cycleStart } from '@nst/shared/biweeklyCycles.js'
+import {
+  CYCLES,
+  cycleDeadline,
+  cycleStart,
+} from '@nst/shared/biweeklyCycles.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import Founder from '../models/founder.js'
@@ -79,6 +83,70 @@ export const validateEvidenceLinks = links => {
 export const hasCycleStarted = (ventureCreatedAt, cycleNum, now = Date.now()) =>
   cycleStart(ventureCreatedAt, cycleNum).getTime() - DAY_MS <= now
 
+// Whether a cycle's report deadline has passed. The same day of slack as
+// hasCycleStarted.
+export const isPastDeadline = (ventureCreatedAt, cycleNum, now = Date.now()) =>
+  cycleDeadline(ventureCreatedAt, cycleNum).getTime() + DAY_MS < now
+
+const NUMBER_FIELDS = {
+  hours_worked: 'Hours worked',
+  customer_interviews: 'Customer interviews',
+  features_shipped: 'Features shipped',
+  revenue: 'Revenue',
+  users_acquired: 'Users acquired',
+  experiments_run: 'Experiments run',
+}
+
+// A report number: empty is 0, anything else must be a number of 0 or
+// more. Returns the number, or null when it isn't one.
+const reportNumber = value => {
+  if (value === '' || value === null) {
+    return 0
+  }
+  const number = typeof value === 'boolean' ? NaN : Number(value)
+  return Number.isFinite(number) && number >= 0 ? number : null
+}
+
+const TEXT_EXEMPT = new Set([
+  ...Object.keys(NUMBER_FIELDS),
+  'evidence_links',
+  'mentor_meeting_date',
+])
+
+// The report's fields with numbers as numbers and an empty meeting date as
+// none. Returns { error } or { data }.
+const cleanNumbers = data => {
+  const cleaned = { ...data }
+  for (const [field, label] of Object.entries(NUMBER_FIELDS)) {
+    if (data[field] === undefined) {
+      continue
+    }
+    const number = reportNumber(data[field])
+    if (number === null) {
+      return { error: `${label} must be a number of 0 or more` }
+    }
+    cleaned[field] = number
+  }
+  const date = data.mentor_meeting_date
+  if (date === '') {
+    cleaned.mentor_meeting_date = null
+  } else if (
+    date !== undefined &&
+    date !== null &&
+    Number.isNaN(new Date(date).getTime())
+  ) {
+    return { error: 'Mentor meeting date must be a valid date' }
+  }
+  const notText = Object.entries(cleaned).find(
+    ([field, value]) =>
+      !TEXT_EXEMPT.has(field) && value !== null && typeof value !== 'string'
+  )
+  if (notText) {
+    return { error: `${notText[0]} must be text` }
+  }
+  return { data: cleaned }
+}
+
 // Checks a student's submit or save request. Returns { error } or the
 // cleaned { cycleNum, data, isSubmit }.
 export const parseStudentSubmission = body => {
@@ -87,10 +155,14 @@ export const parseStudentSubmission = body => {
     return { error: 'Invalid cycle number (1-13)' }
   }
 
-  const data = pickStudentSubmissionFields(body)
-  const linkError = validateEvidenceLinks(data.evidence_links)
+  const picked = pickStudentSubmissionFields(body)
+  const linkError = validateEvidenceLinks(picked.evidence_links)
   if (linkError) {
     return { error: linkError }
+  }
+  const { data, error } = cleanNumbers(picked)
+  if (error) {
+    return { error }
   }
 
   // Only a real `true` submits and locks the cycle; "false" must not.
@@ -139,6 +211,9 @@ export const parseObservation = body => {
       return { error: `${field} must be text` }
     }
     fields[field] = body[field]
+  }
+  if (!fields.observation?.trim()) {
+    return { error: 'Observation notes are required.' }
   }
 
   const reviewed = body.evidence_reviewed
@@ -222,6 +297,7 @@ export const updateOrCreateVentureSubmission = async ({
 
   if (isSubmit) {
     updateData.submitted_at = new Date()
+    updateData.reopened_at = null
     if (userId) {
       updateData.submitted_by = userId
     }

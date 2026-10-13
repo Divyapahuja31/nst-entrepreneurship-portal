@@ -3,6 +3,10 @@ import toError from './toError'
 
 // Bi-weekly check-ins: Google Meet events on the mentor's calendar.
 
+// The codes an error carries when the mentor's Google Calendar can't be
+// used: not connected, or Google no longer accepts the connection.
+export const GOOGLE_CODES = ['GOOGLE_NOT_CONNECTED', 'GOOGLE_RECONNECT']
+
 const withCode = (err, fallback) => ({
   ...toError(err, fallback),
   code: err.response?.data?.code,
@@ -21,7 +25,7 @@ export const loadCheckIns = params =>
     .then(({ data }) => data.checkIns)
     .catch(() => null)
 
-// `recurring` repeats it every two weeks through the startup's last cycle.
+// One check-in at `startAt`, or with `startNow` one starting at once.
 export const scheduleCheckIn = async payload => {
   try {
     const { data } = await api.post('/checkins', {

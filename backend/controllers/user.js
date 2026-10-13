@@ -1,11 +1,13 @@
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
+import { ROLES } from '@nst/shared/permissions.js'
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
 import {
   validateAll,
   validateBatchAndCampus,
+  normalizeName,
   validateName,
   validatePassword,
 } from '../utils/validator.js'
@@ -46,9 +48,14 @@ const INVALID_VERIFICATION = 'Invalid or expired verification request'
 // password check and its timing doesn't reveal which emails exist.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('no-such-user', 10)
 
+// The sign-up form sends "" for a choice left blank, as staff leave campus
+// and batch.
+const noneIfBlank = value => value || undefined
+
 export const signUp = async (req, res) => {
   try {
-    const { username, email, password, batch, campus } = req.body
+    const { email, password, batch, campus } = req.body
+    const username = normalizeName(req.body.username)
 
     const { position, role } = await findRoleForEmail(email)
     if (!role) {
@@ -59,7 +66,12 @@ export const signUp = async (req, res) => {
 
     const error = {
       ...(await validateAll({ username, email, password, position })),
-      ...(await validateBatchAndCampus({ batch, campus }, { required: false })),
+      // Students need both, as with Google sign-up: a proposal takes the
+      // student's campus. Staff have neither.
+      ...(await validateBatchAndCampus(
+        { batch, campus },
+        { required: position === ROLES.STUDENT }
+      )),
     }
     if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
@@ -85,8 +97,8 @@ export const signUp = async (req, res) => {
       user.pendingSignup = {
         username,
         passwordHash: await bcrypt.hash(password, 10),
-        batch: batch || undefined,
-        campus: campus || undefined,
+        batch: noneIfBlank(batch),
+        campus: noneIfBlank(campus),
       }
     } else {
       user = new User({
@@ -94,8 +106,8 @@ export const signUp = async (req, res) => {
         email: normalizedEmail,
         password,
         role: role._id,
-        batch,
-        campus,
+        batch: noneIfBlank(batch),
+        campus: noneIfBlank(campus),
         isEmailVerified: false,
       })
     }
@@ -295,7 +307,8 @@ const parseGoogleSignupToken = token => {
 
 export const completeGoogleSignup = async (req, res) => {
   try {
-    const { token, username, batch, campus } = req.body
+    const { token, batch, campus } = req.body
+    const username = normalizeName(req.body.username)
     const parsed = parseGoogleSignupToken(token)
     if (parsed.error) {
       return res.status(401).json({ error: parsed.error })

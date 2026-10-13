@@ -1,8 +1,10 @@
-import path from 'node:path'
+import {
+  extensionOf,
+  isAllowedEvidenceName,
+} from '@nst/shared/evidenceFiles.js'
 
-// Evidence faculty open: documents, sheets, slides, images, short videos and
-// archives. Anything else (HTML, SVG, scripts, executables) is refused. The
-// stored content type comes from this list, not from what the browser claims.
+// The content type stored for each allowed extension (the list itself is
+// shared with the upload dialog), not what the browser claims.
 const EVIDENCE_TYPES = {
   '.pdf': 'application/pdf',
   '.doc': 'application/msword',
@@ -25,9 +27,8 @@ const EVIDENCE_TYPES = {
   '.zip': 'application/zip',
 }
 
-const extensionOf = fileName => path.extname(String(fileName)).toLowerCase()
-
 export const isAllowedEvidenceFile = fileName =>
+  isAllowedEvidenceName(fileName) &&
   Object.hasOwn(EVIDENCE_TYPES, extensionOf(fileName))
 
 export const evidenceContentType = fileName =>

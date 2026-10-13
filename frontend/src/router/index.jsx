@@ -123,10 +123,15 @@ export const router = createBrowserRouter([
                     path: '/',
                     index: true,
                     Component: PageStudentOverview,
-                    // For the next check-in; the page works without it.
-                    loader: studentLoader(args =>
-                      myCheckInsLoader(args).catch(() => null)
-                    ),
+                    // For the next check-in and recent activity; the page
+                    // works without them.
+                    loader: studentLoader(async args => {
+                      const [checkIns, kpis] = await Promise.all([
+                        myCheckInsLoader(args).catch(() => null),
+                        kpisLoader(args),
+                      ])
+                      return { ...checkIns, kpis: kpis?.data ?? null }
+                    }),
                   },
                   {
                     path: '/kpis',

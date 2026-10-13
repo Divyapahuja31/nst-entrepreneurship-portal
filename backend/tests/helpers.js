@@ -10,7 +10,12 @@ import Role from '../models/role.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import { setEmailProvider } from '../utils/emailProvider.js'
-import { GoogleError, setGoogleWorkspace } from '../utils/googleWorkspace.js'
+import {
+  GoogleError,
+  MEET_SETTINGS_SCOPE,
+  REQUIRED_SCOPES,
+  setGoogleWorkspace,
+} from '../utils/googleWorkspace.js'
 import { settleEmailJobs } from '../utils/kpiLockEmails.js'
 import { migrateRbac } from '../utils/rbacMigration.js'
 import { signToken } from '../utils/token.js'
@@ -121,6 +126,10 @@ setGoogleWorkspace({
     fakeCall('participant', token, name)
     return google.participants.get(name)
   },
+  autoTranscribe: async (token, meetingCode) => {
+    fakeCall('autoTranscribe', token, meetingCode)
+    return { meetingCode }
+  },
   listInstances: async (token, id) => {
     fakeCall('listInstances', token, id)
     const event = google.events.get(id)
@@ -137,12 +146,17 @@ setGoogleWorkspace({
   },
 })
 
-// What a mentor has after connecting their Google Calendar.
-export const connectCalendar = user =>
+// What a mentor has after connecting their Google Calendar. A connection
+// made before the portal asked for Meet settings has only REQUIRED_SCOPES.
+export const ALL_SCOPES = Object.freeze([
+  ...REQUIRED_SCOPES,
+  MEET_SETTINGS_SCOPE,
+])
+export const connectCalendar = (user, scopes = ALL_SCOPES) =>
   GoogleCredential.create({
     user: user._id,
     googleEmail: user.email,
-    scopes: [],
+    scopes,
     refreshToken: encryptToken(`refresh-${user.email}`),
   })
 

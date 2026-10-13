@@ -23,7 +23,10 @@ const statusChangeError = (kpi, status) => {
   if (!status || EVALUATION_TRANSITIONS[kpi.status]?.includes(status)) {
     return null
   }
-  return `A ${statusLabel(kpi.status)} KPI can't be marked ${statusLabel(status)}`
+  const label = statusLabel(kpi.status)
+  const vowels = ['A', 'E', 'I', 'O', 'U']
+  const article = vowels.includes(label[0]?.toUpperCase()) ? 'An' : 'A'
+  return `${article} ${label} KPI can't be marked ${statusLabel(status)}`
 }
 
 const scoreError = (kpi, status, parsedScore) => {

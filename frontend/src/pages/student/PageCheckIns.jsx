@@ -13,7 +13,7 @@ export default function PageCheckIns() {
     <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
       <PageHeader
         title="Check-Ins"
-        subtitle="Your bi-weekly meetings with your mentor. They’re on your Google Calendar too."
+        subtitle="Meetings with your mentor and the programme’s sessions. They’re on your Google Calendar too."
       />
       <CheckInsSection checkIns={data ? data.checkIns : null} />
     </Box>

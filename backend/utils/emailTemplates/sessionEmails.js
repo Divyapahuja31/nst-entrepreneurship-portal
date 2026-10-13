@@ -11,6 +11,8 @@ import {
 // Programme session emails. Each template takes plain values (dates already
 // formatted in the programme's time zone) and returns { subject, html, text }.
 
+const startups = count => (count === 1 ? '1 startup' : `${count} startups`)
+
 const REPLACES =
   'If you got an earlier email about this session, this one replaces it. The invite is on your Google Calendar too.'
 
@@ -58,8 +60,8 @@ export const founderSessionEmail = props => {
 export const staffSessionEmail = props => {
   const subject = `Your bi-weekly session: ${props.day}`
   const intro = props.group
-    ? `You’re running the bi-weekly group session, ${props.time}, with ${props.meetings.length} startups.`
-    : `You meet ${props.meetings.length} startups at the bi-weekly session. Each slot has its own Meet link, in your calendar invites.`
+    ? `You’re running the bi-weekly group session, ${props.time}, with ${startups(props.meetings.length)}.`
+    : `You meet ${startups(props.meetings.length)} at the bi-weekly session. Each slot has its own Meet link, in your calendar invites.`
   const rows = props.meetings.map(m => [m.time, m.ventureName])
   const html = layout({
     title: subject,

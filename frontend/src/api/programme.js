@@ -20,6 +20,16 @@ export const saveProgramme = async settings => {
   }
 }
 
+// Takes every upcoming meeting off and starts the sessions again.
+export const clearSessions = async () => {
+  try {
+    const { data } = await api.post('/admin/programme/sessions/clear')
+    return { page: data }
+  } catch (err) {
+    return toError(err, 'Could not clear the meetings')
+  }
+}
+
 // action: 'schedule', 'redraw' or 'cancel'.
 export const sessionAction = async (sessionId, action) => {
   try {

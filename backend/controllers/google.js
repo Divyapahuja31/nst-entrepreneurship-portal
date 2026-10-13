@@ -3,8 +3,10 @@ import crypto from 'node:crypto'
 import GoogleCredential from '../models/googleCredential.js'
 import {
   REQUIRED_SCOPES,
+  canAutoTranscribe,
   getGoogleWorkspace,
 } from '../utils/googleWorkspace.js'
+import { turnOnTranscriptionForHost } from '../utils/checkInHelper.js'
 import { cookieOptions } from '../utils/token.js'
 import { encryptToken, decryptToken } from '../utils/tokenCrypto.js'
 
@@ -93,6 +95,11 @@ export const googleCallback = async (req, res) => {
       },
       { upsert: true }
     )
+    // Meetings already scheduled transcribe themselves too. The mentor
+    // doesn't wait for it.
+    turnOnTranscriptionForHost(req.user.id).catch(err =>
+      console.warn('Automatic transcription not set up:', err.message)
+    )
     return back('connected')
   } catch (err) {
     console.error('Google Calendar connect error:', err.message)
@@ -107,6 +114,8 @@ export const googleStatus = async (req, res) => {
       connected: Boolean(credential),
       googleEmail: credential?.googleEmail ?? null,
       needsReconnect: Boolean(credential?.needsReconnect),
+      // Connected before the portal asked to turn transcription on.
+      autoTranscripts: canAutoTranscribe(credential),
     })
   } catch (error) {
     console.error('Google status error:', error)

@@ -3,13 +3,18 @@ FROM node:22-bookworm-slim AS frontend-builder
 WORKDIR /app
 
 # Copy root manifests and package files
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/
 COPY backend/package.json ./backend/
 COPY shared/package.json ./shared/
 
-# Install workspace dependencies at root to hoist single React instance and download Linux native bindings
-RUN npm install --no-package-lock --ignore-scripts
+# Install the locked workspace dependencies at root to hoist a single React
+# instance. The lockfile only records the macOS builds of rolldown and
+# lightningcss, so add the Linux builds at the locked versions.
+RUN npm ci --ignore-scripts \
+ && npm install --no-save --ignore-scripts \
+      "@rolldown/binding-linux-$(node -p process.arch)-gnu@$(node -p "require('./node_modules/rolldown/package.json').version")" \
+      "lightningcss-linux-$(node -p process.arch)-gnu@$(node -p "require('./node_modules/vite/node_modules/lightningcss/package.json').version")"
 
 # Copy the permission rules the UI shares with the API, then build
 COPY shared ./shared

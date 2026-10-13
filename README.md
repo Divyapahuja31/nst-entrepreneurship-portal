@@ -64,7 +64,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 
 ### Assigning roles
 
-- **Sign-up:** `@newtonschool.co` accounts start as mentors and everyone else as students. Admin and academic board are never inferred from an email.
+- **Sign-up:** only emails from the domains an admin allows on **School Setup** (`/admin/setup`) can sign up or sign in with Google; a new database starts with `@newtonschool.co` and `@adypu.edu.in`. Accounts from a domain marked Mentor (`@newtonschool.co` at first) start as mentors and everyone else as students. Admin and academic board are never inferred from an email. School Setup is also where admins add campuses and batches.
 - **Changes:** an admin uses **Accounts & Roles** (`/admin/accounts`). They can't change or deactivate their own account, and the last admin can't be demoted or deactivated. Every role change, new account and deactivation is written to an audit log that only admins can read.
 - **Deactivation** keeps the record (KPIs and reviews point at it), signs the person out everywhere, removes them from their startup and leaves the startups they mentored without a mentor until the board assigns one.
 

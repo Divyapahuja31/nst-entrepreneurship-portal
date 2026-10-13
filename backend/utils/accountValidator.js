@@ -4,7 +4,8 @@ import { validateEmail, validateName } from './validator.js'
 
 // Checks an admin's new-account form. Returns { field: message } for each
 // problem; empty when it is fine. Students need a batch and campus, as they
-// do when they sign themselves up.
+// do when they sign themselves up. Whether the email's domain is allowed is
+// checked against the database afterwards.
 export const validateAccountInput = ({
   username,
   email,

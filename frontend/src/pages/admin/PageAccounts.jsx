@@ -215,7 +215,7 @@ function AddAccountDialog({ open, batches, onClose, onCreated }) {
               onChange={set('email')}
               error={Boolean(errors.email)}
               helperText={
-                errors.email || 'An @adypu.edu.in or @newtonschool.co address'
+                errors.email || 'From a domain allowed in School Setup'
               }
             />
             <TextField

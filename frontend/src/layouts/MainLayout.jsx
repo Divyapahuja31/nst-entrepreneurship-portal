@@ -13,6 +13,7 @@ import {
 import {
   BookIcon,
   BriefcaseIcon,
+  BuildingIcon,
   CalendarIcon,
   ChatIcon,
   ChevronLeftIcon,
@@ -93,6 +94,11 @@ const adminMenuItems = [
     menu: 'Accounts & Roles',
     icon: ShieldIcon,
     path: '/admin/accounts',
+  },
+  {
+    menu: 'School Setup',
+    icon: BuildingIcon,
+    path: '/admin/setup',
   },
 ]
 

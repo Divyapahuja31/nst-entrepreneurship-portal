@@ -2,7 +2,6 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { validateAccountInput } from '../utils/accountValidator.js'
-import { determineUserRole } from '../utils/authHelper.js'
 
 const BATCH = '64b7f0c2a1b2c3d4e5f60718'
 const CAMPUS = '64b7f0c2a1b2c3d4e5f60719'
@@ -38,10 +37,10 @@ describe('validateAccountInput', () => {
     )
   })
 
-  it('rejects emails outside the school domains', () => {
+  it('rejects text that is not an email address', () => {
     const error = validateAccountInput({
       username: 'Test Student',
-      email: 'student@gmail.com',
+      email: 'student@',
       role: 'mentor',
     })
     assert.ok(error.email)
@@ -67,14 +66,5 @@ describe('validateAccountInput', () => {
       'role',
       'username',
     ])
-  })
-})
-
-describe('determineUserRole', () => {
-  it('never grants more than mentor from an email', () => {
-    assert.equal(determineUserRole('lead@newtonschool.co'), 'mentor')
-    assert.equal(determineUserRole('LEAD@NewtonSchool.co'), 'mentor')
-    assert.equal(determineUserRole('student@adypu.edu.in'), 'student')
-    assert.equal(determineUserRole(undefined), 'student')
   })
 })

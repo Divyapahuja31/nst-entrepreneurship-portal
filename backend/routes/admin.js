@@ -4,6 +4,7 @@ import { BOARD_ROLES, ROLES } from '@nst/shared/permissions.js'
 import requireRole from '../middleware/requireRole.js'
 import accounts from './accounts.js'
 import programme from './programme.js'
+import setup from './setup.js'
 
 import {
   createFounder,
@@ -45,5 +46,6 @@ router.patch(
 
 router.use('/accounts', requireRole(ROLES.ADMIN), accounts)
 router.use('/programme', requireRole(ROLES.ADMIN), programme)
+router.use('/setup', requireRole(ROLES.ADMIN), setup)
 
 export default router

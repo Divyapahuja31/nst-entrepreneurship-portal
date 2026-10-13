@@ -10,11 +10,7 @@ import Role from '../models/role.js'
 import User from '../models/user.js'
 import startupStage from '../models/enums/startupStage.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
-import {
-  normalizeName,
-  validateEmail,
-  validateName,
-} from '../utils/validator.js'
+import { normalizeName, checkEmail, validateName } from '../utils/validator.js'
 import {
   DUPLICATE_STARTUP_NAME,
   isStartupNameTaken,
@@ -97,9 +93,9 @@ const getFounderFormOptions = async (req, res) => {
   }
 }
 
-const validateCreateFounderInput = payload => ({
+const validateCreateFounderInput = async payload => ({
   founder: validateName(payload.founder),
-  email: validateEmail(payload.email),
+  email: await checkEmail(payload.email),
   startup:
     typeof payload.startup === 'string' && payload.startup.trim()
       ? ''
@@ -191,7 +187,7 @@ const createFounderAndVenture = async ({
 
 const createFounder = async (req, res) => {
   const payload = req.body ?? {}
-  const error = validateCreateFounderInput(payload)
+  const error = await validateCreateFounderInput(payload)
 
   if (Object.values(error).some(Boolean)) {
     return res.status(400).json({ error })

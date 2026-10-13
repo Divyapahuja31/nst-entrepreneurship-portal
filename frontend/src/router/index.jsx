@@ -23,6 +23,7 @@ import PageVentures from '../pages/admin/PageVentures.jsx'
 import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
 import PageAccounts from '../pages/admin/PageAccounts.jsx'
 import PageProgramme from '../pages/admin/PageProgramme.jsx'
+import PageSetup from '../pages/admin/PageSetup.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -53,6 +54,7 @@ import { myCheckInsLoader } from '../api/checkins.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 import { accountsLoader } from '../api/accounts.js'
 import { programmeLoader } from '../api/programme.js'
+import { setupLoader } from '../api/setup.js'
 import { whenAuthReady } from '../stores/auth.js'
 
 // Runs a route's loader only for the roles RequireRole lets through, once
@@ -235,6 +237,11 @@ export const router = createBrowserRouter([
                 path: '/admin/programme',
                 Component: PageProgramme,
                 loader: forRoles([ROLES.ADMIN], programmeLoader),
+              },
+              {
+                path: '/admin/setup',
+                Component: PageSetup,
+                loader: forRoles([ROLES.ADMIN], setupLoader),
               },
             ],
           },

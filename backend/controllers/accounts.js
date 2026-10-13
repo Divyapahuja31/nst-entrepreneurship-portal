@@ -19,7 +19,11 @@ import { normalizeEmail } from '../utils/authHelper.js'
 import { deactivateFounder } from '../utils/founderHelper.js'
 import { refreshMeetingInvites } from '../utils/meetingInvites.js'
 import { removeProgrammeStaff } from '../utils/programmeScheduler.js'
-import { normalizeName, validateBatchAndCampus } from '../utils/validator.js'
+import {
+  normalizeName,
+  validateBatchAndCampus,
+  validateEmailDomain,
+} from '../utils/validator.js'
 
 // Account administration, for admins only (the route checks the role; the
 // self and last-admin rules are checked here). Every change is written to
@@ -103,6 +107,10 @@ const newAccountErrors = async body => {
   const error = validateAccountInput(body)
   if (Object.keys(error).length) {
     return error
+  }
+  const domainError = await validateEmailDomain(body.email.trim())
+  if (domainError) {
+    error.email = domainError
   }
   if (body.role === ROLES.STUDENT) {
     const refs = await validateBatchAndCampus(body, { required: true })

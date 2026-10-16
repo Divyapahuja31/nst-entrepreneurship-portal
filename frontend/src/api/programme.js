@@ -20,6 +20,20 @@ export const saveProgramme = async settings => {
   }
 }
 
+// When the bi-weekly reports start, apart from the sessions. Returns the
+// page's new data, or { error, field }.
+export const saveReportSchedule = async schedule => {
+  try {
+    const { data } = await api.put('/admin/programme/reports', schedule)
+    return { page: data }
+  } catch (err) {
+    return {
+      ...toError(err, 'Could not save when the reports start'),
+      field: err.response?.data?.field,
+    }
+  }
+}
+
 // Takes every upcoming meeting off and starts the sessions again.
 export const clearSessions = async () => {
   try {

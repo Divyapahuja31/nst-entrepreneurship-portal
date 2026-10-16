@@ -4,19 +4,24 @@ import CheckIn from '../models/checkIn.js'
 import GoogleCredential from '../models/googleCredential.js'
 import Programme from '../models/programme.js'
 import ProgrammeSession from '../models/programmeSession.js'
+import ReportSchedule from '../models/reportSchedule.js'
 import User from '../models/user.js'
 import { canAutoTranscribe } from '../utils/googleWorkspace.js'
 import {
   activeStaff,
   capacityProblem,
   getProgramme,
+  getReportSchedule,
   inviteList,
   parseProgramme,
+  parseReportSchedule,
+  reportsOrigin,
   slotsPerStaff,
 } from '../utils/programme.js'
 import {
   cancelSession,
   clearSessions,
+  relabelSessionCycles,
   runSession,
   syncSessions,
   withSession,
@@ -87,14 +92,30 @@ const hostOf = async (programme, user) => {
   }
 }
 
+// When the reports start: the date an admin set for them (null until then)
+// and the moment cycle 1 opens, which follows the sessions while no date is
+// set.
+const reportsOverview = async () => {
+  const [schedule, startsAt] = await Promise.all([
+    getReportSchedule().lean(),
+    reportsOrigin(),
+  ])
+  return {
+    startDate: schedule?.startDate ?? null,
+    timeZone: schedule?.timeZone ?? DEFAULTS.timeZone,
+    startsAt,
+  }
+}
+
 const overview = async user => {
   const programme = await getProgramme()
   const settings = settingsOf(programme)
-  const [invites, staffOptions, sessions, host] = await Promise.all([
+  const [invites, staffOptions, sessions, host, reports] = await Promise.all([
     inviteList(programme),
     activeStaff(),
     ProgrammeSession.find().sort({ number: 1 }),
     hostOf(programme, user),
+    reportsOverview(),
   ])
   // Only people who can still run sessions: a deactivated account left in
   // the settings would otherwise be counted but not shown, and block saving.
@@ -108,6 +129,7 @@ const overview = async user => {
   return {
     programme: settings,
     configured: Boolean(programme),
+    reports,
     host,
     staffOptions,
     invites,
@@ -168,6 +190,29 @@ export const saveProgramme = async (req, res) => {
   } catch (error) {
     console.error('Programme save error:', error)
     return res.status(500).json({ error: 'Could not save the programme' })
+  }
+}
+
+// Sets when the bi-weekly reports start, apart from the sessions. Needs no
+// Google connection. Reports already filed keep their cycle numbers.
+export const saveReportSchedule = async (req, res) => {
+  try {
+    const parsed = parseReportSchedule(req.body ?? {})
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error, field: parsed.field })
+    }
+    await ReportSchedule.findOneAndUpdate(
+      { key: 'reports' },
+      { $set: parsed.fields },
+      { upsert: true, runValidators: true }
+    )
+    await relabelSessionCycles()
+    return res.json(await overview(req.user))
+  } catch (error) {
+    console.error('Report schedule save error:', error)
+    return res
+      .status(500)
+      .json({ error: 'Could not save when the reports start' })
   }
 }
 

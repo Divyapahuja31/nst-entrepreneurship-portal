@@ -26,6 +26,7 @@ import { calendarConnectUrl } from '../../api/checkins'
 import {
   clearSessions,
   saveProgramme,
+  saveReportSchedule,
   sessionAction,
 } from '../../api/programme'
 import EmptyState from '../../components/EmptyState'
@@ -33,7 +34,12 @@ import PageHeader from '../../components/PageHeader'
 import SectionCard from '../../components/SectionCard'
 import StatusPill from '../../components/StatusPill'
 import { CALENDAR_OUTCOMES } from '../../components/calendarOutcomes'
-import { CalendarIcon, PeopleIcon, ShieldIcon } from '../../components/icons'
+import {
+  CalendarIcon,
+  DocTextIcon,
+  PeopleIcon,
+  ShieldIcon,
+} from '../../components/icons'
 
 const WEEKDAYS = [
   'Sunday',
@@ -94,7 +100,7 @@ const LIMITS = [
 const problemsOf = form => {
   const problems = {}
   if (!form.startDate) {
-    problems.startDate = 'Choose the date cycle 1 starts'
+    problems.startDate = 'Choose the date sessions start'
   }
   if (!form.startTime) {
     problems.startTime = 'Choose a start time'
@@ -165,6 +171,116 @@ const toggle = (set, id, on) => {
 }
 
 // ------------------------------------------------------------ settings
+
+// A YYYY-MM-DD day as "16 Oct 2026".
+const formatDay = ymd =>
+  new Date(`${ymd}T00:00:00Z`).toLocaleDateString(undefined, {
+    dateStyle: 'medium',
+    timeZone: 'UTC',
+  })
+
+// When the bi-weekly reports start. Saved on its own: the reports can open
+// before or after the sessions, and no Google Calendar is needed.
+function ReportsCard({ reports, onSaved }) {
+  const [startDate, setStartDate] = useState(reports.startDate ?? '')
+  const [timeZone, setTimeZone] = useState(reports.timeZone)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const changed =
+    startDate !== (reports.startDate ?? '') || timeZone !== reports.timeZone
+
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    const result = await saveReportSchedule({ startDate, timeZone })
+    setSaving(false)
+    if (result.error) {
+      setError(result)
+      return
+    }
+    onSaved(result.page)
+  }
+
+  let subtitle =
+    'Not set yet, so each startup’s reports count from the day it was created.'
+  if (reports.startDate) {
+    subtitle = `Cycle 1 of every startup’s reports opens on ${formatDay(reports.startDate)}, whenever the sessions start.`
+  } else if (reports.startsAt) {
+    subtitle = `Not set yet, so the reports follow the sessions: cycle 1 starts on ${new Date(
+      reports.startsAt
+    ).toLocaleDateString(undefined, { dateStyle: 'medium' })}.`
+  }
+  const fieldError = field => (error?.field === field ? error.error : '')
+
+  return (
+    <SectionCard
+      icon={DocTextIcon}
+      title="Bi-weekly Reports"
+      subtitle={subtitle}
+    >
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr)',
+            sm: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(3, minmax(0, 1fr))',
+          },
+          alignItems: 'start',
+        }}
+      >
+        <TextField
+          type="date"
+          label="Reports start"
+          value={startDate}
+          onChange={e => {
+            setError(null)
+            setStartDate(e.target.value)
+          }}
+          error={Boolean(fieldError('startDate'))}
+          helperText={
+            fieldError('startDate') ||
+            'Cycle 1 opens this day. Reports already filed keep their cycle.'
+          }
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
+        <Autocomplete
+          disableClearable
+          options={[...new Set([timeZone, ...TIME_ZONES])]}
+          value={timeZone}
+          onChange={(_, zone) => {
+            setError(null)
+            setTimeZone(zone)
+          }}
+          renderInput={params => (
+            <TextField
+              {...params}
+              label="Time zone"
+              error={Boolean(fieldError('timeZone'))}
+              helperText={fieldError('timeZone') || 'Type to search'}
+            />
+          )}
+        />
+        <Box sx={{ pt: 1 }}>
+          <Button
+            variant="contained"
+            loading={saving}
+            disabled={!startDate || !changed}
+            onClick={save}
+          >
+            Save Report Dates
+          </Button>
+        </Box>
+      </Box>
+      {error && !error.field && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error.error}
+        </Alert>
+      )}
+    </SectionCard>
+  )
+}
 
 function HostNotice({ host }) {
   if (host.connected && host.autoTranscripts) {
@@ -253,15 +369,15 @@ function SettingsCard({ form, setField, fieldError, configured, saved, host }) {
       >
         <TextField
           type="date"
-          label="Cycle 1 starts"
+          label="Sessions start"
           value={form.startDate}
           onChange={e => setField('startDate', e.target.value)}
           error={Boolean(fieldError('startDate'))}
           helperText={
             fieldError('startDate') ||
             (startMoves
-              ? 'Changing this moves every startup’s bi-weekly cycles.'
-              : 'Every startup’s bi-weekly cycles count from this day.')
+              ? 'Changing this moves every session.'
+              : 'The first session is on the chosen day, on or after this date.')
           }
           slotProps={{ inputLabel: { shrink: true } }}
         />
@@ -972,6 +1088,14 @@ export default function PageProgramme() {
         }}
       >
         {outcome && <Alert severity={outcome.severity}>{outcome.text}</Alert>}
+        <ReportsCard
+          key={`${page.reports.startDate}-${page.reports.timeZone}`}
+          reports={page.reports}
+          onSaved={next => {
+            setPage(next)
+            setMessage('Report dates saved.')
+          }}
+        />
         <HostNotice host={page.host} />
 
         {page.configured && sessions}

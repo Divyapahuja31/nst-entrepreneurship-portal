@@ -133,8 +133,8 @@ npm run migrate:email -w backend
 
 An admin runs the programme from **Programme** (`/admin/programme`). It sets one calendar for every startup:
 
-- **Cycle 1 starts** on a date the admin chooses. Every startup's bi-weekly report cycles count from it, instead of from the day the startup was created. Reports already filed keep their cycle numbers.
-- **One session every other week**, on the chosen day and between the chosen times (Thursday 6–8 pm by default, in the chosen time zone). That gives 13 sessions, one per cycle.
+- **Reports start** on a date the admin sets under **Bi-weekly Reports**, apart from the sessions. Cycle 1 of every startup's reports opens that day, so the reports can open before or after the sessions. It's saved on its own and needs no Google connection. Until it's set, the reports follow the sessions' start date, and before the programme is saved too, each startup's reports count from the day it was created. Reports already filed keep their cycle numbers.
+- **Sessions start** on another date the admin chooses, with **one session every other week** on the chosen day and between the chosen times (Thursday 6–8 pm by default, in the chosen time zone). That gives 13 sessions. Each session's meetings are labelled with the report cycle they fall in, if any.
 - **Meeting staff:** the people who run the sessions. They can be any admins, academic board members or mentors, including the admin. Who mentors a startup doesn't matter here.
 - **Who is invited:** every startup with active founders, and all their founders, unless the admin switches a startup or a founder off. New startups and founders are invited automatically.
 - **Mode:**
@@ -186,7 +186,7 @@ npm test
 - `shared/permissions.test.js` checks every rule against the matrix above, for every role, startup relationship, lock state and status.
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
-- `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and cycles counted from the programme start.
+- `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and report cycles counted from the reports' own start date, or else the sessions'.
 - `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, Meet Now, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 - `signup.test.js`, `startups.test.js`, `kpiReview.test.js`, `biweeklyRules.test.js` and `staffChanges.test.js` cover names and codes at sign-up, proposals and startup names, reviews from out-of-date pages, the bi-weekly rules above, and what happens when someone's role changes or they are deactivated.
 

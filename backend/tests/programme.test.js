@@ -698,6 +698,83 @@ describe('programme meetings and the rest of the portal', () => {
     assert.equal(notYet.status, 400)
 
     const report = await as(owner).get('/api/biweekly')
-    assert.ok(report.body.programmeStart)
+    assert.ok(report.body.reportsStart)
+  })
+})
+
+describe('when the reports start, apart from the sessions', () => {
+  const setReports = (fields = {}, user = data.users.admin) =>
+    as(user).put('/api/admin/programme/reports', {
+      startDate: today(),
+      timeZone: TZ,
+      ...fields,
+    })
+  const submit = cycle =>
+    as(data.users.owner).post('/api/biweekly/submission', {
+      cycle_number: cycle,
+    })
+
+  it('opens the reports with no programme and no Google connection', async () => {
+    const started = ymdIn(new Date(Date.now() - 20 * DAY_MS))
+    const res = await setReports({ startDate: started })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.configured, false)
+    assert.equal(res.body.reports.startDate, started)
+    assert.ok(res.body.reports.startsAt)
+
+    assert.equal((await submit(2)).status, 200)
+    assert.equal((await submit(3)).status, 400)
+    const report = await as(data.users.owner).get('/api/biweekly')
+    assert.equal(
+      new Date(report.body.reportsStart).toISOString(),
+      new Date(res.body.reports.startsAt).toISOString()
+    )
+  })
+
+  it('keeps the reports closed while sessions have started', async () => {
+    const started = ymdIn(new Date(Date.now() - 20 * DAY_MS))
+    await save({ startDate: started, weekday: weekdayOf(started) })
+    // Before a date is set, the reports follow the sessions.
+    const page = await as(data.users.admin).get('/api/admin/programme')
+    assert.equal(page.body.reports.startDate, null)
+    assert.ok(page.body.reports.startsAt)
+
+    const later = ymdIn(new Date(Date.now() + 10 * DAY_MS))
+    const res = await setReports({ startDate: later })
+    assert.equal(res.status, 200)
+    const early = await submit(1)
+    assert.equal(early.status, 400)
+    assert.match(early.body.error, /hasn't opened/)
+
+    // The sessions stay put, labelled with the report cycle they fall in.
+    const sessions = await ProgrammeSession.find().sort({ number: 1 })
+    assert.equal(ymdIn(sessions[0].startsAt), started)
+    // Sessions fall 20 and 6 days ago and in 8 days, all before the reports
+    // open in 10; the one in 22 days is in cycle 1.
+    assert.deepEqual(
+      sessions.slice(0, 4).map(session => session.cycle_number),
+      [null, null, null, 1]
+    )
+  })
+
+  it('a later programme save keeps the reports’ date', async () => {
+    const later = ymdIn(new Date(Date.now() + 10 * DAY_MS))
+    await setReports({ startDate: later })
+    await save()
+    assert.equal((await submit(1)).status, 400)
+    const page = await as(data.users.admin).get('/api/admin/programme')
+    assert.equal(page.body.reports.startDate, later)
+  })
+
+  it('refuses a bad date or time zone, and anyone but an admin', async () => {
+    const bad = await setReports({ startDate: '2026-02-30' })
+    assert.equal(bad.status, 400)
+    assert.equal(bad.body.field, 'startDate')
+    const zone = await setReports({ timeZone: 'Mars/Olympus' })
+    assert.equal(zone.body.field, 'timeZone')
+    for (const who of ['board', 'mentor', 'owner']) {
+      const res = await setReports({}, data.users[who])
+      assert.equal(res.status, 403, who)
+    }
   })
 })

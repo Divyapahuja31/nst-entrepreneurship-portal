@@ -1,5 +1,10 @@
 import { createBrowserRouter, redirect } from 'react-router'
-import { ROLE_NAMES, ROLES, STAFF_ROLES } from '@nst/shared/permissions.js'
+import {
+  BOARD_ROLES,
+  ROLE_NAMES,
+  ROLES,
+  STAFF_ROLES,
+} from '@nst/shared/permissions.js'
 
 import EmptyLayout from '../layouts/EmptyLayout.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
@@ -23,6 +28,7 @@ import PageVentures from '../pages/admin/PageVentures.jsx'
 import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
 import PageAccounts from '../pages/admin/PageAccounts.jsx'
 import PageProgramme from '../pages/admin/PageProgramme.jsx'
+import PageExtraSessions from '../pages/admin/PageExtraSessions.jsx'
 import PageSetup from '../pages/admin/PageSetup.jsx'
 
 // Common pages
@@ -54,6 +60,7 @@ import { myCheckInsLoader } from '../api/checkins.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
 import { accountsLoader } from '../api/accounts.js'
 import { programmeLoader } from '../api/programme.js'
+import { extraSessionsLoader } from '../api/extraSessions.js'
 import { setupLoader } from '../api/setup.js'
 import { whenAuthReady } from '../stores/auth.js'
 
@@ -224,6 +231,16 @@ export const router = createBrowserRouter([
             path: '/admin/profile/:userid',
             Component: PageFounderProfile,
             loader: staffLoader(founderProfileLoader),
+          },
+          {
+            element: <RequireRole allow={BOARD_ROLES} />,
+            children: [
+              {
+                path: '/admin/sessions',
+                Component: PageExtraSessions,
+                loader: forRoles(BOARD_ROLES, extraSessionsLoader),
+              },
+            ],
           },
           {
             element: <RequireRole allow={[ROLES.ADMIN]} />,

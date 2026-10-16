@@ -292,7 +292,7 @@ describe('scheduling a session in slots', () => {
     await save()
     const session = await firstSession()
     assert.equal(session.status, 'PLANNED')
-    assert.match(session.problem, /Connect Google Calendar/)
+    assert.match(session.problem, /connect Google Calendar/)
     assert.equal(callsTo('createEvent').length, 0)
   })
 

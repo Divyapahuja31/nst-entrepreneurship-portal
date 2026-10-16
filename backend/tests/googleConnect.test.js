@@ -9,6 +9,7 @@ import {
   MEET_SETTINGS_SCOPE,
   REQUIRED_SCOPES,
 } from '../utils/googleWorkspace.js'
+import { getHostId } from '../utils/calendarHost.js'
 import { decryptToken, encryptToken } from '../utils/tokenCrypto.js'
 import {
   cookieFor,
@@ -174,6 +175,36 @@ describe('connecting a Google Calendar', () => {
       { code: 'code' }
     )
     assert.match(res.headers.location, /\/admin\?calendar=connected$/)
+  })
+
+  it('an admin connecting from either page hosts every session', async () => {
+    const { admin, admin2, mentor } = data.users
+    grant(mentor.email)
+    await callback(await startConnect(mentor), { code: 'code' })
+    assert.equal(await getHostId(), null)
+
+    grant(admin.email)
+    await callback(await startConnect(admin, '/admin/sessions'), {
+      code: 'code',
+    })
+    assert.equal(String(await getHostId()), String(admin._id))
+
+    // Another admin doesn't take over while the host is connected...
+    grant(admin2.email)
+    await callback(await startConnect(admin2, '/admin/programme'), {
+      code: 'code',
+    })
+    assert.equal(String(await getHostId()), String(admin._id))
+
+    // ...but does once the host's connection is gone.
+    await request(app)
+      .delete('/api/google/connection')
+      .set('Cookie', cookieFor(admin))
+    grant(admin2.email)
+    await callback(await startConnect(admin2, '/admin/programme'), {
+      code: 'code',
+    })
+    assert.equal(String(await getHostId()), String(admin2._id))
   })
 
   it('disconnecting revokes the token at Google', async () => {

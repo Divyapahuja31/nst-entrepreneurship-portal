@@ -1,12 +1,10 @@
 import mongoose from 'mongoose'
 
 import CheckIn from '../models/checkIn.js'
-import GoogleCredential from '../models/googleCredential.js'
 import Programme from '../models/programme.js'
-import ProgrammeSession from '../models/programmeSession.js'
+import ProgrammeSession, { REGULAR } from '../models/programmeSession.js'
 import ReportSchedule from '../models/reportSchedule.js'
-import User from '../models/user.js'
-import { canAutoTranscribe } from '../utils/googleWorkspace.js'
+import { hostForNewProgramme, hostStatus } from '../utils/calendarHost.js'
 import {
   activeStaff,
   capacityProblem,
@@ -57,7 +55,7 @@ const settingsOf = programme =>
   )
 
 // The session meetings, by session id.
-const meetingsBySession = async sessions => {
+export const meetingsBySession = async sessions => {
   const rows = await CheckIn.find({
     session: { $in: sessions.map(s => s._id) },
     status: { $ne: 'CANCELLED' },
@@ -74,22 +72,6 @@ const meetingsBySession = async sessions => {
     bySession.set(id, [...(bySession.get(id) ?? []), row])
   }
   return bySession
-}
-
-const hostOf = async (programme, user) => {
-  const hostId = programme?.host ?? user.id
-  const [host, credential] = await Promise.all([
-    User.findById(hostId).select('username email'),
-    GoogleCredential.findOne({ user: hostId }),
-  ])
-  return {
-    id: String(hostId),
-    username: host?.username ?? null,
-    email: host?.email ?? null,
-    connected: Boolean(credential) && !credential.needsReconnect,
-    autoTranscripts: canAutoTranscribe(credential),
-    isYou: String(hostId) === String(user.id),
-  }
 }
 
 // When the reports start: the date an admin set for them (null until then)
@@ -113,8 +95,8 @@ const overview = async user => {
   const [invites, staffOptions, sessions, host, reports] = await Promise.all([
     inviteList(programme),
     activeStaff(),
-    ProgrammeSession.find().sort({ number: 1 }),
-    hostOf(programme, user),
+    ProgrammeSession.find(REGULAR).sort({ number: 1 }),
+    hostStatus(user),
     reportsOverview(),
   ])
   // Only people who can still run sessions: a deactivated account left in
@@ -179,10 +161,14 @@ export const saveProgramme = async (req, res) => {
       return res.status(400).json({ field: 'capacity', error: capacity })
     }
 
-    // The admin who first saves the programme hosts its events.
+    // The calendar host holds its events; with none yet, the admin who
+    // first saves it.
     const programme = await Programme.findOneAndUpdate(
       { key: 'programme' },
-      { $set: draft, $setOnInsert: { host: req.user.id } },
+      {
+        $set: draft,
+        $setOnInsert: { host: await hostForNewProgramme(req.user.id) },
+      },
       { upsert: true, returnDocument: 'after', runValidators: true }
     )
     await syncSessions(programme)
@@ -225,7 +211,10 @@ const onSession =
       if (!mongoose.isValidObjectId(sessionId)) {
         return res.status(400).json({ error: 'Valid session id is required' })
       }
-      const session = await ProgrammeSession.findById(sessionId)
+      const session = await ProgrammeSession.findOne({
+        _id: sessionId,
+        ...REGULAR,
+      })
       if (!session) {
         return res.status(404).json({ error: 'Session not found' })
       }

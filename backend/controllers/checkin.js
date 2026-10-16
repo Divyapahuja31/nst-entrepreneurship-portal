@@ -37,7 +37,8 @@ const sameId = (a, b) => String(a) === String(b)
 const programmeCheckIn = (req, res, { checkIn, venture, programme }) => {
   if (!programme) {
     res.status(409).json({
-      error: 'Programme sessions are changed from the Programme page',
+      error:
+        'Programme sessions are changed from the Programme or Extra Sessions page',
     })
     return null
   }

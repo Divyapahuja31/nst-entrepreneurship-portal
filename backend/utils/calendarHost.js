@@ -26,6 +26,29 @@ export const getHostId = async () => {
 const isConnected = credential =>
   Boolean(credential) && !credential.needsReconnect
 
+// Only an active admin hosts: a host who was deactivated or is no longer an
+// admin is replaced like one whose connection is gone.
+const isActiveAdmin = user =>
+  Boolean(user) && !user.deletedAt && user.role?.name === ROLES.ADMIN
+
+const loadHost = hostId =>
+  Promise.all([
+    User.findById(hostId)
+      .select('username email role deletedAt')
+      .populate('role', 'name'),
+    GoogleCredential.findOne({ user: hostId }),
+  ])
+
+// Whether userId can hold the sessions now: an active admin with Google
+// connected.
+export const canHost = async userId => {
+  if (!userId) {
+    return false
+  }
+  const [user, credential] = await loadHost(userId)
+  return isActiveAdmin(user) && isConnected(credential)
+}
+
 // Makes userId the host, on the programme too so the two never disagree.
 const setHost = async userId => {
   await CalendarHost.findOneAndUpdate(
@@ -37,21 +60,21 @@ const setHost = async userId => {
 }
 
 // After an admin connects Google: they become the host unless another host
-// is still connected. Meetings already on a lost host's calendar can't be
-// changed through the new one, so a connected host is never replaced.
+// can still hold the sessions. A working host is never replaced; once it's
+// lost, the upcoming meetings move to the new host's calendar when their
+// sessions run again (utils/programmeScheduler.js). Returns whether the
+// host changed to them.
 export const claimHostIfFree = async user => {
   if (user.role !== ROLES.ADMIN) {
     return false
   }
   const current = await getHostId()
-  if (current && String(current) !== String(user.id)) {
-    const credential = await GoogleCredential.findOne({ user: current })
-    if (isConnected(credential)) {
-      return false
-    }
+  const isNew = String(current) !== String(user.id)
+  if (current && isNew && (await canHost(current))) {
+    return false
   }
   await setHost(user.id)
-  return true
+  return isNew
 }
 
 // Whoever the programme's first save should name as host: the host if there
@@ -75,6 +98,11 @@ const NO_HOST = {
   canConnect: false,
 }
 
+const nameOf = user => ({
+  username: user?.username ?? null,
+  email: user?.email ?? null,
+})
+
 // The host as the Programme and Extra Sessions pages show it to `viewer`.
 // With no host yet, an admin viewing is shown as the host they'd be: their
 // first save there makes them it (or connecting, if they haven't).
@@ -84,20 +112,16 @@ export const hostStatus = async viewer => {
   if (!hostId) {
     return NO_HOST
   }
-  const [host, credential] = await Promise.all([
-    User.findById(hostId).select('username email'),
-    GoogleCredential.findOne({ user: hostId }),
-  ])
-  const connected = isConnected(credential)
+  const [host, credential] = await loadHost(hostId)
+  const connected = isActiveAdmin(host) && isConnected(credential)
   const isYou = String(hostId) === String(viewer.id)
   return {
     id: String(hostId),
-    username: host?.username ?? null,
-    email: host?.email ?? null,
+    ...nameOf(host),
     connected,
     autoTranscripts: canAutoTranscribe(credential),
     isYou,
     // The host reconnects; another admin can take over once it's lost.
-    canConnect: isYou || (!connected && viewer.role === ROLES.ADMIN),
+    canConnect: isAdmin && (isYou || !connected),
   }
 }

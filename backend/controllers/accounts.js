@@ -9,6 +9,7 @@ import {
 } from '@nst/shared/permissions.js'
 
 import AuditLog from '../models/auditLog.js'
+import Batch from '../models/batch.js'
 import Founder from '../models/founder.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
@@ -38,6 +39,7 @@ const accountSummary = (user, venture = null) => ({
   email: user.email,
   // A role outside the four (or none) shows as "no role" so it can be fixed.
   role: isRole(user.role?.name) ? user.role.name : null,
+  batch: user.batch ?? null,
   isEmailVerified: Boolean(user.isEmailVerified || user.googleId),
   deactivatedAt: user.deletedAt ?? null,
   createdAt: user.createdAt,
@@ -76,7 +78,7 @@ export const listAccounts = async (req, res) => {
     const [users, founders] = await Promise.all([
       User.find()
         .select(
-          'username email role isEmailVerified googleId deletedAt createdAt'
+          'username email role batch isEmailVerified googleId deletedAt createdAt'
         )
         .populate('role', 'name')
         .sort({ createdAt: -1 }),
@@ -214,8 +216,27 @@ const changeKeepingAnAdmin = async (wasAdmin, change, undo) => {
   return updated
 }
 
+// The campus and batch that go with the new role: staff have neither, and a
+// student needs both, as when they sign up. A student who already has a
+// batch keeps it. Returns { set, unset } or { error }.
+const placeForRole = async (target, role, batchId) => {
+  if (STAFF_ROLES.includes(role)) {
+    return { set: { batch: null }, unset: { campus: '' } }
+  }
+  if (role !== ROLES.STUDENT || target.batch) {
+    return {}
+  }
+  const batch =
+    mongoose.isValidObjectId(batchId) &&
+    (await Batch.findById(batchId).select('campus'))
+  if (!batch) {
+    return { error: 'Choose a batch for the new student' }
+  }
+  return { set: { batch: batch._id, campus: batch.campus } }
+}
+
 // Moves target to the new role. Returns { updated } or { status, error }.
-const applyRoleChange = async (target, previousRole, newRole) => {
+const applyRoleChange = async (target, previousRole, newRole, place) => {
   const oldRoleId = target.role?._id ?? target.role ?? null
   // Conditional on the role read before, so concurrent changes can't both
   // apply.
@@ -224,13 +245,24 @@ const applyRoleChange = async (target, previousRole, newRole) => {
     () =>
       User.findOneAndUpdate(
         { _id: target._id, role: oldRoleId, deletedAt: null },
-        { $set: { role: newRole._id } },
+        {
+          $set: { role: newRole._id, ...place.set },
+          ...(place.unset && { $unset: place.unset }),
+        },
         { returnDocument: 'after' }
       ).populate('role', 'name'),
+    // The undo puts back the campus and batch the change set or cleared.
     () =>
       User.updateOne(
         { _id: target._id, role: newRole._id },
-        { $set: { role: oldRoleId } }
+        {
+          $set: {
+            role: oldRoleId,
+            batch: target.batch ?? null,
+            ...(target.campus && { campus: target.campus }),
+          },
+          ...(!target.campus && { $unset: { campus: '' } }),
+        }
       )
   )
   if (updated === null) {
@@ -256,9 +288,23 @@ const applyRoleChange = async (target, previousRole, newRole) => {
   return { updated }
 }
 
+// Checks the new role and its batch, then applies it. Returns { updated }
+// or { status, error }.
+const changeRoleTo = async (target, previousRole, role, batch) => {
+  const newRole = await Role.findOne({ name: role })
+  if (!newRole) {
+    return { status: 500, error: `${role} role is not configured` }
+  }
+  const place = await placeForRole(target, role, batch)
+  if (place.error) {
+    return { status: 400, error: place.error }
+  }
+  return applyRoleChange(target, previousRole, newRole, place)
+}
+
 export const changeRole = async (req, res) => {
   try {
-    const { role } = req.body ?? {}
+    const { role, batch } = req.body ?? {}
     if (!isRole(role)) {
       return res.status(400).json({ error: 'Choose a role' })
     }
@@ -271,12 +317,7 @@ export const changeRole = async (req, res) => {
       return res.status(200).json({ account: accountSummary(target) })
     }
 
-    const newRole = await Role.findOne({ name: role })
-    if (!newRole) {
-      return res.status(500).json({ error: `${role} role is not configured` })
-    }
-
-    const result = await applyRoleChange(target, previousRole, newRole)
+    const result = await changeRoleTo(target, previousRole, role, batch)
     if (result.error) {
       return res.status(result.status).json({ error: result.error })
     }

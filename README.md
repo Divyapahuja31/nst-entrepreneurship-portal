@@ -64,8 +64,8 @@ Staff means admin, academic board and mentor. The board means admin and academic
 
 ### Assigning roles
 
-- **Sign-up:** only emails from the domains an admin allows on **School Setup** (`/admin/setup`) can sign up or sign in with Google; a new database starts with `@newtonschool.co` and `@adypu.edu.in`. Accounts from a domain marked Mentor (`@newtonschool.co` at first) start as mentors and everyone else as students. Admin and academic board are never inferred from an email. School Setup is also where admins add campuses and batches.
-- **Changes:** an admin uses **Accounts & Roles** (`/admin/accounts`). They can't change or deactivate their own account, and the last admin can't be demoted or deactivated. Every role change, new account and deactivation is written to an audit log that only admins can read.
+- **Sign-up:** only emails from the domains an admin allows on **School Setup** (`/admin/setup`) can sign up or sign in with Google; a new database starts with `@newtonschool.co` and `@adypu.edu.in`. Accounts from a domain marked Mentor (`@newtonschool.co` at first) start as mentors and everyone else as students. Mentors aren't asked for a campus or batch at sign-up; students choose both. Admin and academic board are never inferred from an email. School Setup is also where admins add campuses and batches.
+- **Changes:** an admin uses **Accounts & Roles** (`/admin/accounts`). Staff have no campus or batch, so making someone staff clears theirs, and making a staff member a student asks for their batch. They can't change or deactivate their own account, and the last admin can't be demoted or deactivated. Every role change, new account and deactivation is written to an audit log that only admins can read.
 - **Deactivation** keeps the record (KPIs and reviews point at it), signs the person out everywhere, removes them from their startup and leaves the startups they mentored without a mentor until the board assigns one.
 
 ### The first admin
@@ -84,7 +84,7 @@ Before deploying this version, run the migration once. It's safe to run again.
 npm run migrate:rbac -w backend
 ```
 
-It renames the old `academic board` role to `academic_board`, creates any missing roles, makes accounts without a valid role students and gives every KPI an unlocked flag. Existing admins stay admins.
+It renames the old `academic board` role to `academic_board`, creates any missing roles, makes accounts without a valid role students, gives every KPI an unlocked flag and clears the campus and batch that staff were once asked for at sign-up. Existing admins stay admins.
 
 Bi-weekly reports belong to the startup, like its KPIs, and are shared by its co-founders: one report per startup per cycle. Older reports were filed per founder, so move them once:
 

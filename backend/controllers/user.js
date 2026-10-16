@@ -27,6 +27,7 @@ import {
   signGoogleSignupToken,
   verifyGoogleSignupToken,
 } from '../utils/token.js'
+import { listEmailDomains } from '../utils/emailDomains.js'
 import {
   findRoleForEmail,
   getGoogleAuthUrl,
@@ -48,9 +49,13 @@ const INVALID_VERIFICATION = 'Invalid or expired verification request'
 // password check and its timing doesn't reveal which emails exist.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('no-such-user', 10)
 
-// The sign-up form sends "" for a choice left blank, as staff leave campus
-// and batch.
+// The sign-up form sends "" for a choice left blank. Staff have no campus or
+// batch, so whatever their form sends is dropped.
 const noneIfBlank = value => value || undefined
+const studentPlace = (position, { batch, campus }) =>
+  position === ROLES.STUDENT
+    ? { batch: noneIfBlank(batch), campus: noneIfBlank(campus) }
+    : { batch: undefined, campus: undefined }
 
 export const signUp = async (req, res) => {
   try {
@@ -67,11 +72,9 @@ export const signUp = async (req, res) => {
     const error = {
       ...(await validateAll({ username, email, password, position })),
       // Students need both, as with Google sign-up: a proposal takes the
-      // student's campus. Staff have neither.
-      ...(await validateBatchAndCampus(
-        { batch, campus },
-        { required: position === ROLES.STUDENT }
-      )),
+      // student's campus. Staff have neither, so theirs aren't checked.
+      ...(position === ROLES.STUDENT &&
+        (await validateBatchAndCampus({ batch, campus }, { required: true }))),
     }
     if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
@@ -97,8 +100,7 @@ export const signUp = async (req, res) => {
       user.pendingSignup = {
         username,
         passwordHash: await bcrypt.hash(password, 10),
-        batch: noneIfBlank(batch),
-        campus: noneIfBlank(campus),
+        ...studentPlace(position, { batch, campus }),
       }
     } else {
       user = new User({
@@ -106,8 +108,7 @@ export const signUp = async (req, res) => {
         email: normalizedEmail,
         password,
         role: role._id,
-        batch: noneIfBlank(batch),
-        campus: noneIfBlank(campus),
+        ...studentPlace(position, { batch, campus }),
         isEmailVerified: false,
       })
     }
@@ -277,14 +278,19 @@ export const googleAuthCallback = async (req, res) => {
 
 export const getGoogleSignupOptions = async (req, res) => {
   try {
-    const [campuses, batches] = await Promise.all([
+    const [campuses, batches, domains] = await Promise.all([
       Campus.find().sort({ name: 1 }),
       Batch.find().populate('campus', 'name').sort({ name: 1 }),
+      listEmailDomains(),
     ])
 
     return res.status(200).json({
       campuses,
       batches,
+      // The sign-up forms leave out campus and batch for these.
+      staffDomains: domains
+        .filter(entry => entry.staff)
+        .map(entry => entry.domain),
     })
   } catch (error) {
     console.error('Get Google signup options error:', error)
@@ -315,19 +321,23 @@ export const completeGoogleSignup = async (req, res) => {
     }
 
     const { googleId, email } = parsed.data
+    const { position, role } = await findRoleForEmail(email)
+    const isStudent = position === ROLES.STUDENT
 
-    // Same name rules as email sign-up, and real batch/campus records.
+    // Same name rules as email sign-up, and real batch/campus records for a
+    // student. Staff have neither.
     const fieldErrors = [
       validateName(username),
-      ...Object.values(
-        await validateBatchAndCampus({ batch, campus }, { required: true })
-      ),
+      ...(isStudent
+        ? Object.values(
+            await validateBatchAndCampus({ batch, campus }, { required: true })
+          )
+        : []),
     ].filter(Boolean)
     if (fieldErrors.length) {
       return res.status(400).json({ error: fieldErrors[0] })
     }
 
-    const { position, role } = await findRoleForEmail(email)
     if (!role) {
       console.error(`${position} role does not exist in database`)
       return res.status(500).json({
@@ -348,8 +358,7 @@ export const completeGoogleSignup = async (req, res) => {
       username,
       email,
       googleId,
-      batch,
-      campus,
+      ...studentPlace(position, { batch, campus }),
       role: role._id,
       isEmailVerified: true,
     })

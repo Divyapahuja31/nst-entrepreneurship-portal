@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 
 import app from '../app.js'
+import Batch from '../models/batch.js'
 import CheckIn from '../models/checkIn.js'
 import Founder from '../models/founder.js'
 import Programme from '../models/programme.js'
@@ -135,8 +136,15 @@ describe('someone who runs programme sessions', () => {
   it('made a student: leaves the staff too', async () => {
     const { admin, mentor } = data.users
     await saveProgramme([admin, mentor])
+    const batch = await Batch.create({
+      name: '2025-29',
+      startYear: 2025,
+      endYear: 2029,
+      campus: data.campus._id,
+    })
     await as(admin).patch(`/api/admin/accounts/${mentor._id}/role`, {
       role: 'student',
+      batch: String(batch._id),
     })
     const programme = await Programme.findOne({ key: 'programme' })
     assert.deepEqual(programme.staff.map(String), [String(admin._id)])

@@ -6,6 +6,7 @@ import request from 'supertest'
 import app from '../app.js'
 import Batch from '../models/batch.js'
 import User from '../models/user.js'
+import { signGoogleSignupToken } from '../utils/token.js'
 import { seed, sentEmails, startDatabase, stopDatabase } from './helpers.js'
 
 let data
@@ -102,6 +103,59 @@ describe('campus and batch at sign-up', () => {
       batch: '',
     })
     assert.equal(res.status, 200)
+  })
+
+  it("staff don't keep a campus or batch sent anyway", async () => {
+    const res = await signUp({ email: 'sent@newtonschool.co' })
+    assert.equal(res.status, 200)
+    const staff = await User.findOne({ email: 'sent@newtonschool.co' }).lean()
+    assert.equal(staff.batch, null)
+    assert.equal(staff.campus, undefined)
+  })
+
+  it('the forms learn which domains are staff', async () => {
+    const res = await request(app).get('/api/auth/google/signup-options')
+    assert.deepEqual(res.body.staffDomains, ['newtonschool.co'])
+  })
+})
+
+describe('campus and batch after Google sign-in', () => {
+  const complete = (email, fields = {}) =>
+    request(app)
+      .post('/api/auth/google/complete-signup')
+      .send({
+        token: signGoogleSignupToken({ googleId: `g-${email}`, email }),
+        username: 'Asha Rao',
+        ...fields,
+      })
+
+  it('staff are not asked for them', async () => {
+    const res = await complete('mentor.new@newtonschool.co', {
+      campus: String(data.campus._id),
+      batch: String(batch._id),
+    })
+    assert.equal(res.status, 201)
+    const staff = await User.findOne({ email: 'mentor.new@newtonschool.co' })
+      .populate('role')
+      .lean()
+    assert.equal(staff.role.name, 'mentor')
+    assert.equal(staff.batch, null)
+    assert.equal(staff.campus, undefined)
+
+    const bare = await complete('bare@newtonschool.co')
+    assert.equal(bare.status, 201)
+  })
+
+  it('a student still needs both', async () => {
+    const res = await complete('student.new@adypu.edu.in')
+    assert.equal(res.status, 400)
+    const ok = await complete('student.new@adypu.edu.in', {
+      campus: String(data.campus._id),
+      batch: String(batch._id),
+    })
+    assert.equal(ok.status, 201)
+    const student = await User.findOne({ email: 'student.new@adypu.edu.in' })
+    assert.equal(String(student.batch), String(batch._id))
   })
 })
 

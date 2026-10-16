@@ -27,10 +27,12 @@ export const createAccount = async payload => {
   }
 }
 
-export const changeAccountRole = async (userId, role) => {
+// batch is needed only when a staff member becomes a student.
+export const changeAccountRole = async (userId, role, batch) => {
   try {
     const { data } = await api.patch(`/admin/accounts/${userId}/role`, {
       role,
+      ...(batch && { batch }),
     })
     return { account: data.account }
   } catch (err) {

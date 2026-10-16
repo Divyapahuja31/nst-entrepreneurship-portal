@@ -251,10 +251,18 @@ const applyRoleChange = async (target, previousRole, newRole, place) => {
         },
         { returnDocument: 'after' }
       ).populate('role', 'name'),
+    // The undo puts back the campus and batch the change set or cleared.
     () =>
       User.updateOne(
         { _id: target._id, role: newRole._id },
-        { $set: { role: oldRoleId } }
+        {
+          $set: {
+            role: oldRoleId,
+            batch: target.batch ?? null,
+            ...(target.campus && { campus: target.campus }),
+          },
+          ...(!target.campus && { $unset: { campus: '' } }),
+        }
       )
   )
   if (updated === null) {

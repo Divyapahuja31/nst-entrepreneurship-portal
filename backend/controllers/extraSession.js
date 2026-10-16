@@ -74,17 +74,22 @@ const pageData = async viewer => {
     hostStatus(viewer),
   ])
   const meetings = await meetingsBySession(sessions)
+  // Only people who can still run sessions: a deactivated account in the
+  // staff would be counted but not shown, and block saving.
+  const active = new Set(staffOptions.map(s => String(s._id)))
+  const activeOnly = list => ids(list).filter(id => active.has(id))
+  const defaults = defaultsOf(programme)
   return {
     host,
     timeZone: timeZoneOf(programme),
-    defaults: defaultsOf(programme),
+    defaults: { ...defaults, staff: activeOnly(defaults.staff) },
     staffOptions,
     invites,
     sessions: sessions.map(session => ({
       ...session.toObject(),
       extra: {
         ...session.extra.toObject(),
-        staff: ids(session.extra.staff),
+        staff: activeOnly(session.extra.staff),
         excludedVentures: ids(session.extra.excludedVentures),
         excludedFounders: ids(session.extra.excludedFounders),
       },

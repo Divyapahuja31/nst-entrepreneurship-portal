@@ -1,8 +1,7 @@
 import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
-import ProgrammeSession from '../models/programmeSession.js'
 import { findAttendees, googleFor } from './checkInHelper.js'
-import { runSession, withSession } from './programmeScheduler.js'
+import { rerunScheduledSessions } from './programmeScheduler.js'
 
 // When a founder joins or leaves a startup, its upcoming meetings invite the
 // founders it has now: the mentor's check-ins on the mentor's calendar, and
@@ -61,22 +60,12 @@ const refreshMentorCheckIns = async ventureId => {
   }
 }
 
-// Each session already drawn is brought in line; only what changed is
-// touched, and only its people are emailed.
-const refreshProgrammeSessions = async () => {
-  const sessions = await ProgrammeSession.find({
-    status: 'SCHEDULED',
-    startsAt: { $gt: new Date() },
-  }).select('_id')
-  for (const { _id } of sessions) {
-    await withSession(_id, session => runSession(session))
-  }
-}
-
 export const refreshMeetingInvites = async ventureId => {
+  // Each session already drawn is brought in line; only what changed is
+  // touched, and only its people are emailed.
   const steps = [
     ['check-in', () => refreshMentorCheckIns(ventureId)],
-    ['programme session', refreshProgrammeSessions],
+    ['programme session', () => rerunScheduledSessions()],
   ]
   for (const [what, refresh] of steps) {
     try {

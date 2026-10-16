@@ -239,9 +239,9 @@ export function HostNotice({ host, returnTo }) {
     text =
       'Every session, bi-weekly and extra, goes on your Google Calendar. Connect it here or on the other page; the academic board schedules through it too.'
   } else if (host.canConnect) {
-    text = `Sessions went on ${host.username}’s Google Calendar, which is no longer connected. Connect yours to host them from now on.`
+    text = `Sessions went on ${host.username}’s Google Calendar, which can’t be used any more. Connect yours to host them from now on: the upcoming meetings move to your calendar.`
   } else if (host.id) {
-    text = `Sessions go on ${host.username}’s Google Calendar, which is no longer connected. Ask them or another admin to connect.`
+    text = `Sessions went on ${host.username}’s Google Calendar, which can’t be used any more. Ask an admin to connect theirs.`
   }
   return (
     <Alert severity="warning" action={connect('Connect Google Calendar')}>

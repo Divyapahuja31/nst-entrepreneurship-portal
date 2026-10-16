@@ -5,8 +5,12 @@ import request from 'supertest'
 import app from '../app.js'
 import CalendarHost from '../models/calendarHost.js'
 import CheckIn from '../models/checkIn.js'
+import GoogleCredential from '../models/googleCredential.js'
+import Programme from '../models/programme.js'
 import ProgrammeSession from '../models/programmeSession.js'
-import { getHostId } from '../utils/calendarHost.js'
+import User from '../models/user.js'
+import { claimHostIfFree, getHostId } from '../utils/calendarHost.js'
+import { rerunScheduledSessions } from '../utils/programmeScheduler.js'
 import {
   connectCalendar,
   cookieFor,
@@ -282,5 +286,146 @@ describe('changing an extra session', () => {
     const regular = await ProgrammeSession.findOne({ number: 1 })
     const res = await as(data.users.admin).post(`${URL}/${regular._id}/cancel`)
     assert.equal(res.status, 404)
+  })
+})
+
+describe('a new calendar host', () => {
+  // An admin connecting Google, as the callback claims the host for them.
+  const claimAs = user => claimHostIfFree({ id: user._id, role: 'admin' })
+  const tokenOf = user => `refresh-${user.email}`
+
+  it("moves the upcoming meetings off a deactivated host's calendar", async () => {
+    await saveProgramme()
+    const { admin, admin2, board, owner } = data.users
+    await as(board).post(URL, extra())
+    const [session] = await extraSessions()
+    const before = await meetingsOf(session)
+    assert.equal(before.length, 2)
+
+    // Ada leaves: her Google still works, but she no longer hosts.
+    await User.updateOne({ _id: admin._id }, { deletedAt: new Date() })
+    const page = (await as(admin2).get(URL)).body
+    assert.equal(page.host.connected, false)
+    assert.equal(page.host.canConnect, true)
+    const refused = await as(board).post(URL, extra({ date: inDays(4) }))
+    assert.equal(refused.status, 409)
+
+    await connectCalendar(admin2)
+    assert.equal(await claimAs(admin2), true)
+    google.calls.length = 0
+    await rerunScheduledSessions()
+
+    const after = await meetingsOf(session)
+    assert.ok(after.every(m => String(m.host) === String(admin2._id)))
+    const created = callsTo('createEvent')
+    assert.equal(created.length, 2)
+    assert.ok(created.every(call => call.token === tokenOf(admin2)))
+    // Her old events come off through her own connection.
+    const deleted = callsTo('deleteEvent')
+    assert.deepEqual(
+      deleted.map(call => call.args[0]).sort(),
+      before.map(m => m.googleEventId).sort()
+    )
+    assert.ok(deleted.every(call => call.token === tokenOf(admin)))
+    assert.ok(before.every(m => google.events.get(m.googleEventId).deleted))
+    assert.equal((await ProgrammeSession.findById(session._id)).problem, null)
+    // Founders get their new Meet link.
+    assert.equal(emailsTo(owner.email, /Demo day rehearsal/).length, 2)
+    assert.notEqual(after[0].meetUrl, before[0].meetUrl)
+
+    // Later changes go through the new host.
+    google.calls.length = 0
+    const moved = await as(board).put(
+      `${URL}/${session._id}`,
+      extra({ startTime: '17:00', endTime: '18:00' })
+    )
+    assert.equal(moved.status, 200)
+    assert.equal((await ProgrammeSession.findById(session._id)).problem, null)
+    assert.ok(callsTo('patchEvent').every(c => c.token === tokenOf(admin2)))
+  })
+
+  it('moves a group meeting off a host whose connection is lost', async () => {
+    await saveProgramme()
+    const { admin, admin2, board } = data.users
+    await as(board).post(URL, extra({ mode: 'GROUP' }))
+    const [session] = await extraSessions()
+    const [old] = await meetingsOf(session)
+
+    // A connected host keeps hosting.
+    await connectCalendar(admin2)
+    assert.equal(await claimAs(admin2), false)
+
+    await GoogleCredential.updateOne(
+      { user: admin._id },
+      { needsReconnect: true }
+    )
+    assert.equal(await claimAs(admin2), true)
+    google.calls.length = 0
+    await rerunScheduledSessions()
+
+    const after = await meetingsOf(session)
+    assert.equal(after.length, 2)
+    assert.equal(new Set(after.map(m => m.googleEventId)).size, 1)
+    assert.notEqual(after[0].googleEventId, old.googleEventId)
+    assert.ok(after.every(m => String(m.host) === String(admin2._id)))
+    assert.equal(callsTo('createEvent').length, 1)
+    // Her connection is gone, so her event can't be touched.
+    assert.equal(callsTo('patchEvent').length, 0)
+    assert.equal(callsTo('deleteEvent').length, 0)
+
+    // Cancelling works too, on the new host's calendar.
+    const cancelled = await as(board).post(`${URL}/${session._id}/cancel`)
+    assert.equal(cancelled.status, 200)
+    const [deleted] = callsTo('deleteEvent')
+    assert.equal(deleted.token, tokenOf(admin2))
+  })
+})
+
+describe('what the editor sends', () => {
+  it('in group mode, hidden slot settings never block saving', async () => {
+    const { admin } = data.users
+    const slots = await as(admin).post(URL, extra({ slotMinutes: 0 }))
+    assert.equal(slots.body.field, 'slotMinutes')
+
+    const group = await as(admin).post(
+      URL,
+      extra({ mode: 'GROUP', slotMinutes: 0, gapMinutes: -5 })
+    )
+    assert.equal(group.status, 201)
+    const [session] = await extraSessions()
+    assert.equal(session.extra.slotMinutes, 15)
+    assert.equal(session.extra.gapMinutes, 0)
+
+    const programme = await as(admin).put('/api/admin/programme', {
+      startDate: inDays(30),
+      weekday: weekdayOf(inDays(30)),
+      startTime: '18:00',
+      endTime: '20:00',
+      timeZone: TZ,
+      mode: 'GROUP',
+      staff: [String(admin._id)],
+      slotMinutes: 0,
+      gapMinutes: 0,
+      firstGapMinutes: 0,
+      leadDays: 7,
+    })
+    assert.equal(programme.status, 200)
+    assert.equal(programme.body.programme.slotMinutes, 15)
+  })
+
+  it('starts new sessions with active staff only', async () => {
+    const { admin, mentor } = data.users
+    await Programme.create({
+      startDate: inDays(30),
+      weekday: weekdayOf(inDays(30)),
+      startTime: '18:00',
+      endTime: '20:00',
+      timeZone: TZ,
+      staff: [admin._id, mentor._id],
+      host: admin._id,
+    })
+    await User.updateOne({ _id: mentor._id }, { deletedAt: new Date() })
+    const page = (await as(admin).get(URL)).body
+    assert.deepEqual(page.defaults.staff, [String(admin._id)])
   })
 })

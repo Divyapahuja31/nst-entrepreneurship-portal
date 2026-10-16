@@ -197,16 +197,44 @@ const NUMBERS = [
   ['leadDays', 1, 13, 'Schedule each session 1 to 13 days ahead'],
 ]
 
+// The slot settings and their defaults. Only slot mode uses them, and the
+// pages hide them in group mode.
+const SLOT_DEFAULTS = { slotMinutes: 15, gapMinutes: 0, firstGapMinutes: 0 }
+
+const isModeProblem = body => !['GROUP', 'SLOTS'].includes(body.mode)
+
+// The first number out of range, as { field, error }, or null. In group
+// mode the slot settings aren't checked: a hidden field can't block saving.
+const numberProblem = (body, numbers) => {
+  const number = numbers.find(
+    ([field, min, max]) =>
+      !(body.mode === 'GROUP' && field in SLOT_DEFAULTS) &&
+      !intIn(body[field], min, max)
+  )
+  return number ? { field: number[0], error: number[3] } : null
+}
+
+// The numbers to save, checked by numberProblem: a slot setting left
+// invalid in group mode is saved as its default.
+const numbersOf = (body, numbers) =>
+  Object.fromEntries(
+    numbers.map(([field, min, max]) => [
+      field,
+      intIn(body[field], min, max) ? body[field] : SLOT_DEFAULTS[field],
+    ])
+  )
+
 // The first problem with the dates and times, or null.
 const timingProblem = body => {
   if (!isDay(body.startDate)) {
     return { field: 'startDate', error: 'Choose the date sessions start' }
   }
-  const number = NUMBERS.find(
-    ([field, min, max]) => !intIn(body[field], min, max)
-  )
+  if (isModeProblem(body)) {
+    return { field: 'mode', error: 'Choose group or slots' }
+  }
+  const number = numberProblem(body, NUMBERS)
   if (number) {
-    return { field: number[0], error: number[3] }
+    return number
   }
   if (!isTime(body.startTime) || !isTime(body.endTime)) {
     return { field: 'startTime', error: 'Choose a start and end time' }
@@ -216,9 +244,6 @@ const timingProblem = body => {
   }
   if (!isTimeZone(body.timeZone)) {
     return { field: 'timeZone', error: 'Choose a valid time zone' }
-  }
-  if (!['GROUP', 'SLOTS'].includes(body.mode)) {
-    return { field: 'mode', error: 'Choose group or slots' }
   }
   return null
 }
@@ -258,7 +283,7 @@ export const parseProgramme = body => {
   return {
     fields: {
       ...pick(['startDate', 'startTime', 'endTime', 'timeZone', 'mode']),
-      ...pick(NUMBERS.map(([field]) => field)),
+      ...numbersOf(body, NUMBERS),
       staff,
       excludedVentures,
       excludedFounders,
@@ -320,13 +345,10 @@ const extraTimingProblem = body => {
   if (minutesOf(body.endTime) <= minutesOf(body.startTime)) {
     return { field: 'endTime', error: 'The session must end after it starts' }
   }
-  if (!['GROUP', 'SLOTS'].includes(body.mode)) {
+  if (isModeProblem(body)) {
     return { field: 'mode', error: 'Choose group or slots' }
   }
-  const number = SLOT_NUMBERS.find(
-    ([field, min, max]) => !intIn(body[field], min, max)
-  )
-  return number ? { field: number[0], error: number[3] } : null
+  return numberProblem(body, SLOT_NUMBERS)
 }
 
 // Who runs an extra session and who is left out, or { field, error }.
@@ -344,7 +366,7 @@ const extraPeople = body => {
 }
 
 // Checks an extra session an admin or the board sent: its day and times (in
-// the programme's time zone), how it runs and who is in it. Returns
+// timeZone, the session's own), how it runs and who is in it. Returns
 // { field, error } or { fields }.
 export const parseExtraSession = (body, timeZone, now = new Date()) => {
   const problem = extraTimingProblem(body)
@@ -367,9 +389,7 @@ export const parseExtraSession = (body, timeZone, now = new Date()) => {
         title: typeof body.title === 'string' ? body.title.trim() : '',
         timeZone,
         mode: body.mode,
-        slotMinutes: body.slotMinutes,
-        gapMinutes: body.gapMinutes,
-        firstGapMinutes: body.firstGapMinutes,
+        ...numbersOf(body, SLOT_NUMBERS),
         ...people,
       },
     },

@@ -137,6 +137,10 @@ const problemsOf = (form, startups) => {
 
 const titleOf = session => session.extra.title || 'Programme session'
 
+// A session's day and times are in the zone it was made in, which the
+// server reads them in when it's changed; new ones use the page's.
+const zoneOf = (session, page) => session.extra.timeZone || page.timeZone
+
 // ------------------------------------------------------------ the editor
 
 function DetailsCard({ form, setField, fieldError, editing }) {
@@ -319,7 +323,7 @@ function SessionsList({ page, busy, onEdit, onCancel }) {
     <SessionRow
       key={session._id}
       session={session}
-      timeZone={page.timeZone}
+      timeZone={zoneOf(session, page)}
       busy={busy}
       onEdit={onEdit}
       onCancel={onCancel}
@@ -373,7 +377,7 @@ export default function PageExtraSessions() {
   const loaded = useLoaderData()
   const outcome = useCalendarOutcome()
   const [page, setPage] = useState(loaded)
-  // { id, form } while adding (id null) or changing a session.
+  // { id, form, timeZone } while adding (id null) or changing a session.
   const [editing, setEditing] = useState(null)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -456,7 +460,11 @@ export default function PageExtraSessions() {
               disabled={!page.host.connected}
               onClick={() => {
                 setError(null)
-                setEditing({ id: null, form: newForm(page.defaults) })
+                setEditing({
+                  id: null,
+                  form: newForm(page.defaults),
+                  timeZone: page.timeZone,
+                })
               }}
             >
               New Session
@@ -519,7 +527,7 @@ export default function PageExtraSessions() {
                   variant="body2"
                   color={barError ? 'error' : 'text.secondary'}
                 >
-                  {barError || `Times are in ${page.timeZone}.`}
+                  {barError || `Times are in ${editing.timeZone}.`}
                 </Typography>
               </Box>
               <Button
@@ -546,9 +554,11 @@ export default function PageExtraSessions() {
           busy={Boolean(editing) || cancelling}
           onEdit={session => {
             setError(null)
+            const timeZone = zoneOf(session, page)
             setEditing({
               id: session._id,
-              form: formOf(session, page.timeZone),
+              form: formOf(session, timeZone),
+              timeZone,
             })
             window.scrollTo({ top: 0, behavior: 'smooth' })
           }}

@@ -23,6 +23,7 @@ import {
   SidebarIcon,
   ShieldIcon,
   SignOutIcon,
+  SparklesIcon,
 } from '../components/icons'
 
 import { Navigate, Outlet, useLocation } from 'react-router'
@@ -84,12 +85,20 @@ const commonMenuItems = [
   },
 ]
 
+// For the academic board as well as admins.
+const extraSessionsItem = {
+  menu: 'Extra Sessions',
+  icon: SparklesIcon,
+  path: '/admin/sessions',
+}
+
 const adminMenuItems = [
   {
     menu: 'Programme',
     icon: CalendarIcon,
     path: '/admin/programme',
   },
+  extraSessionsItem,
   {
     menu: 'Accounts & Roles',
     icon: ShieldIcon,
@@ -102,7 +111,7 @@ const adminMenuItems = [
   },
 ]
 
-const menuFor = (user, { isStaff, isMentor, isAdmin, isStudent }) => {
+const menuFor = (user, { isStaff, isMentor, isAdmin, isBoard, isStudent }) => {
   if (isStaff) {
     // A mentor's lists hold only the startups assigned to them.
     const staffItems = isMentor
@@ -115,6 +124,7 @@ const menuFor = (user, { isStaff, isMentor, isAdmin, isStudent }) => {
     return [
       ...staffItems,
       ...(isAdmin ? adminMenuItems : []),
+      ...(isBoard && !isAdmin ? [extraSessionsItem] : []),
       ...commonMenuItems,
     ]
   }

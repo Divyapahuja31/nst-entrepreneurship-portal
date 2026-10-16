@@ -2,7 +2,7 @@ import { cycleForDate } from '@nst/shared/biweeklyCycles.js'
 
 import CheckIn from '../models/checkIn.js'
 import Programme from '../models/programme.js'
-import ProgrammeSession from '../models/programmeSession.js'
+import ProgrammeSession, { REGULAR } from '../models/programmeSession.js'
 import {
   googleFor,
   meetFields,
@@ -15,11 +15,13 @@ import {
   activeStaff,
   capacityProblem,
   drawAssignment,
+  extraTitle,
   getProgramme,
   invitedStartups,
   keepAssignment,
   reportsOrigin,
   sessionDates,
+  settingsFor,
   slotTimes,
 } from './programme.js'
 import {
@@ -49,9 +51,16 @@ const idOf = item => {
 }
 const idsOf = list => list.map(idOf).sort().join(',')
 
-const eventBody = ({ summary, startsAt, endsAt, timeZone, emails }) => ({
+const eventBody = ({
+  session,
   summary,
-  description: `Bi-weekly programme session.\n\nYour check-ins: ${appUrl()}/checkins`,
+  startsAt,
+  endsAt,
+  timeZone,
+  emails,
+}) => ({
+  summary,
+  description: `${session.extra ? `${extraTitle(session)}.` : 'Bi-weekly programme session.'}\n\nYour check-ins: ${appUrl()}/checkins`,
   start: { dateTime: startsAt.toISOString(), timeZone },
   end: { dateTime: endsAt.toISOString(), timeZone },
   attendees: [...new Set(emails)].map(email => ({ email })),
@@ -215,7 +224,8 @@ const removeRows = async (rows, { google, tell, deleteEvents }) => {
 }
 
 const applySlots = async (ctx, rows) => {
-  const { google, programme, plan, tell } = ctx
+  const { google, programme, session, plan, tell } = ctx
+  const kind = session.extra ? extraTitle(session) : 'bi-weekly check-in'
   const byVenture = rowsByVenture(rows)
   for (const meeting of plan) {
     const [startup] = meeting.startups
@@ -224,7 +234,8 @@ const applySlots = async (ctx, rows) => {
     byVenture.delete(String(startup.venture._id))
     const attendees = attendeesFor(startup.founders, row)
     const body = eventBody({
-      summary: `${startup.venture.name}: bi-weekly check-in with ${member.username}`,
+      session,
+      summary: `${startup.venture.name}: ${kind} with ${member.username}`,
       startsAt: meeting.startsAt,
       endsAt: meeting.endsAt,
       timeZone: programme.timeZone,
@@ -265,7 +276,7 @@ const applySlots = async (ctx, rows) => {
 }
 
 const applyGroup = async (ctx, rows) => {
-  const { google, programme, plan } = ctx
+  const { google, programme, session, plan } = ctx
   const [meeting] = plan
   if (!meeting) {
     await removeRows(rows, { ...ctx, deleteEvents: true })
@@ -282,7 +293,8 @@ const applyGroup = async (ctx, rows) => {
     attendees: attendeesFor(startup.founders, row),
   }))
   const body = eventBody({
-    summary: 'Bi-weekly group session',
+    session,
+    summary: session.extra ? extraTitle(session) : 'Bi-weekly group session',
     startsAt: meeting.startsAt,
     endsAt: meeting.endsAt,
     timeZone: programme.timeZone,
@@ -383,12 +395,14 @@ const redraw = (previous, ventureIds, staffIds) => {
   return draw
 }
 
-// Everything needed to apply a session's plan, or { problem }.
+// Everything needed to apply a session's plan, or { problem }. An extra
+// session runs with its own settings on the programme's calendar.
 const prepare = async (session, rows, fresh) => {
-  const programme = await getProgramme()
-  if (!programme) {
+  const saved = await getProgramme()
+  if (!saved) {
     return { problem: 'Set up the programme first.' }
   }
+  const programme = settingsFor(saved, session)
   const [staff, startups] = await Promise.all([
     activeStaff(programme.staff),
     invitedStartups(programme),
@@ -411,10 +425,8 @@ const prepare = async (session, rows, fresh) => {
   if (plan.some(meeting => meeting.endsAt > session.endsAt)) {
     return {
       problem:
-        capacityProblem(
-          { ...programme.toObject(), staff: staffIds },
-          startups.length
-        ) ?? 'The meetings don’t fit in the session.',
+        capacityProblem({ ...programme, staff: staffIds }, startups.length) ??
+        'The meetings don’t fit in the session.',
     }
   }
   const google = await hostGoogle(programme)
@@ -444,8 +456,11 @@ export const runSession = async (session, { fresh = false } = {}) => {
     const current = rows.filter(r => r.group === isGroup)
     await (isGroup ? applyGroup(ctx, current) : applySlots(ctx, current))
   } catch (error) {
-    await sendCancellations(tell, programme)
-    console.error(`Programme session ${session.number} not scheduled:`, error)
+    await sendCancellations(tell, programme, session)
+    console.error(
+      `Programme session ${session.number ?? extraTitle(session)} not scheduled:`,
+      error
+    )
     return failure(
       session,
       `Google Calendar refused a change: ${error.message}`,
@@ -459,7 +474,7 @@ export const runSession = async (session, { fresh = false } = {}) => {
     problem: null,
   })
   await session.save()
-  await sendCancellations(await stillLeaving(session, tell), programme)
+  await sendCancellations(await stillLeaving(session, tell), programme, session)
   await sendSessionEmails(session, programme)
   return {}
 }
@@ -518,7 +533,7 @@ export const cancelSession = async session => {
   session.set({ status: 'CANCELLED', problem: null })
   await session.save()
   if (programme) {
-    await sendCancellations(tell, programme)
+    await sendCancellations(tell, programme, session)
   }
 }
 
@@ -554,12 +569,18 @@ export const withSession = async (sessionId, work, now = new Date()) => {
 // their startups to the others, emailing only the people whose meeting
 // changed.
 export const removeProgrammeStaff = async (userId, now = new Date()) => {
-  const programme = await Programme.findOneAndUpdate(
-    { key: 'programme', staff: userId },
-    { $pull: { staff: userId } },
-    { returnDocument: 'after' }
-  )
-  if (!programme) {
+  const [programme, extras] = await Promise.all([
+    Programme.findOneAndUpdate(
+      { key: 'programme', staff: userId },
+      { $pull: { staff: userId } },
+      { returnDocument: 'after' }
+    ),
+    ProgrammeSession.updateMany(
+      { 'extra.staff': userId },
+      { $pull: { 'extra.staff': userId } }
+    ),
+  ])
+  if (!programme && !extras.modifiedCount) {
     return 0
   }
   const affected = await CheckIn.distinct('session', {
@@ -661,6 +682,7 @@ export const clearSessions = async (programme, now = new Date()) => {
     return false
   }
   const scheduled = await ProgrammeSession.find({
+    ...REGULAR,
     startsAt: { $gt: now },
     status: 'SCHEDULED',
   }).sort({ startsAt: 1 })
@@ -669,7 +691,8 @@ export const clearSessions = async (programme, now = new Date()) => {
       return false
     }
   }
-  await ProgrammeSession.deleteMany({})
+  // Extra sessions are left as they are.
+  await ProgrammeSession.deleteMany(REGULAR)
   await ProgrammeSession.insertMany(
     sessionDates(programme, await reportsOrigin())
   )

@@ -51,6 +51,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Write bi-weekly observations and evaluations | ✅ | ✅ | assigned startups | ❌ |
 | Reopen a submitted bi-weekly report | ✅ | ✅ | ❌ | ❌ |
 | Set up the programme: calendar, staff, who is invited, sessions | ✅ | ❌ | ❌ | ❌ |
+| Add, change or cancel extra sessions on any day | ✅ | ✅ | ❌ | ❌ |
 | Connect a Google Calendar | ✅ | ❌ | ✅ | ❌ |
 | Schedule, move or cancel their own check-ins | ❌ | ❌ | assigned startups | ❌ |
 | Notes and "Check Now" on a programme meeting | ✅ | the meetings they run | the meetings they run | ❌ |
@@ -147,6 +148,19 @@ Later changes don't start the draw again. A new time, gap or length moves the me
 
 Programme meetings show on each startup's Check-Ins tab and on founders' pages. Each staff member sees the meetings they run on their Overview, where they can read the transcript and write notes. Transcripts are collected through the admin's connection. A group session's transcript is collected once and attached to every startup in it.
 
+### Extra sessions
+
+Besides the 13 bi-weekly sessions, an admin or the academic board can add a session on any day from **Extra Sessions** (`/admin/sessions`), for a demo day rehearsal or a one-off review, say. Each runs like a bi-weekly session, with its own settings for that day:
+
+- A title, the day and the times, in the programme's time zone.
+- Slots or one group meeting, with its own slot length and gaps.
+- Its own meeting staff, starting from the programme's.
+- Its own invite list, starting from the programme's. Startups and founders can be switched off for that one day.
+
+It's scheduled as soon as it's saved. Its meetings go on the programme host's Google Calendar, so the programme must be set up first. Everyone in it is invited and emailed, with the session's title in the emails and invites. It can be changed or cancelled until it starts: a change emails only the people whose meeting moved, and a cancellation tells everyone. Its meetings show with the startups' check-ins, and transcripts and notes work as for the bi-weekly sessions. **Clear All Meetings** on Programme leaves extra sessions alone.
+
+Extra sessions have no session number. The unique index on session numbers from before them is replaced the first time one is added.
+
 ## Mentor check-ins (Google Calendar and Meet)
 
 Besides the programme, a startup's mentor can schedule their own check-ins with it.
@@ -186,6 +200,7 @@ npm test
 - `shared/permissions.test.js` checks every rule against the matrix above, for every role, startup relationship, lock state and status.
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
+- `backend/tests/extraSessions.test.js` checks extra sessions: who may add them, slots and group mode on the host's calendar, their own staff and invitations, changing and cancelling them, and that they stay apart from the bi-weekly sessions.
 - `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and report cycles counted from the reports' own start date, or else the sessions'.
 - `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, Meet Now, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 - `signup.test.js`, `startups.test.js`, `kpiReview.test.js`, `biweeklyRules.test.js` and `staffChanges.test.js` cover names and codes at sign-up, proposals and startup names, reviews from out-of-date pages, the bi-weekly rules above, and what happens when someone's role changes or they are deactivated.

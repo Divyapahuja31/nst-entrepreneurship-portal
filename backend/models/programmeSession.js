@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 
-// An extra session's own settings, for one day. Everything else (the host,
-// the time zone) comes from the programme.
+// An extra session's own settings, for one day. It needs no programme: the
+// calendar host (utils/calendarHost.js) holds its meetings.
 const extraSchema = new mongoose.Schema(
   {
     title: {
@@ -17,6 +17,8 @@ const extraSchema = new mongoose.Schema(
     slotMinutes: { type: Number, default: 15 },
     gapMinutes: { type: Number, default: 0 },
     firstGapMinutes: { type: Number, default: 0 },
+    // The zone its day and times were given in.
+    timeZone: { type: String, default: 'Asia/Kolkata' },
     staff: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     excludedVentures: [
       { type: mongoose.Schema.Types.ObjectId, ref: 'Venture' },

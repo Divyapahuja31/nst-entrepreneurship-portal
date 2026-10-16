@@ -2,6 +2,7 @@ import {
   Alert,
   Autocomplete,
   Box,
+  Button,
   FormControlLabel,
   Link,
   Switch,
@@ -9,6 +10,7 @@ import {
   Typography,
 } from '@mui/material'
 
+import { calendarConnectUrl } from '../../api/checkins'
 import EmptyState from '../EmptyState'
 import SectionCard from '../SectionCard'
 import { PeopleIcon, ShieldIcon } from '../icons'
@@ -201,5 +203,49 @@ export function Meetings({ meetings, timeZone }) {
         </Typography>
       ))}
     </Box>
+  )
+}
+
+// The Google Calendar every session goes on, bi-weekly and extra: one
+// admin's, connected from this page or the other one alike. The academic
+// board schedules through it. returnTo: the page to come back to.
+export function HostNotice({ host, returnTo }) {
+  if (host.connected && host.autoTranscripts) {
+    return null
+  }
+  const connect = label =>
+    host.canConnect && (
+      <Button
+        variant="outlined"
+        component="a"
+        href={calendarConnectUrl(returnTo)}
+      >
+        {label}
+      </Button>
+    )
+  if (host.connected) {
+    return (
+      <Alert severity="info" action={host.isYou && connect('Reconnect')}>
+        {host.isYou
+          ? 'Reconnect your Google Calendar so every session transcribes itself.'
+          : `Ask ${host.username} to reconnect their Google Calendar so every session transcribes itself.`}{' '}
+        Until then, someone has to turn transcripts on in each meeting.
+      </Alert>
+    )
+  }
+  let text =
+    'Sessions go on an admin’s Google Calendar. Ask an admin to connect theirs on Programme or Extra Sessions; you can then schedule through it.'
+  if (host.isYou) {
+    text =
+      'Every session, bi-weekly and extra, goes on your Google Calendar. Connect it here or on the other page; the academic board schedules through it too.'
+  } else if (host.canConnect) {
+    text = `Sessions went on ${host.username}’s Google Calendar, which is no longer connected. Connect yours to host them from now on.`
+  } else if (host.id) {
+    text = `Sessions go on ${host.username}’s Google Calendar, which is no longer connected. Ask them or another admin to connect.`
+  }
+  return (
+    <Alert severity="warning" action={connect('Connect Google Calendar')}>
+      {text}
+    </Alert>
   )
 }

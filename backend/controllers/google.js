@@ -6,13 +6,15 @@ import {
   canAutoTranscribe,
   getGoogleWorkspace,
 } from '../utils/googleWorkspace.js'
+import { claimHostIfFree } from '../utils/calendarHost.js'
 import { turnOnTranscriptionForHost } from '../utils/checkInHelper.js'
 import { cookieOptions } from '../utils/token.js'
 import { encryptToken, decryptToken } from '../utils/tokenCrypto.js'
 
 // A mentor connects their Google Calendar so the portal can put check-ins on
-// it; the admin hosting the programme connects theirs for its sessions. The
-// route allows mentors and admins.
+// it; an admin connects theirs to host the programme's sessions, from the
+// Programme or Extra Sessions page alike (utils/calendarHost.js). The route
+// allows mentors and admins.
 
 // Ties Google's callback to the browser that started connecting, and
 // remembers which page to return to.
@@ -95,6 +97,9 @@ export const googleCallback = async (req, res) => {
       },
       { upsert: true }
     )
+    // An admin hosts the sessions unless another connected admin already
+    // does.
+    await claimHostIfFree(req.user)
     // Meetings already scheduled transcribe themselves too. The mentor
     // doesn't wait for it.
     turnOnTranscriptionForHost(req.user.id).catch(err =>

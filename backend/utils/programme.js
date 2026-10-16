@@ -278,16 +278,21 @@ const EXTRA_FIELDS = [
   'excludedFounders',
 ]
 
+export const DEFAULT_TIME_ZONE = 'Asia/Kolkata'
+
 // The settings a session runs with: the programme's, with an extra session's
-// own on top. A plain object either way.
+// own on top. A plain object either way; an extra session needs no
+// programme.
 export const settingsFor = (programme, session) => {
-  const settings = programme.toObject?.() ?? { ...programme }
+  const settings = programme?.toObject?.() ?? { ...programme }
   if (!session?.extra) {
     return settings
   }
   for (const field of EXTRA_FIELDS) {
     settings[field] = session.extra[field]
   }
+  settings.timeZone =
+    session.extra.timeZone || settings.timeZone || DEFAULT_TIME_ZONE
   // Its own hours, so the slots are counted in its window.
   settings.startTime = clockIn(session.startsAt, settings.timeZone)
   settings.endTime = clockIn(session.endsAt, settings.timeZone)
@@ -360,6 +365,7 @@ export const parseExtraSession = (body, timeZone, now = new Date()) => {
       endsAt: zonedDate(body.date, body.endTime, timeZone),
       extra: {
         title: typeof body.title === 'string' ? body.title.trim() : '',
+        timeZone,
         mode: body.mode,
         slotMinutes: body.slotMinutes,
         gapMinutes: body.gapMinutes,

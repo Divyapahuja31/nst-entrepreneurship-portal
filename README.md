@@ -142,7 +142,7 @@ An admin runs the programme from **Programme** (`/admin/programme`). It sets one
   - **Slots:** each startup meets one staff member in its own slot (15 minutes by default, with an optional gap between slots and before the first). The staff run their slots in parallel. Startups are dealt at random and evenly across the staff, drawn again for every session. Saving refuses settings that leave too few slots for the invited startups.
   - **Group:** one meeting for the whole session, with every invited founder and all the staff.
 
-Each session is scheduled a few days before it (7 by default, "Schedule ahead"). The meetings are drawn, created as events with Meet links on the admin's Google Calendar, and every staff member and founder is invited and emailed their time and link. The admin who first saves the programme hosts the events and must connect their Google Calendar on that page. An admin can also **Schedule Now**, **Redraw** or **Cancel** each session.
+Each session is scheduled a few days before it (7 by default, "Schedule ahead"). The meetings are drawn, created as events with Meet links on the admin's Google Calendar, and every staff member and founder is invited and emailed their time and link. The events go on the **calendar host's** Google Calendar: the first admin to connect Google on **Programme** or **Extra Sessions** (either page, the same connection), or else the admin who first saves the programme. Another admin takes over only once the host's connection is gone, since meetings already on a lost host's calendar can't be changed through a new one. The academic board schedules through the host's connection. An admin can also **Schedule Now**, **Redraw** or **Cancel** each session.
 
 Later changes don't start the draw again. A new time, gap or length moves the meetings, and adding or removing staff, startups or founders moves only what it has to. Only people whose meeting changed get an email, and anyone removed gets a cancellation. If a staff member is deactivated, save the programme or redraw to move their startups.
 
@@ -157,7 +157,7 @@ Besides the 13 bi-weekly sessions, an admin or the academic board can add a sess
 - Its own meeting staff, starting from the programme's.
 - Its own invite list, starting from the programme's. Startups and founders can be switched off for that one day.
 
-It's scheduled as soon as it's saved. Its meetings go on the programme host's Google Calendar, so the programme must be set up first. Everyone in it is invited and emailed, with the session's title in the emails and invites. It can be changed or cancelled until it starts: a change emails only the people whose meeting moved, and a cancellation tells everyone. Its meetings show with the startups' check-ins, and transcripts and notes work as for the bi-weekly sessions. **Clear All Meetings** on Programme leaves extra sessions alone.
+It needs no bi-weekly programme. It's scheduled as soon as it's saved, and its meetings go on the calendar host's Google Calendar (see above), so an admin must have connected Google first. Before there is a host, a connected admin who adds one becomes it. Everyone in it is invited and emailed, with the session's title in the emails and invites. It can be changed or cancelled until it starts: a change emails only the people whose meeting moved, and a cancellation tells everyone. Its meetings show with the startups' check-ins, and transcripts and notes work as for the bi-weekly sessions. **Clear All Meetings** on Programme leaves extra sessions alone.
 
 Extra sessions have no session number. The unique index on session numbers from before them is replaced the first time one is added.
 
@@ -189,7 +189,7 @@ After each check-in the server looks for its Google Meet transcript through the 
 3. Set `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` and `GOOGLE_WORKSPACE_REDIRECT_URI` in `backend/.env`. Without them the sign-in client (`GOOGLE_CLIENT_*`) is used, which then needs the scopes and redirect URI above. Students would see a consent screen asking for calendar access only if they reached the connect route, which is for mentors only.
 4. Set `GOOGLE_TOKEN_KEY` to 32 random bytes (`openssl rand -base64 32`, or `-hex 32`). Mentors' refresh tokens are encrypted with it. Changing it means every mentor connects again.
 
-The admin hosting the programme connects their calendar on the Programme page. Each mentor clicks **Connect Google Calendar** once, the first time they schedule their own check-in. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
+The admin hosting the sessions connects their calendar on the Programme or Extra Sessions page. Each mentor clicks **Connect Google Calendar** once, the first time they schedule their own check-in. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
 
 ## Tests
 

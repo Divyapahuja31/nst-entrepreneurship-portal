@@ -280,10 +280,9 @@ function BiWeekly({ data: propData }) {
   const detailRef = React.useRef(null)
 
   const cycles = React.useMemo(
-    // Every startup's cycles count from the programme start once it is set.
-    () =>
-      computeCycles(data?.programmeStart || venture?.createdAt || new Date()),
-    [data?.programmeStart, venture?.createdAt]
+    // Every startup's cycles count from the reports' start once it is set.
+    () => computeCycles(data?.reportsStart || venture?.createdAt || new Date()),
+    [data?.reportsStart, venture?.createdAt]
   )
 
   const currentCycle = React.useMemo(() => {

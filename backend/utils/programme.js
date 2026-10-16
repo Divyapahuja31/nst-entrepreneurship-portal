@@ -5,6 +5,7 @@ import { STAFF_ROLES } from '@nst/shared/permissions.js'
 
 import Founder from '../models/founder.js'
 import Programme from '../models/programme.js'
+import ReportSchedule from '../models/reportSchedule.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
 
@@ -65,18 +66,20 @@ const minutesOf = hhmm => {
 
 // ------------------------------------------------------------- sessions
 
-// When cycle 1 starts: midnight of the start date in the programme's zone.
+// When the first session's fortnight starts: midnight of the start date in
+// the programme's zone. Also when the reports start if an admin hasn't set
+// that apart (reportsOrigin).
 export const programmeStart = programme =>
   zonedDate(programme.startDate, '00:00', programme.timeZone)
 
-// One session per cycle: the first `weekday` on or after the start date,
-// then every two weeks.
-export const sessionDates = programme => {
+// One session a fortnight: the first `weekday` on or after the start date,
+// then every two weeks. Each is labelled with the report cycle it falls in,
+// counted from `origin`.
+export const sessionDates = (programme, origin = programmeStart(programme)) => {
   const first = addDays(
     programme.startDate,
     (programme.weekday - weekdayOf(programme.startDate) + 7) % 7
   )
-  const origin = programmeStart(programme)
   return Array.from({ length: CYCLES }, (_, i) => {
     const day = addDays(first, i * CYCLE_DAYS)
     const startsAt = zonedDate(day, programme.startTime, programme.timeZone)
@@ -91,12 +94,29 @@ export const sessionDates = programme => {
 
 export const getProgramme = () => Programme.findOne({ key: 'programme' })
 
-// Where a startup's cycles count from: the programme's start once an admin
-// has set one, before that the day the startup was created.
-export const cycleOrigin = async venture => {
+export const getReportSchedule = () =>
+  ReportSchedule.findOne({ key: 'reports' })
+
+// When cycle 1 of the reports starts: midnight of its start date in its zone.
+export const reportsStart = schedule =>
+  zonedDate(schedule.startDate, '00:00', schedule.timeZone)
+
+// Where every startup's report cycles count from: the date an admin set for
+// the reports, else the programme's start (as before the two were apart),
+// else null.
+export const reportsOrigin = async () => {
+  const schedule = await getReportSchedule().lean()
+  if (schedule) {
+    return reportsStart(schedule)
+  }
   const programme = await getProgramme().select('startDate timeZone').lean()
-  return programme ? programmeStart(programme) : venture.createdAt
+  return programme ? programmeStart(programme) : null
 }
+
+// A startup's report cycles: from reportsOrigin, or before any is set, from
+// the day the startup was created.
+export const cycleOrigin = async venture =>
+  (await reportsOrigin()) ?? venture.createdAt
 
 // ------------------------------------------------------------- capacity
 
@@ -174,7 +194,7 @@ const NUMBERS = [
 // The first problem with the dates and times, or null.
 const timingProblem = body => {
   if (!isDay(body.startDate)) {
-    return { field: 'startDate', error: 'Choose the date cycle 1 starts' }
+    return { field: 'startDate', error: 'Choose the date sessions start' }
   }
   const number = NUMBERS.find(
     ([field, min, max]) => !intIn(body[field], min, max)
@@ -195,6 +215,18 @@ const timingProblem = body => {
     return { field: 'mode', error: 'Choose group or slots' }
   }
   return null
+}
+
+// Checks the reports' start an admin sent. Returns { field, error } or
+// { fields }.
+export const parseReportSchedule = body => {
+  if (!isDay(body.startDate)) {
+    return { field: 'startDate', error: 'Choose the date the reports start' }
+  }
+  if (!isTimeZone(body.timeZone)) {
+    return { field: 'timeZone', error: 'Choose a valid time zone' }
+  }
+  return { fields: { startDate: body.startDate, timeZone: body.timeZone } }
 }
 
 // Checks the settings an admin sent. Returns { field, error } or { fields }.

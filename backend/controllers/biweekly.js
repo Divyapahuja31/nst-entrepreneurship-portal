@@ -9,11 +9,7 @@ import BiWeeklyEvaluation from '../models/biWeeklyEvaluation.js'
 import BiWeeklyObservation from '../models/biWeeklyObservation.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
-import {
-  cycleOrigin,
-  getProgramme,
-  programmeStart,
-} from '../utils/programme.js'
+import { cycleOrigin, reportsOrigin } from '../utils/programme.js'
 import startupStage from '../models/enums/startupStage.js'
 import {
   validateCycleNumber,
@@ -35,11 +31,6 @@ const withStageLabel = venture =>
     ...venture.toJSON(),
     stageLabel: startupStage[venture.stage] ?? venture.stage,
   }
-
-const currentProgrammeStart = async () => {
-  const programme = await getProgramme().select('startDate timeZone').lean()
-  return programme ? programmeStart(programme) : null
-}
 
 export const getBiWeeklyData = async (req, res) => {
   try {
@@ -79,7 +70,7 @@ export const getBiWeeklyData = async (req, res) => {
       evaluations,
       observations,
       // Where every startup's cycles count from, once an admin has set it.
-      programmeStart: await currentProgrammeStart(),
+      reportsStart: await reportsOrigin(),
     })
   } catch (err) {
     console.error('Get biweekly error:', err)

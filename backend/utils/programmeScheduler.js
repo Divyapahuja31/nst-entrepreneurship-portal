@@ -1,3 +1,5 @@
+import { cycleForDate } from '@nst/shared/biweeklyCycles.js'
+
 import CheckIn from '../models/checkIn.js'
 import Programme from '../models/programme.js'
 import ProgrammeSession from '../models/programmeSession.js'
@@ -16,6 +18,7 @@ import {
   getProgramme,
   invitedStartups,
   keepAssignment,
+  reportsOrigin,
   sessionDates,
   slotTimes,
 } from './programme.js'
@@ -611,7 +614,8 @@ export const scheduleDueSessions = async (now = new Date()) => {
 // and those already scheduled are brought in line (keeping the draw).
 export const syncSessions = async (programme, now = new Date()) => {
   const toUpdate = []
-  for (const date of sessionDates(programme)) {
+  const origin = await reportsOrigin()
+  for (const date of sessionDates(programme, origin)) {
     let session = await ProgrammeSession.findOne({ number: date.number })
     // A session already over stays as it was, unless the new dates put it
     // ahead (cycle 1 moved later): then the old one belonged to the old
@@ -666,6 +670,30 @@ export const clearSessions = async (programme, now = new Date()) => {
     }
   }
   await ProgrammeSession.deleteMany({})
-  await ProgrammeSession.insertMany(sessionDates(programme))
+  await ProgrammeSession.insertMany(
+    sessionDates(programme, await reportsOrigin())
+  )
   return true
+}
+
+// After the reports' start moves: each session, and its meetings in the
+// startups' check-ins, is labelled with the report cycle it now falls in.
+// The meetings themselves don't move.
+export const relabelSessionCycles = async () => {
+  const origin = await reportsOrigin()
+  const sessions = await ProgrammeSession.find().select('startsAt cycle_number')
+  for (const session of sessions) {
+    const cycle = origin ? cycleForDate(origin, session.startsAt) : null
+    if (cycle === session.cycle_number) {
+      continue
+    }
+    await ProgrammeSession.updateOne(
+      { _id: session._id },
+      { $set: { cycle_number: cycle } }
+    )
+    await CheckIn.updateMany(
+      { session: session._id },
+      { $set: { cycle_number: cycle } }
+    )
+  }
 }

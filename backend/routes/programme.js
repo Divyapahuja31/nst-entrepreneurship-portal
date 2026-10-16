@@ -5,6 +5,7 @@ import {
   getProgrammePage,
   redrawSession,
   saveProgramme,
+  saveReportSchedule,
   scheduleSessionNow,
 } from '../controllers/programme.js'
 
@@ -13,6 +14,7 @@ const router = Router()
 
 router.get('/', getProgrammePage)
 router.put('/', saveProgramme)
+router.put('/reports', saveReportSchedule)
 router.post('/sessions/:sessionId/schedule', scheduleSessionNow)
 router.post('/sessions/:sessionId/redraw', redrawSession)
 router.post('/sessions/:sessionId/cancel', cancelProgrammeSession)

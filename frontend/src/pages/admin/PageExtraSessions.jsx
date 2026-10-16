@@ -54,6 +54,16 @@ import useCalendarOutcome from '../../components/programme/useCalendarOutcome'
 
 const SLOT_FIELDS = ['slotMinutes', 'gapMinutes', 'firstGapMinutes']
 
+// The fields that show their own error under the input.
+const INLINE_FIELDS = new Set([
+  'title',
+  'date',
+  'startTime',
+  'endTime',
+  'staff',
+  ...SLOT_FIELDS,
+])
+
 // "YYYY-MM-DD" and "HH:MM" of a moment in timeZone, for the date and time
 // fields.
 const ymdIn = (date, timeZone) =>
@@ -416,6 +426,17 @@ export default function PageExtraSessions() {
     }
     setPage(result.page)
     setEditing(null)
+    // Saved either way, but Google may have refused it: then nobody is
+    // invited yet, and the session shows why.
+    const saved = editing.id
+      ? result.page.sessions.find(s => s._id === editing.id)
+      : result.page.sessions.find(
+          s => !page.sessions.some(p => p._id === s._id)
+        )
+    if (saved?.problem) {
+      setMessage('Session saved, but not scheduled yet. See the warning on it.')
+      return
+    }
     setMessage(
       editing.id
         ? 'Session changed. Only people whose meeting moved are emailed.'
@@ -436,7 +457,9 @@ export default function PageExtraSessions() {
     setMessage('Session cancelled. Everyone in it is told.')
   }
 
-  let barError = error && !error.field ? error.error : ''
+  // A server error on a field with no input here (capacity, invites) shows in
+  // the bar, or it would show nowhere.
+  let barError = error && !INLINE_FIELDS.has(error.field) ? error.error : ''
   if (problems.invites) {
     barError = problems.invites
   } else if (overCapacity) {

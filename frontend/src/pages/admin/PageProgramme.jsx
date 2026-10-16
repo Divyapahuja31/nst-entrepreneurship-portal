@@ -161,9 +161,13 @@ function ReportsCard({ reports, onSaved }) {
   if (reports.startDate) {
     subtitle = `Cycle 1 of every startup’s reports opens on ${formatDay(reports.startDate)}, whenever the sessions start.`
   } else if (reports.startsAt) {
+    // Midnight in the sessions' zone, which may be another day here.
     subtitle = `Not set yet, so the reports follow the sessions: cycle 1 starts on ${new Date(
       reports.startsAt
-    ).toLocaleDateString(undefined, { dateStyle: 'medium' })}.`
+    ).toLocaleDateString(undefined, {
+      dateStyle: 'medium',
+      timeZone: reports.timeZone,
+    })}.`
   }
   const fieldError = field => (error?.field === field ? error.error : '')
 
@@ -541,8 +545,8 @@ function SessionsCard({
             upcoming.map(row)
           ) : (
             <Typography variant="body2" color="text.secondary">
-              Every session has taken place. Move cycle 1 to start a new
-              calendar.
+              Every session has taken place. Move the date sessions start to
+              begin a new calendar.
             </Typography>
           )}
           {past.length > 0 && (
@@ -695,6 +699,14 @@ export default function PageProgramme() {
       return
     }
     setPage(result.page)
+    // Google may have refused it: the session then shows why.
+    const after = result.page.sessions.find(s => s._id === session._id)
+    if (after?.problem) {
+      setMessage(
+        `Session ${session.number} couldn’t be updated. See the warning on it.`
+      )
+      return
+    }
     setMessage(DONE[action](session))
   }
 
@@ -834,12 +846,12 @@ export default function PageProgramme() {
         <DialogTitle>Clear All Meetings?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Every upcoming meeting comes off the Google Calendars, and everyone
-            in one gets a cancellation email. The 13 sessions then start again
-            from the settings, all planned: each is drawn{' '}
+            Every upcoming bi-weekly meeting comes off the Google Calendars, and
+            everyone in one gets a cancellation email. The 13 sessions then
+            start again from the settings, all planned: each is drawn{' '}
             {plural(page.programme.leadDays, 'day')} before it, or when you
             press Schedule Now. Meetings already held stay in the startups’
-            check-ins.
+            check-ins, and extra sessions stay as they are.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

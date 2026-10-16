@@ -674,7 +674,7 @@ export const removeProgrammeStaff = async (userId, now = new Date()) => {
 // Schedules the sessions now within their lead time, and retries scheduled
 // ones a change couldn't finish. Run by the background job.
 export const scheduleDueSessions = async (now = new Date()) => {
-  // Extra sessions need no programme; they use its lead time when it has one.
+  // The bi-weekly sessions are drawn their lead time ahead.
   const programme = await getProgramme()
   const leadDays = programme?.leadDays ?? 7
   const horizon = new Date(now.getTime() + leadDays * DAY_MS)
@@ -682,6 +682,9 @@ export const scheduleDueSessions = async (now = new Date()) => {
     startsAt: { $gt: now },
     $or: [
       { status: 'PLANNED', startsAt: { $lte: horizon } },
+      // An extra session is scheduled when it's saved, whatever the lead
+      // time; one that couldn't be then is tried again.
+      { status: 'PLANNED', extra: { $ne: null } },
       { status: 'SCHEDULED', problem: { $ne: null } },
     ],
   }).sort({ startsAt: 1 })

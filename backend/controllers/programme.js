@@ -76,15 +76,15 @@ export const meetingsBySession = async sessions => {
 
 // When the reports start: the date an admin set for them (null until then)
 // and the moment cycle 1 opens, which follows the sessions while no date is
-// set.
-const reportsOverview = async () => {
+// set. Its zone is the sessions' too until then.
+const reportsOverview = async programme => {
   const [schedule, startsAt] = await Promise.all([
     getReportSchedule().lean(),
     reportsOrigin(),
   ])
   return {
     startDate: schedule?.startDate ?? null,
-    timeZone: schedule?.timeZone ?? DEFAULTS.timeZone,
+    timeZone: schedule?.timeZone ?? programme?.timeZone ?? DEFAULTS.timeZone,
     startsAt,
   }
 }
@@ -97,7 +97,7 @@ const overview = async user => {
     activeStaff(),
     ProgrammeSession.find(REGULAR).sort({ number: 1 }),
     hostStatus(user),
-    reportsOverview(),
+    reportsOverview(programme),
   ])
   // Only people who can still run sessions: a deactivated account left in
   // the settings would otherwise be counted but not shown, and block saving.
@@ -172,6 +172,10 @@ export const saveProgramme = async (req, res) => {
       { upsert: true, returnDocument: 'after', runValidators: true }
     )
     await syncSessions(programme)
+    // Until an admin sets the reports' own date they follow the sessions, so
+    // a new start moves the report cycles: extra sessions and their meetings
+    // take the cycle they now fall in.
+    await relabelSessionCycles()
     return res.json(await overview(req.user))
   } catch (error) {
     console.error('Programme save error:', error)

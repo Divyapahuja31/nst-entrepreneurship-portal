@@ -10,7 +10,11 @@ import Programme from '../models/programme.js'
 import ProgrammeSession from '../models/programmeSession.js'
 import User from '../models/user.js'
 import { claimHostIfFree, getHostId } from '../utils/calendarHost.js'
-import { rerunScheduledSessions } from '../utils/programmeScheduler.js'
+import { GoogleError } from '../utils/googleWorkspace.js'
+import {
+  rerunScheduledSessions,
+  scheduleDueSessions,
+} from '../utils/programmeScheduler.js'
 import {
   connectCalendar,
   cookieFor,
@@ -42,11 +46,11 @@ const weekdayOf = ymd => new Date(`${ymd}T00:00:00Z`).getUTCDay()
 const URL = '/api/admin/extra-sessions'
 
 // The bi-weekly programme, with its sessions a month away so none is
-// scheduled while these tests run.
-const saveProgramme = () =>
+// scheduled while these tests run, unless it starts on another day.
+const saveProgramme = (startDate = inDays(30)) =>
   as(data.users.admin).put('/api/admin/programme', {
-    startDate: inDays(30),
-    weekday: weekdayOf(inDays(30)),
+    startDate,
+    weekday: weekdayOf(startDate),
     startTime: '18:00',
     endTime: '20:00',
     timeZone: TZ,
@@ -206,6 +210,28 @@ describe('adding an extra session', () => {
     assert.equal((await as(board).get(URL)).body.host.connected, true)
   })
 
+  it('one Google refused is tried again, however far ahead', async () => {
+    google.failures.set(
+      'createEvent',
+      new GoogleError('Backend Error', { status: 503 })
+    )
+    const res = await as(data.users.admin).post(
+      URL,
+      extra({ date: inDays(30) })
+    )
+    assert.equal(res.status, 201)
+    const [refused] = await extraSessions()
+    assert.equal(refused.status, 'PLANNED')
+    assert.match(refused.problem, /Backend Error/)
+
+    google.failures.clear()
+    assert.equal(await scheduleDueSessions(), 1)
+    const [session] = await extraSessions()
+    assert.equal(session.status, 'SCHEDULED')
+    assert.equal(session.problem, null)
+    assert.equal((await meetingsOf(session)).length, 2)
+  })
+
   it('needs a future time, staff and room for everyone', async () => {
     const { admin } = data.users
     await saveProgramme()
@@ -279,6 +305,22 @@ describe('changing an extra session', () => {
 
     const again = await as(board).post(`${URL}/${session._id}/cancel`)
     assert.equal(again.status, 409)
+  })
+
+  it('takes the report cycle the programme start puts it in', async () => {
+    await as(data.users.admin).post(URL, extra())
+    const [session] = await extraSessions()
+    assert.equal(session.cycle_number, null)
+
+    // The reports follow the sessions, which started 20 days ago: three days
+    // from now is in cycle 2.
+    const saved = await saveProgramme(inDays(-20))
+    assert.equal(saved.status, 200)
+    const after = await ProgrammeSession.findById(session._id)
+    assert.equal(after.cycle_number, 2)
+    const meetings = await meetingsOf(session)
+    assert.equal(meetings.length, 2)
+    assert.ok(meetings.every(m => m.cycle_number === 2))
   })
 
   it("can't change a bi-weekly session through these routes", async () => {

@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 import CheckIn from '../models/checkIn.js'
 import GoogleCredential from '../models/googleCredential.js'
 import Programme from '../models/programme.js'
-import ProgrammeSession from '../models/programmeSession.js'
+import ProgrammeSession, { REGULAR } from '../models/programmeSession.js'
 import ReportSchedule from '../models/reportSchedule.js'
 import User from '../models/user.js'
 import { canAutoTranscribe } from '../utils/googleWorkspace.js'
@@ -57,7 +57,7 @@ const settingsOf = programme =>
   )
 
 // The session meetings, by session id.
-const meetingsBySession = async sessions => {
+export const meetingsBySession = async sessions => {
   const rows = await CheckIn.find({
     session: { $in: sessions.map(s => s._id) },
     status: { $ne: 'CANCELLED' },
@@ -113,7 +113,7 @@ const overview = async user => {
   const [invites, staffOptions, sessions, host, reports] = await Promise.all([
     inviteList(programme),
     activeStaff(),
-    ProgrammeSession.find().sort({ number: 1 }),
+    ProgrammeSession.find(REGULAR).sort({ number: 1 }),
     hostOf(programme, user),
     reportsOverview(),
   ])
@@ -225,7 +225,10 @@ const onSession =
       if (!mongoose.isValidObjectId(sessionId)) {
         return res.status(400).json({ error: 'Valid session id is required' })
       }
-      const session = await ProgrammeSession.findById(sessionId)
+      const session = await ProgrammeSession.findOne({
+        _id: sessionId,
+        ...REGULAR,
+      })
       if (!session) {
         return res.status(404).json({ error: 'Session not found' })
       }

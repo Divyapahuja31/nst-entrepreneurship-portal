@@ -12,12 +12,9 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  FormControlLabel,
-  Link,
   MenuItem,
   Paper,
   Snackbar,
-  Switch,
   TextField,
   Typography,
 } from '@mui/material'
@@ -35,11 +32,22 @@ import SectionCard from '../../components/SectionCard'
 import StatusPill from '../../components/StatusPill'
 import { CALENDAR_OUTCOMES } from '../../components/calendarOutcomes'
 import {
-  CalendarIcon,
-  DocTextIcon,
-  PeopleIcon,
-  ShieldIcon,
-} from '../../components/icons'
+  LIMITS,
+  TIME_ZONES,
+  clockOf,
+  dayOf,
+  invitedCount,
+  minutesOf,
+  plural,
+  sessionStatus,
+  slotsPerStaff,
+} from '../../components/programme/helpers'
+import {
+  InvitesCard,
+  Meetings,
+  StaffCard,
+} from '../../components/programme/parts'
+import { CalendarIcon, DocTextIcon } from '../../components/icons'
 
 const WEEKDAYS = [
   'Sunday',
@@ -60,42 +68,6 @@ const NUMBER_FIELDS = [
 ]
 
 const DAY_MS = 24 * 60 * 60 * 1000
-
-const TIME_ZONES = Intl.supportedValuesOf?.('timeZone') ?? []
-
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
-
-const minutesOf = time => {
-  const [h, m] = (time || '0:0').split(':').map(Number)
-  return h * 60 + m
-}
-
-// The same sum as the server: how many slots one person can run.
-const slotsPerStaff = form => {
-  const window =
-    minutesOf(form.endTime) - minutesOf(form.startTime) - form.firstGapMinutes
-  if (window < form.slotMinutes || form.slotMinutes <= 0) {
-    return 0
-  }
-  return Math.floor(
-    (window + form.gapMinutes) / (form.slotMinutes + form.gapMinutes)
-  )
-}
-
-// The server's checks, run as the admin types: field -> what's wrong. Slot
-// fields count only in slot mode, where they show.
-const LIMITS = [
-  ['slotMinutes', 5, 120, 'A slot lasts 5 to 120 minutes', true],
-  ['gapMinutes', 0, 60, 'The gap between slots is 0 to 60 minutes', true],
-  [
-    'firstGapMinutes',
-    0,
-    120,
-    'The gap before the first slot is 0 to 120 minutes',
-    true,
-  ],
-  ['leadDays', 1, 13, 'Schedule each session 1 to 13 days ahead', false],
-]
 
 const problemsOf = form => {
   const problems = {}
@@ -152,23 +124,6 @@ const snapshotOf = form =>
       ])
       .sort(([a], [b]) => a.localeCompare(b))
   )
-
-const invitedCount = (invites, form) =>
-  invites.filter(
-    s =>
-      !form.excludedVentures.has(String(s.venture._id)) &&
-      s.founders.some(f => !form.excludedFounders.has(String(f._id)))
-  ).length
-
-const toggle = (set, id, on) => {
-  const next = new Set(set)
-  if (on) {
-    next.delete(id)
-  } else {
-    next.add(id)
-  }
-  return next
-}
 
 // ------------------------------------------------------------ settings
 
@@ -453,236 +408,7 @@ function SettingsCard({ form, setField, fieldError, configured, saved, host }) {
   )
 }
 
-// Whether the invited startups fit, recomputed as the form changes.
-function CapacityNotice({ form, startups }) {
-  if (form.mode !== 'SLOTS') {
-    return (
-      <Alert severity="info" sx={{ mt: 2 }}>
-        {plural(startups, 'startup')} in one group meeting.
-      </Alert>
-    )
-  }
-  const perStaff = slotsPerStaff(form)
-  const room = perStaff * form.staff.length
-  const sum = `${plural(form.staff.length, 'staff member')} × ${plural(perStaff, 'slot')} each = room for ${room}`
-  return room >= startups ? (
-    <Alert severity="success" sx={{ mt: 2 }}>
-      {sum}. All {plural(startups, 'invited startup')} fit.
-    </Alert>
-  ) : (
-    <Alert severity="warning" sx={{ mt: 2 }}>
-      {sum}, but {plural(startups, 'startup')} {startups === 1 ? 'is' : 'are'}{' '}
-      invited. Add staff, shorten the slots or widen the session window.
-    </Alert>
-  )
-}
-
-function StaffCard({ form, setField, fieldError, options, startups }) {
-  const value = options.filter(o => form.staff.includes(String(o._id)))
-  return (
-    <SectionCard
-      icon={ShieldIcon}
-      title="Meeting Staff"
-      subtitle="The people who run the sessions. Whoever mentors a startup doesn’t matter here."
-    >
-      <Autocomplete
-        multiple
-        options={options}
-        value={value}
-        onChange={(_, picked) =>
-          setField(
-            'staff',
-            picked.map(p => String(p._id))
-          )
-        }
-        getOptionLabel={o => `${o.username} · ${o.email}`}
-        isOptionEqualToValue={(a, b) => String(a._id) === String(b._id)}
-        renderInput={params => (
-          <TextField
-            {...params}
-            label="Staff"
-            error={Boolean(fieldError('staff'))}
-            helperText={
-              fieldError('staff') ||
-              'Admins, academic board and mentors, including you. At least one.'
-            }
-          />
-        )}
-      />
-      <CapacityNotice form={form} startups={startups} />
-    </SectionCard>
-  )
-}
-
-function InvitesCard({ invites, form, setField }) {
-  if (!invites.length) {
-    return (
-      <SectionCard icon={PeopleIcon} title="Invited">
-        <EmptyState
-          icon={PeopleIcon}
-          title="No startups yet"
-          description="Startups with active founders appear here, invited by default."
-        />
-      </SectionCard>
-    )
-  }
-  return (
-    <SectionCard
-      icon={PeopleIcon}
-      title="Invited"
-      subtitle="Every startup and founder is invited unless you switch them off. New ones are invited automatically."
-    >
-      <Box sx={{ display: 'grid', gap: 1.5 }}>
-        {invites.map(({ venture, founders }) => {
-          const ventureId = String(venture._id)
-          const ventureIn = !form.excludedVentures.has(ventureId)
-          return (
-            <Box
-              key={ventureId}
-              sx={{ p: 2, borderRadius: '14px', bgcolor: 'background.default' }}
-            >
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={ventureIn}
-                    onChange={e =>
-                      setField(
-                        'excludedVentures',
-                        toggle(
-                          form.excludedVentures,
-                          ventureId,
-                          e.target.checked
-                        )
-                      )
-                    }
-                  />
-                }
-                label={
-                  <Typography variant="subtitle1">{venture.name}</Typography>
-                }
-              />
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, pl: 6 }}>
-                {founders.map(founder => {
-                  const founderId = String(founder._id)
-                  return (
-                    <FormControlLabel
-                      key={founderId}
-                      disabled={!ventureIn}
-                      control={
-                        <Switch
-                          size="small"
-                          checked={
-                            ventureIn && !form.excludedFounders.has(founderId)
-                          }
-                          onChange={e =>
-                            setField(
-                              'excludedFounders',
-                              toggle(
-                                form.excludedFounders,
-                                founderId,
-                                e.target.checked
-                              )
-                            )
-                          }
-                        />
-                      }
-                      label={
-                        <Typography variant="body2">
-                          {founder.username}
-                        </Typography>
-                      }
-                    />
-                  )
-                })}
-              </Box>
-            </Box>
-          )
-        })}
-      </Box>
-    </SectionCard>
-  )
-}
-
 // ------------------------------------------------------------ sessions
-
-const sessionStatus = session => {
-  const now = new Date()
-  const started = new Date(session.startsAt) <= now
-  const over = new Date(session.endsAt) <= now
-  if (session.status === 'CANCELLED') {
-    return { label: 'Cancelled', tint: 'gray', plain: true }
-  }
-  if (session.problem && !over) {
-    return { label: 'Needs attention', tint: 'orange' }
-  }
-  if (session.status === 'SCHEDULED') {
-    if (over) {
-      return { label: 'Held', tint: 'green' }
-    }
-    return started
-      ? { label: 'In progress', tint: 'green' }
-      : { label: 'Scheduled', tint: 'blue' }
-  }
-  return over
-    ? { label: 'Not scheduled', tint: 'gray', plain: true }
-    : { label: 'Planned', tint: 'gray', plain: true }
-}
-
-const formatIn = (date, timeZone, options) =>
-  new Intl.DateTimeFormat(undefined, { timeZone, ...options }).format(
-    new Date(date)
-  )
-
-const dayOf = (date, timeZone) =>
-  formatIn(date, timeZone, { weekday: 'short', day: 'numeric', month: 'short' })
-
-const clockOf = (date, timeZone) =>
-  formatIn(date, timeZone, { hour: 'numeric', minute: '2-digit' })
-
-const spanOf = (meeting, timeZone) => {
-  const end = new Date(
-    new Date(meeting.scheduledAt).getTime() + meeting.durationMinutes * 60000
-  )
-  return `${clockOf(meeting.scheduledAt, timeZone)} – ${clockOf(end, timeZone)}`
-}
-
-function Meetings({ meetings, timeZone }) {
-  if (meetings[0].group) {
-    return (
-      <Typography variant="body2">
-        Group meeting, {spanOf(meetings[0], timeZone)}, with{' '}
-        {meetings.map(m => m.venture?.name).join(', ')}. Run by{' '}
-        {meetings[0].staff.map(s => s.username).join(', ')}.{' '}
-        {meetings[0].meetUrl && (
-          <Link
-            href={meetings[0].meetUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Join Meet
-          </Link>
-        )}
-      </Typography>
-    )
-  }
-  return (
-    <Box sx={{ display: 'grid', gap: 0.75 }}>
-      {meetings.map(m => (
-        <Typography key={m._id} variant="body2">
-          <Box component="span" sx={{ color: 'text.secondary' }}>
-            {spanOf(m, timeZone)}
-          </Box>{' '}
-          {m.venture?.name} with {m.staff.map(s => s.username).join(', ')}{' '}
-          {m.meetUrl && (
-            <Link href={m.meetUrl} target="_blank" rel="noopener noreferrer">
-              Meet
-            </Link>
-          )}
-        </Typography>
-      ))}
-    </Box>
-  )
-}
 
 // The line under a session's date: its number and cycle, then what happens
 // next to it.

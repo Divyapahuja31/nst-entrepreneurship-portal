@@ -1,14 +1,44 @@
 import mongoose from 'mongoose'
 
-// One bi-weekly session of the programme. Its meetings are CheckIns with
-// `session` set, created when the session is scheduled (utils/
-// programmeScheduler.js), a few days before it.
+// An extra session's own settings, for one day. Everything else (the host,
+// the time zone) comes from the programme.
+const extraSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    mode: {
+      type: String,
+      enum: ['GROUP', 'SLOTS'],
+      default: 'SLOTS',
+    },
+    slotMinutes: { type: Number, default: 15 },
+    gapMinutes: { type: Number, default: 0 },
+    firstGapMinutes: { type: Number, default: 0 },
+    staff: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    excludedVentures: [
+      { type: mongoose.Schema.Types.ObjectId, ref: 'Venture' },
+    ],
+    excludedFounders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  },
+  { _id: false }
+)
+
+// One session of the programme: one of the 13 bi-weekly sessions (with a
+// number), or an extra one an admin or the board adds on any day (with
+// `extra` and no number). Its meetings are CheckIns with `session` set,
+// created when the session is scheduled (utils/programmeScheduler.js).
 const programmeSessionSchema = new mongoose.Schema(
   {
     number: {
       type: Number,
-      required: true,
-      unique: true,
+    },
+    extra: {
+      type: extraSchema,
+      default: undefined,
     },
     cycle_number: {
       type: Number,
@@ -45,6 +75,15 @@ const programmeSessionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 )
+
+// Numbers are unique among the bi-weekly sessions; extra ones have none.
+programmeSessionSchema.index(
+  { number: 1 },
+  { unique: true, partialFilterExpression: { number: { $type: 'number' } } }
+)
+
+// The bi-weekly sessions, leaving out extra ones.
+export const REGULAR = { extra: null }
 
 export const modelName = 'ProgrammeSession'
 

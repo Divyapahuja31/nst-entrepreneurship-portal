@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 
 import CheckIn from '../models/checkIn.js'
+import { extraTitle } from './programme.js'
 import {
   sendFounderSession,
   sendSessionCancelled,
@@ -13,6 +14,9 @@ import {
 // a new one. Calendar invites from Google go out as well.
 
 const MINUTE_MS = 60 * 1000
+
+// An extra session's title for its emails; null for a bi-weekly one.
+const sessionNameOf = session => (session?.extra ? extraTitle(session) : null)
 
 const formatDay = (date, timeZone) =>
   new Intl.DateTimeFormat('en-GB', {
@@ -65,7 +69,7 @@ const loadRows = session =>
     .populate('staff', 'username email')
     .populate('attendees.user', 'username')
 
-const founderEmails = (rows, timeZone) =>
+const founderEmails = (rows, timeZone, sessionName) =>
   rows.flatMap(row =>
     row.attendees.map(
       attendee => () =>
@@ -81,6 +85,7 @@ const founderEmails = (rows, timeZone) =>
               attendee.invitedAt?.getTime(),
             ].join(':') + revisionOf(row),
           recipientName: attendee.user?.username ?? attendee.email,
+          sessionName,
           group: row.group,
           ventureName: row.venture?.name ?? 'Your startup',
           day: formatDay(row.scheduledAt, timeZone),
@@ -116,6 +121,7 @@ const staffEmails = (session, rows, timeZone) => {
           .join(';')
       )}`,
       recipientName: member.username,
+      sessionName: sessionNameOf(session),
       group,
       day: formatDay(own[0].scheduledAt, timeZone),
       time,
@@ -133,7 +139,7 @@ const staffEmails = (session, rows, timeZone) => {
 export const sendSessionEmails = async (session, programme) => {
   const rows = await loadRows(session)
   const sends = [
-    ...founderEmails(rows, programme.timeZone),
+    ...founderEmails(rows, programme.timeZone, sessionNameOf(session)),
     ...staffEmails(session, rows, programme.timeZone),
   ]
   for (const send of sends) {
@@ -142,13 +148,14 @@ export const sendSessionEmails = async (session, programme) => {
 }
 
 // people: [{ email, userId, name, ventureName?, startsAt, endsAt, key }]
-export const sendCancellations = async (people, programme) => {
+export const sendCancellations = async (people, programme, session = null) => {
   for (const person of people) {
     await quietly(() =>
       sendSessionCancelled({
         recipient: { email: person.email, userId: person.userId },
         dedupeKey: person.key,
         recipientName: person.name ?? person.email,
+        sessionName: sessionNameOf(session),
         ventureName: person.ventureName ?? null,
         day: formatDay(person.startsAt, programme.timeZone),
         time: formatSpan(person.startsAt, person.endsAt, programme.timeZone),

@@ -4,6 +4,7 @@ import {
   ROLE_LABELS,
   ROLE_NAMES,
   ROLES,
+  STAFF_ROLES,
   canChangeRoleOf,
   canDeleteAccountOf,
 } from '@nst/shared/permissions.js'
@@ -321,7 +322,7 @@ export default function PageAccounts() {
   const [filter, setFilter] = React.useState('')
   const [adding, setAdding] = React.useState(false)
   // A change waiting for confirmation: { kind: 'role' | 'deactivate',
-  // account, role }.
+  // account, role, batch }.
   const [confirming, setConfirming] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState('')
@@ -348,13 +349,19 @@ export default function PageAccounts() {
     return null
   }
 
+  // A staff member made a student needs a batch; a student keeps theirs.
+  const needsBatch =
+    confirming?.kind === 'role' &&
+    confirming.role === ROLES.STUDENT &&
+    !confirming.account.batch
+
   const confirm = async () => {
-    const { kind, account, role } = confirming
+    const { kind, account, role, batch } = confirming
     setBusy(true)
     setError('')
     const result =
       kind === 'role'
-        ? await changeAccountRole(account.id, role)
+        ? await changeAccountRole(account.id, role, batch)
         : await deactivateAccount(account.id)
     setBusy(false)
     setConfirming(null)
@@ -607,7 +614,30 @@ export default function PageAccounts() {
                 {roleLabel(confirming.role)}. {ROLE_SUMMARY[confirming.role]}.
                 {confirming.account.role === ROLES.MENTOR &&
                   ' Their startups will need a new mentor.'}
+                {STAFF_ROLES.includes(confirming.role) &&
+                  confirming.account.batch &&
+                  ' Staff have no campus or batch, so theirs is cleared.'}
               </DialogContentText>
+              {needsBatch && (
+                <TextField
+                  select
+                  fullWidth
+                  required
+                  label="Batch"
+                  value={confirming.batch ?? ''}
+                  onChange={event =>
+                    setConfirming({ ...confirming, batch: event.target.value })
+                  }
+                  helperText="Students need a batch, as when they sign up."
+                  sx={{ mt: 2 }}
+                >
+                  {batches.map(batch => (
+                    <MenuItem key={batch._id} value={batch._id}>
+                      {batch.name} · {batch.campus?.name ?? 'Unknown campus'}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
             </DialogContent>
           </>
         )}
@@ -637,6 +667,7 @@ export default function PageAccounts() {
             variant="contained"
             color={confirming?.kind === 'deactivate' ? 'error' : 'primary'}
             loading={busy}
+            disabled={needsBatch && !confirming.batch}
             onClick={confirm}
           >
             {confirming?.kind === 'deactivate' ? 'Deactivate' : 'Change Role'}

@@ -9,16 +9,20 @@ import AuthScreen from '../../components/AuthScreen'
 import { useAuthStore } from '../../stores/auth'
 import { completeGoogleSignup } from '../../api/auth'
 
-// Whether the sign-up link's token can still be used. The server checks it
-// properly; reading its expiry here just avoids a form that can't succeed.
-const isUsable = token => {
+// The sign-up link's token, unverified. The server checks it properly;
+// reading it here just avoids a form that can't succeed.
+const readToken = token => {
   try {
     const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-    const { type, exp } = JSON.parse(atob(part))
-    return type === 'google-signup' && exp * 1000 > Date.now()
+    return JSON.parse(atob(part))
   } catch {
-    return false
+    return null
   }
+}
+
+const isUsable = token => {
+  const payload = readToken(token)
+  return payload?.type === 'google-signup' && payload.exp * 1000 > Date.now()
 }
 
 function CompleteSignup() {
@@ -27,11 +31,15 @@ function CompleteSignup() {
   const [searchParams] = useSearchParams()
 
   const token = searchParams.get('token')
+  const domain = readToken(token)?.email?.split('@')[1]
 
   const [options, setOptions] = useState({
     campuses: [],
     batches: [],
+    staffDomains: [],
   })
+  // Staff have no campus or batch, so they aren't asked for one.
+  const isStaff = options.staffDomains.includes(domain)
 
   const [form, setForm] = useState({
     username: '',
@@ -58,6 +66,7 @@ function CompleteSignup() {
         setOptions({
           campuses: data.campuses || [],
           batches: data.batches || [],
+          staffDomains: data.staffDomains || [],
         })
       } catch (error) {
         console.error('Failed to load signup options:', error)
@@ -88,7 +97,7 @@ function CompleteSignup() {
       return
     }
 
-    if (!form.username.trim() || !form.batch || !form.campus) {
+    if (!form.username.trim() || (!isStaff && (!form.batch || !form.campus))) {
       setError('Please complete all required fields.')
       return
     }
@@ -99,8 +108,7 @@ function CompleteSignup() {
     const result = await completeGoogleSignup({
       token,
       username: form.username.trim(),
-      batch: form.batch,
-      campus: form.campus,
+      ...(!isStaff && { batch: form.batch, campus: form.campus }),
     })
 
     setLoading(false)
@@ -172,41 +180,45 @@ function CompleteSignup() {
           disabled={loading}
         />
 
-        <TextField
-          fullWidth
-          required
-          select
-          label="Campus"
-          name="campus"
-          value={form.campus}
-          onChange={handleChange}
-          sx={{ mb: 1.5 }}
-          disabled={loading}
-        >
-          {options.campuses.map(campus => (
-            <MenuItem key={campus._id} value={campus._id}>
-              {campus.name}
-            </MenuItem>
-          ))}
-        </TextField>
+        {!isStaff && (
+          <>
+            <TextField
+              fullWidth
+              required
+              select
+              label="Campus"
+              name="campus"
+              value={form.campus}
+              onChange={handleChange}
+              sx={{ mb: 1.5 }}
+              disabled={loading}
+            >
+              {options.campuses.map(campus => (
+                <MenuItem key={campus._id} value={campus._id}>
+                  {campus.name}
+                </MenuItem>
+              ))}
+            </TextField>
 
-        <TextField
-          fullWidth
-          required
-          select
-          label="Batch"
-          name="batch"
-          value={form.batch}
-          onChange={handleChange}
-          sx={{ mb: 1.5 }}
-          disabled={loading}
-        >
-          {options.batches.map(batch => (
-            <MenuItem key={batch._id} value={batch._id}>
-              {batch.name}
-            </MenuItem>
-          ))}
-        </TextField>
+            <TextField
+              fullWidth
+              required
+              select
+              label="Batch"
+              name="batch"
+              value={form.batch}
+              onChange={handleChange}
+              sx={{ mb: 1.5 }}
+              disabled={loading}
+            >
+              {options.batches.map(batch => (
+                <MenuItem key={batch._id} value={batch._id}>
+                  {batch.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </>
+        )}
 
         <Button
           fullWidth

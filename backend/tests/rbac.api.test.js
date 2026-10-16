@@ -4,6 +4,7 @@ import request from 'supertest'
 
 import app from '../app.js'
 import AuditLog from '../models/auditLog.js'
+import Batch from '../models/batch.js'
 import KPI from '../models/kpi.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
@@ -327,6 +328,14 @@ describe('bi-weekly reviews', () => {
   })
 })
 
+const newBatch = () =>
+  Batch.create({
+    name: '2025-29',
+    startYear: 2025,
+    endYear: 2029,
+    campus: data.campus._id,
+  })
+
 describe('accounts', () => {
   it('only admins manage accounts', async () => {
     for (const who of ['board', 'mentor', 'owner']) {
@@ -372,11 +381,59 @@ describe('accounts', () => {
 
   it('demoting a mentor frees their startups', async () => {
     const { admin, mentor } = data.users
+    const batch = await newBatch()
     await as(admin).patch(`/api/admin/accounts/${mentor._id}/role`, {
       role: 'student',
+      batch: String(batch._id),
     })
     const alpha = await Venture.findById(data.ventures.alpha._id)
     assert.equal(alpha.mentor, null)
+  })
+
+  it('a staff member made a student needs a batch, and gets its campus', async () => {
+    const { admin, mentor } = data.users
+    const url = `/api/admin/accounts/${mentor._id}/role`
+    const without = await as(admin).patch(url, { role: 'student' })
+    assert.equal(without.status, 400)
+    assert.match(without.body.error, /batch/)
+    const unchanged = await User.findById(mentor._id).populate('role')
+    assert.equal(unchanged.role.name, 'mentor')
+
+    const batch = await newBatch()
+    const res = await as(admin).patch(url, {
+      role: 'student',
+      batch: String(batch._id),
+    })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.account.batch, String(batch._id))
+    const student = await User.findById(mentor._id)
+    assert.equal(String(student.batch), String(batch._id))
+    assert.equal(String(student.campus), String(data.campus._id))
+  })
+
+  it('a student made staff loses their campus and batch', async () => {
+    const { admin, outsider } = data.users
+    const batch = await newBatch()
+    await User.updateOne(
+      { _id: outsider._id },
+      { $set: { batch: batch._id, campus: data.campus._id } }
+    )
+    const res = await as(admin).patch(
+      `/api/admin/accounts/${outsider._id}/role`,
+      { role: 'mentor' }
+    )
+    assert.equal(res.status, 200)
+    assert.equal(res.body.account.batch, null)
+    const mentor = await User.findById(outsider._id).lean()
+    assert.equal(mentor.batch, null)
+    assert.equal(mentor.campus, undefined)
+
+    // Back to student: their old batch is gone, so one is asked for again.
+    const back = await as(admin).patch(
+      `/api/admin/accounts/${outsider._id}/role`,
+      { role: 'student' }
+    )
+    assert.equal(back.status, 400)
   })
 
   it('always keeps an admin, even when two demote each other', async () => {
@@ -478,6 +535,24 @@ describe('migration', () => {
       renamed: 0,
       usersGivenStudent: 0,
       kpisUnlocked: 0,
+      staffPlacesCleared: 0,
     })
+  })
+
+  it('clears the campus and batch that staff were asked for at sign-up', async () => {
+    const batch = await newBatch()
+    const place = { batch: batch._id, campus: data.campus._id }
+    await User.updateMany(
+      { _id: { $in: [data.users.mentor._id, data.users.owner._id] } },
+      { $set: place }
+    )
+
+    const { staffPlacesCleared } = await migrateRbac()
+    assert.equal(staffPlacesCleared, 1)
+    const mentor = await User.findById(data.users.mentor._id).lean()
+    assert.equal(mentor.batch, null)
+    assert.equal(mentor.campus, undefined)
+    const student = await User.findById(data.users.owner._id)
+    assert.equal(String(student.batch), String(batch._id))
   })
 })

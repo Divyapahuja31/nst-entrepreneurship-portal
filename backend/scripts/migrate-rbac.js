@@ -3,8 +3,12 @@ import { migrateRbac } from '../utils/rbacMigration.js'
 import { runWithDatabase } from './connect.js'
 
 runWithDatabase(async () => {
-  const { renamed, usersGivenStudent, kpisUnlocked } = await migrateRbac()
+  const { renamed, usersGivenStudent, kpisUnlocked, staffPlacesCleared } =
+    await migrateRbac()
   console.info(`Roles renamed: ${renamed}`)
   console.info(`Users without a valid role, now students: ${usersGivenStudent}`)
   console.info(`KPIs given a lock flag: ${kpisUnlocked}`)
+  console.info(
+    `Staff whose campus and batch were cleared: ${staffPlacesCleared}`
+  )
 })

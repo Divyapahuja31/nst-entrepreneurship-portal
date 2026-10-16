@@ -1,4 +1,9 @@
-import { ROLE_LABELS, ROLE_NAMES, ROLES } from '@nst/shared/permissions.js'
+import {
+  ROLE_LABELS,
+  ROLE_NAMES,
+  ROLES,
+  STAFF_ROLES,
+} from '@nst/shared/permissions.js'
 import KPI from '../models/kpi.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
@@ -51,5 +56,15 @@ export const migrateRbac = async () => {
     { $set: { isLocked: false, lockedBy: null, lockedAt: null } }
   )
 
-  return { renamed, usersGivenStudent, kpisUnlocked }
+  // Staff have no campus or batch. Sign-up used to ask everyone for them.
+  const staff = await Role.find({ name: { $in: STAFF_ROLES } }).select('_id')
+  const { modifiedCount: staffPlacesCleared } = await User.updateMany(
+    {
+      role: { $in: staff.map(r => r._id) },
+      $or: [{ batch: { $ne: null } }, { campus: { $exists: true } }],
+    },
+    { $set: { batch: null }, $unset: { campus: '' } }
+  )
+
+  return { renamed, usersGivenStudent, kpisUnlocked, staffPlacesCleared }
 }

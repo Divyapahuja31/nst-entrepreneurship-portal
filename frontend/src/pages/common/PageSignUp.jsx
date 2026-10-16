@@ -39,10 +39,16 @@ function SignUp() {
   const [otpError, setOtpError] = useState('')
   const [otpSuccess, setOtpSuccess] = useState('')
 
+  const [typedEmail, setTypedEmail] = useState('')
   const [options, setOptions] = useState({
     campuses: [],
     batches: [],
+    staffDomains: [],
   })
+  // Staff have no campus or batch, so they aren't asked for one.
+  const isStaff = options.staffDomains.includes(
+    typedEmail.trim().toLowerCase().split('@')[1]
+  )
   const [loadingOptions, setLoadingOptions] = useState(true)
   const [optionsError, setOptionsError] = useState('')
 
@@ -59,6 +65,7 @@ function SignUp() {
         setOptions({
           campuses: data.campuses || [],
           batches: data.batches || [],
+          staffDomains: data.staffDomains || [],
         })
       } catch (error) {
         console.error('Failed to load signup options:', error)
@@ -191,6 +198,7 @@ function SignUp() {
               name="email"
               type="email"
               autoComplete="email"
+              onChange={event => setTypedEmail(event.target.value)}
               helperText={fieldErrors.email}
               sx={{ mb: 1.5 }}
             />
@@ -199,54 +207,62 @@ function SignUp() {
               error={Boolean(fieldErrors.password)}
               autoComplete="new-password"
               helperText={fieldErrors.password || 'At least 8 characters'}
-              sx={{ mb: 1.5 }}
+              sx={{ mb: isStaff ? 4 : 1.5 }}
             />
 
-            <FormControl
-              fullWidth
-              sx={{ mb: 1.5 }}
-              disabled={loadingOptions}
-              error={Boolean(fieldErrors.campus)}
-            >
-              <InputLabel id="signup-campus-label">Campus</InputLabel>
+            {!isStaff && (
+              <>
+                <FormControl
+                  fullWidth
+                  sx={{ mb: 1.5 }}
+                  disabled={loadingOptions}
+                  error={Boolean(fieldErrors.campus)}
+                >
+                  <InputLabel id="signup-campus-label">Campus</InputLabel>
 
-              <Select
-                labelId="signup-campus-label"
-                name="campus"
-                defaultValue=""
-              >
-                {options.campuses.map(campus => (
-                  <MenuItem key={campus._id} value={campus._id}>
-                    {campus.name}
-                  </MenuItem>
-                ))}
-              </Select>
+                  <Select
+                    labelId="signup-campus-label"
+                    name="campus"
+                    defaultValue=""
+                  >
+                    {options.campuses.map(campus => (
+                      <MenuItem key={campus._id} value={campus._id}>
+                        {campus.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
 
-              {fieldErrors.campus && (
-                <FormHelperText>{fieldErrors.campus}</FormHelperText>
-              )}
-            </FormControl>
+                  {fieldErrors.campus && (
+                    <FormHelperText>{fieldErrors.campus}</FormHelperText>
+                  )}
+                </FormControl>
 
-            <FormControl
-              fullWidth
-              sx={{ mb: 4 }}
-              disabled={loadingOptions}
-              error={Boolean(fieldErrors.batch)}
-            >
-              <InputLabel id="signup-batch-label">Batch</InputLabel>
+                <FormControl
+                  fullWidth
+                  sx={{ mb: 4 }}
+                  disabled={loadingOptions}
+                  error={Boolean(fieldErrors.batch)}
+                >
+                  <InputLabel id="signup-batch-label">Batch</InputLabel>
 
-              <Select labelId="signup-batch-label" name="batch" defaultValue="">
-                {options.batches.map(batch => (
-                  <MenuItem key={batch._id} value={batch._id}>
-                    {batch.name}
-                  </MenuItem>
-                ))}
-              </Select>
+                  <Select
+                    labelId="signup-batch-label"
+                    name="batch"
+                    defaultValue=""
+                  >
+                    {options.batches.map(batch => (
+                      <MenuItem key={batch._id} value={batch._id}>
+                        {batch.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
 
-              <FormHelperText>
-                {fieldErrors.batch || 'Students choose their campus and batch.'}
-              </FormHelperText>
-            </FormControl>
+                  <FormHelperText>
+                    {fieldErrors.batch || 'Your campus and batch at college.'}
+                  </FormHelperText>
+                </FormControl>
+              </>
+            )}
 
             <Button
               fullWidth

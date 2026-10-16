@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link as RouterLink, useLoaderData } from 'react-router'
+import { useLoaderData } from 'react-router'
 
 import {
   Alert,
@@ -39,16 +39,18 @@ import {
   slotsPerStaff,
 } from '../../components/programme/helpers'
 import {
+  HostNotice,
   InvitesCard,
   Meetings,
   StaffCard,
 } from '../../components/programme/parts'
-import useAccess from '../../hooks/useAccess'
+import useCalendarOutcome from '../../components/programme/useCalendarOutcome'
 
-// One-off sessions on any day, apart from the bi-weekly calendar. Each runs
-// like a bi-weekly session (slots or one group meeting) with its own staff
-// and invitations, on the programme host's Google Calendar. For admins and
-// the academic board; the API checks the same.
+// One-off sessions on any day, apart from the bi-weekly calendar: no
+// programme is needed. Each runs like a bi-weekly session (slots or one group
+// meeting) with its own staff and invitations, on the calendar host's Google
+// Calendar, the same connection the Programme page uses. For admins and the
+// academic board; the API checks the same.
 
 const SLOT_FIELDS = ['slotMinutes', 'gapMinutes', 'firstGapMinutes']
 
@@ -328,7 +330,7 @@ function SessionsList({ page, busy, onEdit, onCancel }) {
     <SectionCard
       icon={CalendarIcon}
       title="Sessions"
-      subtitle="Every extra session, on the programme’s Google Calendar."
+      subtitle="Every extra session, on the host’s Google Calendar."
     >
       {page.sessions.length ? (
         <Box sx={{ display: 'grid', gap: 1.5 }}>
@@ -369,7 +371,7 @@ function SessionsList({ page, busy, onEdit, onCancel }) {
 
 export default function PageExtraSessions() {
   const loaded = useLoaderData()
-  const { isAdmin } = useAccess()
+  const outcome = useCalendarOutcome()
   const [page, setPage] = useState(loaded)
   // { id, form } while adding (id null) or changing a session.
   const [editing, setEditing] = useState(null)
@@ -447,11 +449,11 @@ export default function PageExtraSessions() {
         title="Extra Sessions"
         subtitle="One-off sessions on any day, run like the bi-weekly ones."
         action={
-          page.configured &&
           !editing && (
             <Button
               variant="contained"
               startIcon={<PlusIcon />}
+              disabled={!page.host.connected}
               onClick={() => {
                 setError(null)
                 setEditing({ id: null, form: newForm(page.defaults) })
@@ -470,27 +472,8 @@ export default function PageExtraSessions() {
           gridTemplateColumns: 'minmax(0, 1fr)',
         }}
       >
-        {!page.configured && (
-          <Alert
-            severity="info"
-            action={
-              isAdmin && (
-                <Button
-                  variant="outlined"
-                  component={RouterLink}
-                  to="/admin/programme"
-                >
-                  Set Up
-                </Button>
-              )
-            }
-          >
-            Extra sessions go on the programme host’s Google Calendar.{' '}
-            {isAdmin
-              ? 'Set up the programme first.'
-              : 'Ask an admin to set up the programme first.'}
-          </Alert>
-        )}
+        {outcome && <Alert severity={outcome.severity}>{outcome.text}</Alert>}
+        <HostNotice host={page.host} returnTo="/admin/sessions" />
         {notice && (
           <Alert severity="error" onClose={() => setNotice(null)}>
             {notice}
@@ -536,8 +519,7 @@ export default function PageExtraSessions() {
                   variant="body2"
                   color={barError ? 'error' : 'text.secondary'}
                 >
-                  {barError ||
-                    `Times are in ${page.timeZone}, the programme’s time zone.`}
+                  {barError || `Times are in ${page.timeZone}.`}
                 </Typography>
               </Box>
               <Button

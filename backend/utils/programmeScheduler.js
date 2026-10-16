@@ -10,6 +10,7 @@ import {
   transcriptDueAt,
   withMeetLink,
 } from './checkInHelper.js'
+import { getHostId } from './calendarHost.js'
 import { appUrl } from './kpiLockEmails.js'
 import {
   activeStaff,
@@ -361,12 +362,13 @@ const failure = async (session, problem, rows) => {
 }
 
 const hostProblem =
-  'Connect Google Calendar on the Programme page to schedule sessions.'
+  'An admin needs to connect Google Calendar on the Programme or Extra Sessions page.'
 
-// The host admin's Google, or null when they can't be reached.
-const hostGoogle = async programme => {
+// The calendar host's Google, or null when there is none or they can't be
+// reached.
+const hostGoogle = async hostId => {
   try {
-    return programme ? await googleFor(programme.host) : null
+    return hostId ? await googleFor(hostId) : null
   } catch {
     return null
   }
@@ -399,10 +401,11 @@ const redraw = (previous, ventureIds, staffIds) => {
 // session runs with its own settings on the programme's calendar.
 const prepare = async (session, rows, fresh) => {
   const saved = await getProgramme()
-  if (!saved) {
+  if (!saved && !session.extra) {
     return { problem: 'Set up the programme first.' }
   }
-  const programme = settingsFor(saved, session)
+  const hostId = await getHostId()
+  const programme = { ...settingsFor(saved, session), host: hostId }
   const [staff, startups] = await Promise.all([
     activeStaff(programme.staff),
     invitedStartups(programme),
@@ -429,7 +432,7 @@ const prepare = async (session, rows, fresh) => {
         'The meetings don’t fit in the session.',
     }
   }
-  const google = await hostGoogle(programme)
+  const google = await hostGoogle(hostId)
   return google ? { programme, plan, google } : { problem: hostProblem }
 }
 
@@ -496,9 +499,10 @@ const stillLeaving = async (session, tell) => {
 // Cancels a session: its events come off the calendars and everyone in it
 // is told once.
 export const cancelSession = async session => {
-  const programme = await getProgramme()
+  const saved = await getProgramme()
+  const programme = saved || session.extra ? settingsFor(saved, session) : null
   const rows = await loadRows(session)
-  const google = await hostGoogle(programme)
+  const google = await hostGoogle(await getHostId())
   const tell = []
   await removeRows(rows, { google, tell, deleteEvents: false })
   if (google) {
@@ -604,11 +608,10 @@ export const removeProgrammeStaff = async (userId, now = new Date()) => {
 // Schedules the sessions now within their lead time, and retries scheduled
 // ones a change couldn't finish. Run by the background job.
 export const scheduleDueSessions = async (now = new Date()) => {
+  // Extra sessions need no programme; they use its lead time when it has one.
   const programme = await getProgramme()
-  if (!programme) {
-    return 0
-  }
-  const horizon = new Date(now.getTime() + programme.leadDays * DAY_MS)
+  const leadDays = programme?.leadDays ?? 7
+  const horizon = new Date(now.getTime() + leadDays * DAY_MS)
   const due = await ProgrammeSession.find({
     startsAt: { $gt: now },
     $or: [

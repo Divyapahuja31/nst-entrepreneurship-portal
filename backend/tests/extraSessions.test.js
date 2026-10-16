@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 
 import app from '../app.js'
+import CalendarHost from '../models/calendarHost.js'
 import CheckIn from '../models/checkIn.js'
 import ProgrammeSession from '../models/programmeSession.js'
+import { getHostId } from '../utils/calendarHost.js'
 import {
   connectCalendar,
   cookieFor,
@@ -156,12 +158,52 @@ describe('adding an extra session', () => {
     assert.ok(left.every(s => s.status === 'SCHEDULED'))
   })
 
-  it('needs the programme, a future time, staff and room for everyone', async () => {
-    const { admin } = data.users
-    const none = await as(admin).post(URL, extra())
+  it('needs no bi-weekly programme, only a connected host', async () => {
+    const { admin, board, owner } = data.users
+    const none = await as(board).post(URL, extra())
     assert.equal(none.status, 409)
-    assert.match(none.body.error, /Set up the programme first/)
+    assert.match(none.body.error, /connect Google Calendar/)
+    const before = await as(board).get(URL)
+    assert.equal(before.body.host.connected, false)
+    assert.equal(before.body.host.canConnect, false)
+    // The connected admin is shown as the host they'd be.
+    const forAdmin = (await as(admin).get(URL)).body.host
+    assert.equal(forAdmin.isYou, true)
+    assert.equal(forAdmin.connected, true)
 
+    // The admin connected (from either page) and so hosts.
+    await CalendarHost.create({ user: admin._id })
+    const page = await as(board).get(URL)
+    assert.equal(page.body.host.connected, true)
+    assert.equal(page.body.defaults.mode, 'SLOTS')
+    assert.equal(page.body.timeZone, TZ)
+
+    const res = await as(board).post(URL, extra())
+    assert.equal(res.status, 201)
+    const [session] = await extraSessions()
+    assert.equal(session.status, 'SCHEDULED')
+    assert.equal(session.extra.timeZone, TZ)
+    const meetings = await meetingsOf(session)
+    assert.equal(meetings.length, 2)
+    assert.ok(meetings.every(m => String(m.host) === String(admin._id)))
+    assert.equal(emailsTo(owner.email, /Demo day rehearsal/).length, 1)
+
+    const cancelled = await as(board).post(`${URL}/${session._id}/cancel`)
+    assert.equal(cancelled.status, 200)
+    assert.equal(emailsTo(owner.email, /Cancelled: Demo day/).length, 1)
+  })
+
+  it('a connected admin adding the first one becomes the host', async () => {
+    const { admin, board } = data.users
+    const res = await as(admin).post(URL, extra())
+    assert.equal(res.status, 201)
+    assert.equal(res.body.host.isYou, true)
+    assert.equal(String(await getHostId()), String(admin._id))
+    assert.equal((await as(board).get(URL)).body.host.connected, true)
+  })
+
+  it('needs a future time, staff and room for everyone', async () => {
+    const { admin } = data.users
     await saveProgramme()
     const past = await as(admin).post(URL, extra({ date: inDays(-1) }))
     assert.equal(past.body.field, 'date')
@@ -194,7 +236,7 @@ describe('adding an extra session', () => {
     }
     const page = await as(data.users.board).get(URL)
     assert.equal(page.status, 200)
-    assert.equal(page.body.configured, true)
+    assert.equal(page.body.host.connected, true)
     assert.equal(page.body.invites.length, 2)
     assert.deepEqual(page.body.defaults.staff, [String(data.users.admin._id)])
   })

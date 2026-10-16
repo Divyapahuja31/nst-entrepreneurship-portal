@@ -2,7 +2,9 @@ import mongoose from 'mongoose'
 import { cycleForDate } from '@nst/shared/biweeklyCycles.js'
 
 import ProgrammeSession from '../models/programmeSession.js'
+import { claimHostIfFree, hostStatus } from '../utils/calendarHost.js'
 import {
+  DEFAULT_TIME_ZONE,
   activeStaff,
   capacityProblem,
   getProgramme,
@@ -21,8 +23,8 @@ import { meetingsBySession } from './programme.js'
 // Extra sessions: programme sessions on any day, apart from the bi-weekly
 // calendar, added by an admin or the academic board (the route checks the
 // role). Each runs like a bi-weekly session, as slots or one group meeting,
-// with its own staff and invitations, and goes on the programme host's
-// Google Calendar.
+// with its own staff and invitations, and goes on the calendar host's Google
+// Calendar (utils/calendarHost.js). They need no bi-weekly programme.
 
 const EXTRA = { extra: { $ne: null } }
 
@@ -39,33 +41,42 @@ const ensureIndexes = () => {
 
 const ids = list => (list ?? []).map(String)
 
-// What a new extra session starts from: the programme's settings.
-const defaultsOf = programme =>
-  programme && {
-    mode: programme.mode,
-    startTime: programme.startTime,
-    endTime: programme.endTime,
-    slotMinutes: programme.slotMinutes,
-    gapMinutes: programme.gapMinutes,
-    firstGapMinutes: programme.firstGapMinutes,
-    staff: ids(programme.staff),
-    excludedVentures: ids(programme.excludedVentures),
-    excludedFounders: ids(programme.excludedFounders),
-  }
+// What a new extra session starts from: the programme's settings, or plain
+// ones before there is a programme.
+const BLANK = {
+  mode: 'SLOTS',
+  startTime: '18:00',
+  endTime: '20:00',
+  slotMinutes: 15,
+  gapMinutes: 0,
+  firstGapMinutes: 0,
+}
+const defaultsOf = programme => ({
+  ...BLANK,
+  ...(programme &&
+    Object.fromEntries(Object.keys(BLANK).map(key => [key, programme[key]]))),
+  staff: ids(programme?.staff),
+  excludedVentures: ids(programme?.excludedVentures),
+  excludedFounders: ids(programme?.excludedFounders),
+})
 
-const pageData = async () => {
+// The zone new sessions are given in.
+const timeZoneOf = programme => programme?.timeZone ?? DEFAULT_TIME_ZONE
+
+const pageData = async viewer => {
   const programme = await getProgramme()
-  const [invites, staffOptions, sessions] = await Promise.all([
+  const [invites, staffOptions, sessions, host] = await Promise.all([
     inviteList(null),
     activeStaff(),
     ProgrammeSession.find(EXTRA)
       .sort({ startsAt: -1 })
       .populate('extra.createdBy', 'username'),
+    hostStatus(viewer),
   ])
   const meetings = await meetingsBySession(sessions)
   return {
-    configured: Boolean(programme),
-    timeZone: programme?.timeZone ?? 'Asia/Kolkata',
+    host,
+    timeZone: timeZoneOf(programme),
     defaults: defaultsOf(programme),
     staffOptions,
     invites,
@@ -84,19 +95,20 @@ const pageData = async () => {
 
 export const getExtraSessions = async (req, res) => {
   try {
-    return res.json(await pageData())
+    return res.json(await pageData(req.user))
   } catch (error) {
     console.error('Extra sessions load error:', error)
     return res.status(500).json({ error: 'Could not load the sessions' })
   }
 }
 
-const NO_PROGRAMME =
-  'Set up the programme first: extra sessions go on its host’s Google Calendar.'
+const NO_HOST =
+  'An admin needs to connect Google Calendar first: sessions go on their calendar.'
 
-// The checked session from the body, or { status, field, error }.
-const checkedSession = async (body, programme) => {
-  const parsed = parseExtraSession(body ?? {}, programme.timeZone)
+// The checked session from the body, its day and times read in timeZone, or
+// { status, field, error }.
+const checkedSession = async (body, timeZone) => {
+  const parsed = parseExtraSession(body ?? {}, timeZone)
   if (parsed.error) {
     return { status: 400, ...parsed }
   }
@@ -144,11 +156,17 @@ const refuse = (res, { status, field, error }) =>
 // drawn, put on the host's calendar and emailed.
 export const createExtraSession = async (req, res) => {
   try {
-    const programme = await getProgramme()
-    if (!programme) {
-      return refuse(res, { status: 409, error: NO_PROGRAMME })
+    if (!(await hostStatus(req.user)).connected) {
+      return refuse(res, { status: 409, error: NO_HOST })
     }
-    const checked = await checkedSession(req.body, programme)
+    const checked = await checkedSession(
+      req.body,
+      timeZoneOf(await getProgramme())
+    )
+    if (!checked.error) {
+      // With no host yet, a connected admin adding one becomes it.
+      await claimHostIfFree(req.user)
+    }
     if (checked.error) {
       return refuse(res, checked)
     }
@@ -160,7 +178,7 @@ export const createExtraSession = async (req, res) => {
     await withSession(session._id, claimed =>
       runSession(claimed, { fresh: true })
     )
-    return res.status(201).json(await pageData())
+    return res.status(201).json(await pageData(req.user))
   } catch (error) {
     console.error('Extra session create error:', error)
     return res.status(500).json({ error: 'Could not add the session' })
@@ -193,15 +211,18 @@ const BUSY = 'This session is being updated. Try again in a moment.'
 // cancelled one is scheduled again.
 export const updateExtraSession = async (req, res) => {
   try {
-    const programme = await getProgramme()
-    if (!programme) {
-      return refuse(res, { status: 409, error: NO_PROGRAMME })
+    if (!(await hostStatus(req.user)).connected) {
+      return refuse(res, { status: 409, error: NO_HOST })
     }
     const found = await findUpcoming(req, res)
     if (!found) {
       return null
     }
-    const checked = await checkedSession(req.body, programme)
+    // Its times stay in the zone it was made in.
+    const checked = await checkedSession(
+      req.body,
+      found.extra.timeZone || timeZoneOf(await getProgramme())
+    )
     if (checked.error) {
       return refuse(res, checked)
     }
@@ -217,7 +238,7 @@ export const updateExtraSession = async (req, res) => {
     if (result === null) {
       return res.status(409).json({ error: BUSY })
     }
-    return res.json(await pageData())
+    return res.json(await pageData(req.user))
   } catch (error) {
     console.error('Extra session update error:', error)
     return res.status(500).json({ error: 'Could not change the session' })
@@ -240,7 +261,7 @@ export const cancelExtraSession = async (req, res) => {
     if (result === null) {
       return res.status(409).json({ error: BUSY })
     }
-    return res.json(await pageData())
+    return res.json(await pageData(req.user))
   } catch (error) {
     console.error('Extra session cancel error:', error)
     return res.status(500).json({ error: 'Could not cancel the session' })

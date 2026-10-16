@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useLoaderData, useSearchParams } from 'react-router'
+import { useState } from 'react'
+import { useLoaderData } from 'react-router'
 
 import {
   Alert,
@@ -19,7 +19,6 @@ import {
   Typography,
 } from '@mui/material'
 
-import { calendarConnectUrl } from '../../api/checkins'
 import {
   clearSessions,
   saveProgramme,
@@ -30,7 +29,6 @@ import EmptyState from '../../components/EmptyState'
 import PageHeader from '../../components/PageHeader'
 import SectionCard from '../../components/SectionCard'
 import StatusPill from '../../components/StatusPill'
-import { CALENDAR_OUTCOMES } from '../../components/calendarOutcomes'
 import {
   LIMITS,
   TIME_ZONES,
@@ -43,10 +41,12 @@ import {
   slotsPerStaff,
 } from '../../components/programme/helpers'
 import {
+  HostNotice,
   InvitesCard,
   Meetings,
   StaffCard,
 } from '../../components/programme/parts'
+import useCalendarOutcome from '../../components/programme/useCalendarOutcome'
 import { CalendarIcon, DocTextIcon } from '../../components/icons'
 
 const WEEKDAYS = [
@@ -234,55 +234,6 @@ function ReportsCard({ reports, onSaved }) {
         </Alert>
       )}
     </SectionCard>
-  )
-}
-
-function HostNotice({ host }) {
-  if (host.connected && host.autoTranscripts) {
-    return null
-  }
-  if (host.connected) {
-    return (
-      <Alert
-        severity="info"
-        action={
-          host.isYou && (
-            <Button
-              variant="outlined"
-              component="a"
-              href={calendarConnectUrl('/admin/programme')}
-            >
-              Reconnect
-            </Button>
-          )
-        }
-      >
-        {host.isYou
-          ? 'Reconnect your Google Calendar so every session transcribes itself.'
-          : `Ask ${host.username} to reconnect their Google Calendar so every session transcribes itself.`}{' '}
-        Until then, someone has to turn transcripts on in each meeting.
-      </Alert>
-    )
-  }
-  return (
-    <Alert
-      severity="warning"
-      action={
-        host.isYou && (
-          <Button
-            variant="outlined"
-            component="a"
-            href={calendarConnectUrl('/admin/programme')}
-          >
-            Connect Google Calendar
-          </Button>
-        )
-      }
-    >
-      Sessions go on {host.isYou ? 'your' : `${host.username}’s`} Google
-      Calendar. {host.isYou ? 'Connect it' : 'Ask them to connect it'} so
-      sessions can be scheduled.
-    </Alert>
   )
 }
 
@@ -671,26 +622,6 @@ function SaveBar({ configured, saving, error, blocked, onSave, onDiscard }) {
 
 // ------------------------------------------------------------ the page
 
-// Shows the outcome of connecting Google once, then drops it from the URL.
-function useCalendarOutcome() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [outcome] = useState(
-    () => CALENDAR_OUTCOMES[searchParams.get('calendar')]
-  )
-  useEffect(() => {
-    if (searchParams.has('calendar')) {
-      setSearchParams(
-        params => {
-          params.delete('calendar')
-          return params
-        },
-        { replace: true }
-      )
-    }
-  }, [searchParams, setSearchParams])
-  return outcome
-}
-
 const DONE = {
   schedule: session => `Session ${session.number} is scheduled.`,
   redraw: session => `Session ${session.number} is drawn again.`,
@@ -822,7 +753,7 @@ export default function PageProgramme() {
             setMessage('Report dates saved.')
           }}
         />
-        <HostNotice host={page.host} />
+        <HostNotice host={page.host} returnTo="/admin/programme" />
 
         {page.configured && sessions}
         <SettingsCard

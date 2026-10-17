@@ -95,6 +95,8 @@ setGoogleWorkspace({
       id,
       hangoutLink: `https://meet.google.com/${code}`,
       conferenceData: { conferenceId: code },
+      // Whose calendar it's on: as at Google, only they can change it.
+      owner: token,
     }
     google.events.set(id, created)
     return created
@@ -105,10 +107,19 @@ setGoogleWorkspace({
   },
   patchEvent: async (token, id, patch) => {
     fakeCall('patchEvent', token, id, patch)
+    const event = google.events.get(id)
+    if (event && event.owner !== token) {
+      throw new GoogleError('Not Found', { status: 404 })
+    }
     return { id, ...patch }
   },
+  // Another calendar's event is "not found", which deleteEvent ignores.
   deleteEvent: async (token, id) => {
     fakeCall('deleteEvent', token, id)
+    const event = google.events.get(id)
+    if (event?.owner === token) {
+      event.deleted = true
+    }
   },
   conferenceRecords: async (token, meetingCode) => {
     fakeCall('conferenceRecords', token, meetingCode)

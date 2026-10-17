@@ -52,6 +52,12 @@ export const zonedDate = (ymd, hhmm, timeZone) => {
   return new Date(guess - zoneOffset(new Date(first), timeZone))
 }
 
+// "HH:MM" of a moment in timeZone.
+const clockIn = (date, timeZone) => {
+  const { hour, minute } = zoneParts(new Date(date), timeZone)
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
 const addDays = (ymd, days) =>
   new Date(Date.parse(`${ymd}T00:00:00Z`) + days * DAY_MS)
     .toISOString()
@@ -191,16 +197,44 @@ const NUMBERS = [
   ['leadDays', 1, 13, 'Schedule each session 1 to 13 days ahead'],
 ]
 
+// The slot settings and their defaults. Only slot mode uses them, and the
+// pages hide them in group mode.
+const SLOT_DEFAULTS = { slotMinutes: 15, gapMinutes: 0, firstGapMinutes: 0 }
+
+const isModeProblem = body => !['GROUP', 'SLOTS'].includes(body.mode)
+
+// The first number out of range, as { field, error }, or null. In group
+// mode the slot settings aren't checked: a hidden field can't block saving.
+const numberProblem = (body, numbers) => {
+  const number = numbers.find(
+    ([field, min, max]) =>
+      !(body.mode === 'GROUP' && field in SLOT_DEFAULTS) &&
+      !intIn(body[field], min, max)
+  )
+  return number ? { field: number[0], error: number[3] } : null
+}
+
+// The numbers to save, checked by numberProblem: a slot setting left
+// invalid in group mode is saved as its default.
+const numbersOf = (body, numbers) =>
+  Object.fromEntries(
+    numbers.map(([field, min, max]) => [
+      field,
+      intIn(body[field], min, max) ? body[field] : SLOT_DEFAULTS[field],
+    ])
+  )
+
 // The first problem with the dates and times, or null.
 const timingProblem = body => {
   if (!isDay(body.startDate)) {
     return { field: 'startDate', error: 'Choose the date sessions start' }
   }
-  const number = NUMBERS.find(
-    ([field, min, max]) => !intIn(body[field], min, max)
-  )
+  if (isModeProblem(body)) {
+    return { field: 'mode', error: 'Choose group or slots' }
+  }
+  const number = numberProblem(body, NUMBERS)
   if (number) {
-    return { field: number[0], error: number[3] }
+    return number
   }
   if (!isTime(body.startTime) || !isTime(body.endTime)) {
     return { field: 'startTime', error: 'Choose a start and end time' }
@@ -210,9 +244,6 @@ const timingProblem = body => {
   }
   if (!isTimeZone(body.timeZone)) {
     return { field: 'timeZone', error: 'Choose a valid time zone' }
-  }
-  if (!['GROUP', 'SLOTS'].includes(body.mode)) {
-    return { field: 'mode', error: 'Choose group or slots' }
   }
   return null
 }
@@ -252,10 +283,115 @@ export const parseProgramme = body => {
   return {
     fields: {
       ...pick(['startDate', 'startTime', 'endTime', 'timeZone', 'mode']),
-      ...pick(NUMBERS.map(([field]) => field)),
+      ...numbersOf(body, NUMBERS),
       staff,
       excludedVentures,
       excludedFounders,
+    },
+  }
+}
+
+// ---------------------------------------------------------- extra sessions
+
+const EXTRA_FIELDS = [
+  'mode',
+  'slotMinutes',
+  'gapMinutes',
+  'firstGapMinutes',
+  'staff',
+  'excludedVentures',
+  'excludedFounders',
+]
+
+export const DEFAULT_TIME_ZONE = 'Asia/Kolkata'
+
+// The settings a session runs with: the programme's, with an extra session's
+// own on top. A plain object either way; an extra session needs no
+// programme.
+export const settingsFor = (programme, session) => {
+  const settings = programme?.toObject?.() ?? { ...programme }
+  if (!session?.extra) {
+    return settings
+  }
+  for (const field of EXTRA_FIELDS) {
+    settings[field] = session.extra[field]
+  }
+  settings.timeZone =
+    session.extra.timeZone || settings.timeZone || DEFAULT_TIME_ZONE
+  // Its own hours, so the slots are counted in its window.
+  settings.startTime = clockIn(session.startsAt, settings.timeZone)
+  settings.endTime = clockIn(session.endsAt, settings.timeZone)
+  return settings
+}
+
+// What an extra session is called in calendars and lists.
+export const extraTitle = session => session.extra?.title || 'Programme session'
+
+const SLOT_NUMBERS = NUMBERS.filter(([field]) =>
+  ['slotMinutes', 'gapMinutes', 'firstGapMinutes'].includes(field)
+)
+
+// The first problem with an extra session's title, day, times or slots.
+const extraTimingProblem = body => {
+  if (typeof body.title === 'string' && body.title.trim().length > 80) {
+    return { field: 'title', error: 'Keep the title to 80 characters' }
+  }
+  if (!isDay(body.date)) {
+    return { field: 'date', error: 'Choose the day' }
+  }
+  if (!isTime(body.startTime) || !isTime(body.endTime)) {
+    return { field: 'startTime', error: 'Choose a start and end time' }
+  }
+  if (minutesOf(body.endTime) <= minutesOf(body.startTime)) {
+    return { field: 'endTime', error: 'The session must end after it starts' }
+  }
+  if (isModeProblem(body)) {
+    return { field: 'mode', error: 'Choose group or slots' }
+  }
+  return numberProblem(body, SLOT_NUMBERS)
+}
+
+// Who runs an extra session and who is left out, or { field, error }.
+const extraPeople = body => {
+  const staff = idList(body.staff)
+  if (!staff?.length) {
+    return { field: 'staff', error: 'Add at least one person to run it' }
+  }
+  const excludedVentures = idList(body.excludedVentures ?? [])
+  const excludedFounders = idList(body.excludedFounders ?? [])
+  if (!excludedVentures || !excludedFounders) {
+    return { field: 'invites', error: 'The invite list is not valid' }
+  }
+  return { staff, excludedVentures, excludedFounders }
+}
+
+// Checks an extra session an admin or the board sent: its day and times (in
+// timeZone, the session's own), how it runs and who is in it. Returns
+// { field, error } or { fields }.
+export const parseExtraSession = (body, timeZone, now = new Date()) => {
+  const problem = extraTimingProblem(body)
+  if (problem) {
+    return problem
+  }
+  const people = extraPeople(body)
+  if (people.error) {
+    return people
+  }
+  const startsAt = zonedDate(body.date, body.startTime, timeZone)
+  if (startsAt <= now) {
+    return { field: 'date', error: 'Choose a time that hasn’t passed' }
+  }
+  return {
+    fields: {
+      startsAt,
+      endsAt: zonedDate(body.date, body.endTime, timeZone),
+      extra: {
+        title: typeof body.title === 'string' ? body.title.trim() : '',
+        timeZone,
+        mode: body.mode,
+        ...numbersOf(body, SLOT_NUMBERS),
+        ...people,
+      },
     },
   }
 }

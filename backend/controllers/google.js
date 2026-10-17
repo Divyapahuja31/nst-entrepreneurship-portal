@@ -6,13 +6,16 @@ import {
   canAutoTranscribe,
   getGoogleWorkspace,
 } from '../utils/googleWorkspace.js'
+import { claimHostIfFree } from '../utils/calendarHost.js'
 import { turnOnTranscriptionForHost } from '../utils/checkInHelper.js'
+import { rerunScheduledSessions } from '../utils/programmeScheduler.js'
 import { cookieOptions } from '../utils/token.js'
 import { encryptToken, decryptToken } from '../utils/tokenCrypto.js'
 
 // A mentor connects their Google Calendar so the portal can put check-ins on
-// it; the admin hosting the programme connects theirs for its sessions. The
-// route allows mentors and admins.
+// it; an admin connects theirs to host the programme's sessions, from the
+// Programme or Extra Sessions page alike (utils/calendarHost.js). The route
+// allows mentors and admins.
 
 // Ties Google's callback to the browser that started connecting, and
 // remembers which page to return to.
@@ -48,6 +51,17 @@ const readState = req => {
     return typeof saved?.state === 'string' ? saved : null
   } catch {
     return null
+  }
+}
+
+// An admin hosts the sessions unless another working host already does.
+// Taking over moves the upcoming meetings to their calendar; the admin
+// doesn't wait for it.
+const hostIfFree = async user => {
+  if (await claimHostIfFree(user)) {
+    rerunScheduledSessions().catch(err =>
+      console.error('Sessions not moved to the new host:', err.message)
+    )
   }
 }
 
@@ -95,6 +109,7 @@ export const googleCallback = async (req, res) => {
       },
       { upsert: true }
     )
+    await hostIfFree(req.user)
     // Meetings already scheduled transcribe themselves too. The mentor
     // doesn't wait for it.
     turnOnTranscriptionForHost(req.user.id).catch(err =>

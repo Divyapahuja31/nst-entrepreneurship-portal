@@ -51,6 +51,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Write bi-weekly observations and evaluations | ✅ | ✅ | assigned startups | ❌ |
 | Reopen a submitted bi-weekly report | ✅ | ✅ | ❌ | ❌ |
 | Set up the programme: calendar, staff, who is invited, sessions | ✅ | ❌ | ❌ | ❌ |
+| Add, change or cancel extra sessions on any day | ✅ | ✅ | ❌ | ❌ |
 | Connect a Google Calendar | ✅ | ❌ | ✅ | ❌ |
 | Schedule, move or cancel their own check-ins | ❌ | ❌ | assigned startups | ❌ |
 | Notes and "Check Now" on a programme meeting | ✅ | the meetings they run | the meetings they run | ❌ |
@@ -141,11 +142,24 @@ An admin runs the programme from **Programme** (`/admin/programme`). It sets one
   - **Slots:** each startup meets one staff member in its own slot (15 minutes by default, with an optional gap between slots and before the first). The staff run their slots in parallel. Startups are dealt at random and evenly across the staff, drawn again for every session. Saving refuses settings that leave too few slots for the invited startups.
   - **Group:** one meeting for the whole session, with every invited founder and all the staff.
 
-Each session is scheduled a few days before it (7 by default, "Schedule ahead"). The meetings are drawn, created as events with Meet links on the admin's Google Calendar, and every staff member and founder is invited and emailed their time and link. The admin who first saves the programme hosts the events and must connect their Google Calendar on that page. An admin can also **Schedule Now**, **Redraw** or **Cancel** each session.
+Each session is scheduled a few days before it (7 by default, "Schedule ahead"). The meetings are drawn, created as events with Meet links on the admin's Google Calendar, and every staff member and founder is invited and emailed their time and link. The events go on the **calendar host's** Google Calendar: the first admin to connect Google on **Programme** or **Extra Sessions** (either page, the same connection), or else the admin who first saves the programme. Another admin takes over only once the host can't be used: their connection is gone, or they were deactivated or are no longer an admin. A host who can't be used schedules nothing more. When another admin takes over, the upcoming meetings move to their calendar with new Meet links, and their people are emailed. The old events are deleted through the former host's connection if it still works; otherwise they stay on people's calendars. The academic board schedules through the host's connection. An admin can also **Schedule Now**, **Redraw** or **Cancel** each session.
 
 Later changes don't start the draw again. A new time, gap or length moves the meetings, and adding or removing staff, startups or founders moves only what it has to. Only people whose meeting changed get an email, and anyone removed gets a cancellation. If a staff member is deactivated, save the programme or redraw to move their startups.
 
 Programme meetings show on each startup's Check-Ins tab and on founders' pages. Each staff member sees the meetings they run on their Overview, where they can read the transcript and write notes. Transcripts are collected through the admin's connection. A group session's transcript is collected once and attached to every startup in it.
+
+### Extra sessions
+
+Besides the 13 bi-weekly sessions, an admin or the academic board can add a session on any day from **Extra Sessions** (`/admin/sessions`), for a demo day rehearsal or a one-off review, say. Each runs like a bi-weekly session, with its own settings for that day:
+
+- A title, the day and the times, in the programme's time zone.
+- Slots or one group meeting, with its own slot length and gaps.
+- Its own meeting staff, starting from the programme's.
+- Its own invite list, starting from the programme's. Startups and founders can be switched off for that one day.
+
+It needs no bi-weekly programme. It's scheduled as soon as it's saved, and its meetings go on the calendar host's Google Calendar (see above), so an admin must have connected Google first. Before there is a host, a connected admin who adds one becomes it. Everyone in it is invited and emailed, with the session's title in the emails and invites. It can be changed or cancelled until it starts: a change emails only the people whose meeting moved, and a cancellation tells everyone. Its meetings show with the startups' check-ins, and transcripts and notes work as for the bi-weekly sessions. **Clear All Meetings** on Programme leaves extra sessions alone.
+
+Extra sessions have no session number. The unique index on session numbers from before them is replaced the first time one is added.
 
 ## Mentor check-ins (Google Calendar and Meet)
 
@@ -175,7 +189,7 @@ After each check-in the server looks for its Google Meet transcript through the 
 3. Set `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` and `GOOGLE_WORKSPACE_REDIRECT_URI` in `backend/.env`. Without them the sign-in client (`GOOGLE_CLIENT_*`) is used, which then needs the scopes and redirect URI above. Students would see a consent screen asking for calendar access only if they reached the connect route, which is for mentors only.
 4. Set `GOOGLE_TOKEN_KEY` to 32 random bytes (`openssl rand -base64 32`, or `-hex 32`). Mentors' refresh tokens are encrypted with it. Changing it means every mentor connects again.
 
-The admin hosting the programme connects their calendar on the Programme page. Each mentor clicks **Connect Google Calendar** once, the first time they schedule their own check-in. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
+The admin hosting the sessions connects their calendar on the Programme or Extra Sessions page. Each mentor clicks **Connect Google Calendar** once, the first time they schedule their own check-in. They must use the Google account they sign in to the portal with. If Google later refuses the connection (revoked, or the password changed), the portal asks them to connect again.
 
 ## Tests
 
@@ -186,6 +200,7 @@ npm test
 - `shared/permissions.test.js` checks every rule against the matrix above, for every role, startup relationship, lock state and status.
 - `backend/tests/` signs in as each role against an in-memory MongoDB and checks that the API enforces the same rules.
 - `backend/tests/kpiEscalation.test.js` checks when a run of grades alerts the mentor or the board, and the `emailService` and `kpiLockEmails` tests check logging, deduplication and who gets which email. Tests never reach Resend.
+- `backend/tests/extraSessions.test.js` checks extra sessions: who may add them, slots and group mode on the host's calendar, their own staff and invitations, changing and cancelling them, and that they stay apart from the bi-weekly sessions. It also checks that a new calendar host takes the upcoming meetings over, and that group mode ignores the hidden slot settings.
 - `backend/tests/programme.test.js` checks the programme calendar, drawing slots, scheduling on the admin's calendar, changes and who is emailed, group sessions, and report cycles counted from the reports' own start date, or else the sessions'.
 - `backend/tests/checkins.test.js`, `googleConnect.test.js` and `transcripts.test.js` check scheduling, Meet Now, who may do what, connecting a calendar and collecting transcripts against a fake Google ([`tests/helpers.js`](backend/tests/helpers.js)). Tests never reach Google.
 - `signup.test.js`, `startups.test.js`, `kpiReview.test.js`, `biweeklyRules.test.js` and `staffChanges.test.js` cover names and codes at sign-up, proposals and startup names, reviews from out-of-date pages, the bi-weekly rules above, and what happens when someone's role changes or they are deactivated.

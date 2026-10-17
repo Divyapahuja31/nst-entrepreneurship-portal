@@ -10,6 +10,7 @@ import {
 
 // Programme session emails. Each template takes plain values (dates already
 // formatted in the programme's time zone) and returns { subject, html, text }.
+// An extra session passes its title as sessionName; a bi-weekly one doesn't.
 
 const startups = count => (count === 1 ? '1 startup' : `${count} startups`)
 
@@ -18,13 +19,15 @@ const REPLACES =
 
 // To a founder: their startup's slot, or the group session.
 export const founderSessionEmail = props => {
-  const what = props.group
-    ? 'Bi-weekly group session'
-    : 'Your bi-weekly check-in'
+  const name = props.sessionName
+  let what = props.group ? 'Bi-weekly group session' : 'Your bi-weekly check-in'
+  if (name) {
+    what = props.group ? name : `Your check-in: ${name}`
+  }
   const subject = `${what}: ${props.day}, ${props.time}`
   const intro = props.group
-    ? 'The programme’s bi-weekly group session is coming up. Every startup joins the same meeting.'
-    : `${props.ventureName} has a check-in with ${props.staffNames} at the bi-weekly session.`
+    ? `${name ?? 'The programme’s bi-weekly group session'} is coming up. Every startup joins the same meeting.`
+    : `${props.ventureName} has a check-in with ${props.staffNames} at ${name ?? 'the bi-weekly session'}.`
   const rows = [
     ['Startup', props.ventureName],
     ['Date', props.day],
@@ -58,16 +61,18 @@ export const founderSessionEmail = props => {
 
 // To a staff member: the startups they meet, or the group session.
 export const staffSessionEmail = props => {
-  const subject = `Your bi-weekly session: ${props.day}`
+  const name = props.sessionName
+  const title = name ?? 'Your bi-weekly session'
+  const subject = `${title}: ${props.day}`
   const intro = props.group
-    ? `You’re running the bi-weekly group session, ${props.time}, with ${startups(props.meetings.length)}.`
-    : `You meet ${startups(props.meetings.length)} at the bi-weekly session. Each slot has its own Meet link, in your calendar invites.`
+    ? `You’re running ${name ?? 'the bi-weekly group session'}, ${props.time}, with ${startups(props.meetings.length)}.`
+    : `You meet ${startups(props.meetings.length)} at ${name ?? 'the bi-weekly session'}. Each slot has its own Meet link, in your calendar invites.`
   const rows = props.meetings.map(m => [m.time, m.ventureName])
   const html = layout({
     title: subject,
     preheader: intro,
     body: [
-      heading('Your bi-weekly session'),
+      heading(title),
       paragraph(`Hi ${escapeHtml(props.recipientName)},`),
       paragraph(escapeHtml(intro)),
       detailsTable(rows),
@@ -92,10 +97,11 @@ export const staffSessionEmail = props => {
 // To anyone whose meeting was cancelled, or who was taken off the invite
 // list.
 export const sessionCancelledEmail = props => {
-  const subject = `Cancelled: bi-weekly session, ${props.day}, ${props.time}`
+  const name = props.sessionName
+  const subject = `Cancelled: ${name ?? 'bi-weekly session'}, ${props.day}, ${props.time}`
   const body = props.ventureName
     ? `The check-in for ${props.ventureName} on ${props.day}, ${props.time} is cancelled, or you’re no longer invited to it.`
-    : `The bi-weekly session on ${props.day}, ${props.time} is cancelled.`
+    : `${name ?? 'The bi-weekly session'} on ${props.day}, ${props.time} is cancelled.`
   const html = layout({
     title: subject,
     preheader: body,

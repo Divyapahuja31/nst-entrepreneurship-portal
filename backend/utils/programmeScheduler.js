@@ -2,7 +2,7 @@ import { cycleForDate } from '@nst/shared/biweeklyCycles.js'
 
 import CheckIn from '../models/checkIn.js'
 import Programme from '../models/programme.js'
-import ProgrammeSession from '../models/programmeSession.js'
+import ProgrammeSession, { REGULAR } from '../models/programmeSession.js'
 import {
   googleFor,
   meetFields,
@@ -10,16 +10,19 @@ import {
   transcriptDueAt,
   withMeetLink,
 } from './checkInHelper.js'
+import { canHost, getHostId } from './calendarHost.js'
 import { appUrl } from './kpiLockEmails.js'
 import {
   activeStaff,
   capacityProblem,
   drawAssignment,
+  extraTitle,
   getProgramme,
   invitedStartups,
   keepAssignment,
   reportsOrigin,
   sessionDates,
+  settingsFor,
   slotTimes,
 } from './programme.js'
 import {
@@ -49,9 +52,16 @@ const idOf = item => {
 }
 const idsOf = list => list.map(idOf).sort().join(',')
 
-const eventBody = ({ summary, startsAt, endsAt, timeZone, emails }) => ({
+const eventBody = ({
+  session,
   summary,
-  description: `Bi-weekly programme session.\n\nYour check-ins: ${appUrl()}/checkins`,
+  startsAt,
+  endsAt,
+  timeZone,
+  emails,
+}) => ({
+  summary,
+  description: `${session.extra ? `${extraTitle(session)}.` : 'Bi-weekly programme session.'}\n\nYour check-ins: ${appUrl()}/checkins`,
   start: { dateTime: startsAt.toISOString(), timeZone },
   end: { dateTime: endsAt.toISOString(), timeZone },
   attendees: [...new Set(emails)].map(email => ({ email })),
@@ -178,10 +188,48 @@ const isMoved = (row, meeting) =>
 const isChanged = (row, meeting, attendees) =>
   isMoved(row, meeting) || idsOf(row.attendees) !== idsOf(attendees)
 
-const updateRow = async (row, meeting, fields) => {
+// Whether the meeting's event is on the current host's calendar. One made
+// before the host changed is on the former host's, which the current
+// host's connection can't change.
+const isOnHost = (row, programme) =>
+  String(row.host ?? programme.host) === String(programme.host)
+
+// Each host's Google, looked up once per run (null when they can't be
+// reached): an event is changed through the host whose calendar it's on.
+const googlesByHost = currentHost => {
+  const found = new Map()
+  return hostId => {
+    const id = String(hostId ?? currentHost)
+    if (!found.has(id)) {
+      found.set(id, hostGoogle(hostId ?? currentHost))
+    }
+    return found.get(id)
+  }
+}
+
+// Deletes the rows' events, each through its own host's connection. One on
+// a calendar that can't be reached any more stays there.
+const deleteEvents = async (rows, googleOf) => {
+  const events = new Map(rows.map(r => [r.googleEventId, r.host]))
+  for (const [eventId, hostId] of events) {
+    const google = await googleOf(hostId)
+    if (!google) {
+      continue
+    }
+    try {
+      await google('deleteEvent', eventId)
+    } catch (error) {
+      console.error('Programme event not deleted:', error.message)
+    }
+  }
+}
+
+// `newHost`: the meeting moved to the current host's calendar, so it has
+// a new Meet link and its people are told again.
+const updateRow = async (row, meeting, fields, newHost = false) => {
   row.set({
     ...fields,
-    revision: row.revision + (isMoved(row, meeting) ? 1 : 0),
+    revision: row.revision + (newHost || isMoved(row, meeting) ? 1 : 0),
     'transcript.nextPollAt': transcriptDueAt(
       fields.scheduledAt,
       fields.durationMinutes
@@ -190,21 +238,15 @@ const updateRow = async (row, meeting, fields) => {
   await row.save()
 }
 
-// Cancels rows, deleting their events when `deleteEvents` (a group's event
+// Cancels rows, deleting their events when `withEvents` (a group's event
 // stays while other startups still meet in it). Collects who to tell.
-const removeRows = async (rows, { google, tell, deleteEvents }) => {
-  if (deleteEvents && google) {
-    for (const eventId of new Set(rows.map(r => r.googleEventId))) {
-      try {
-        await google('deleteEvent', eventId)
-      } catch (error) {
-        console.error('Programme event not deleted:', error.message)
-      }
-    }
+const removeRows = async (rows, { googleOf, tell, withEvents }) => {
+  if (withEvents) {
+    await deleteEvents(rows, googleOf)
   }
   for (const row of rows) {
     tell.push(...row.attendees.map(a => founderLeaving(row, a)))
-    if (deleteEvents) {
+    if (withEvents) {
       tell.push(...row.staff.map(member => staffLeaving(row, member)))
     }
   }
@@ -215,7 +257,8 @@ const removeRows = async (rows, { google, tell, deleteEvents }) => {
 }
 
 const applySlots = async (ctx, rows) => {
-  const { google, programme, plan, tell } = ctx
+  const { google, programme, session, plan, tell } = ctx
+  const kind = session.extra ? extraTitle(session) : 'bi-weekly check-in'
   const byVenture = rowsByVenture(rows)
   for (const meeting of plan) {
     const [startup] = meeting.startups
@@ -224,7 +267,8 @@ const applySlots = async (ctx, rows) => {
     byVenture.delete(String(startup.venture._id))
     const attendees = attendeesFor(startup.founders, row)
     const body = eventBody({
-      summary: `${startup.venture.name}: bi-weekly check-in with ${member.username}`,
+      session,
+      summary: `${startup.venture.name}: ${kind} with ${member.username}`,
       startsAt: meeting.startsAt,
       endsAt: meeting.endsAt,
       timeZone: programme.timeZone,
@@ -248,7 +292,8 @@ const applySlots = async (ctx, rows) => {
     tell.push(
       ...removedFounders(row, attendees).map(a => founderLeaving(row, a))
     )
-    if (!isChanged(row, meeting, attendees)) {
+    const onOldHost = !isOnHost(row, programme)
+    if (!onOldHost && !isChanged(row, meeting, attendees)) {
       continue
     }
     // A staff member taken off the meeting is told it's off for them.
@@ -258,17 +303,44 @@ const applySlots = async (ctx, rows) => {
         .filter(s => !staying.has(String(s._id)))
         .map(s => staffLeaving(row, s))
     )
+    if (onOldHost) {
+      // Made on a former host's calendar: it moves to the current host's.
+      const event = await createEvent(google, body)
+      await deleteEvents([row], ctx.googleOf)
+      await updateRow(row, meeting, { ...fields, ...event }, true)
+      continue
+    }
     await google('patchEvent', row.googleEventId, body)
     await updateRow(row, meeting, fields)
   }
-  await removeRows([...byVenture.values()], { ...ctx, deleteEvents: true })
+  await removeRows([...byVenture.values()], { ...ctx, withEvents: true })
+}
+
+const groupTitle = session =>
+  session.extra ? extraTitle(session) : 'Bi-weekly group session'
+
+// The group's one event, kept while it's on the host's calendar. One made
+// on a former host's calendar is made again on the host's, and the old one
+// deleted. `kept` is the row whose event was kept.
+const groupEvent = async ({ google, googleOf, programme }, rows, body) => {
+  const kept = rows.find(r => isOnHost(r, programme))
+  const away = rows.filter(r => !isOnHost(r, programme))
+  const event = kept
+    ? {
+        googleEventId: kept.googleEventId,
+        meetUrl: kept.meetUrl,
+        meetingCode: kept.meetingCode,
+      }
+    : await createEvent(google, body)
+  await deleteEvents(away, googleOf)
+  return { event, kept, moved: away.length > 0 }
 }
 
 const applyGroup = async (ctx, rows) => {
-  const { google, programme, plan } = ctx
+  const { google, programme, session, plan } = ctx
   const [meeting] = plan
   if (!meeting) {
-    await removeRows(rows, { ...ctx, deleteEvents: true })
+    await removeRows(rows, { ...ctx, withEvents: true })
     return
   }
   const byVenture = rowsByVenture(rows)
@@ -282,7 +354,8 @@ const applyGroup = async (ctx, rows) => {
     attendees: attendeesFor(startup.founders, row),
   }))
   const body = eventBody({
-    summary: 'Bi-weekly group session',
+    session,
+    summary: groupTitle(session),
     startsAt: meeting.startsAt,
     endsAt: meeting.endsAt,
     timeZone: programme.timeZone,
@@ -292,17 +365,12 @@ const applyGroup = async (ctx, rows) => {
     ],
   })
 
-  const event = rows.length
-    ? {
-        googleEventId: rows[0].googleEventId,
-        meetUrl: rows[0].meetUrl,
-        meetingCode: rows[0].meetingCode,
-      }
-    : await createEvent(google, body)
+  const { event, kept, moved } = await groupEvent(ctx, rows, body)
   const changed =
+    moved ||
     rows.length !== everyone.length ||
     everyone.some(e => !e.row || isChanged(e.row, meeting, e.attendees))
-  if (rows.length && changed) {
+  if (kept && changed) {
     await google('patchEvent', event.googleEventId, body)
   }
 
@@ -325,12 +393,14 @@ const applyGroup = async (ctx, rows) => {
     ctx.tell.push(
       ...removedFounders(row, attendees).map(a => founderLeaving(row, a))
     )
-    if (isChanged(row, meeting, attendees)) {
+    if (!isOnHost(row, programme)) {
+      await updateRow(row, meeting, { ...fields, ...event }, true)
+    } else if (isChanged(row, meeting, attendees)) {
       await updateRow(row, meeting, fields)
     }
   }
   // Startups no longer invited leave; the event stays for the rest.
-  await removeRows([...byVenture.values()], { ...ctx, deleteEvents: false })
+  await removeRows([...byVenture.values()], { ...ctx, withEvents: false })
 }
 
 const loadRows = session =>
@@ -349,12 +419,12 @@ const failure = async (session, problem, rows) => {
 }
 
 const hostProblem =
-  'Connect Google Calendar on the Programme page to schedule sessions.'
+  'An admin needs to connect Google Calendar on the Programme or Extra Sessions page.'
 
-// The host admin's Google, or null when they can't be reached.
-const hostGoogle = async programme => {
+// A host's Google, or null when there is none or they can't be reached.
+const hostGoogle = async hostId => {
   try {
-    return programme ? await googleFor(programme.host) : null
+    return hostId ? await googleFor(hostId) : null
   } catch {
     return null
   }
@@ -383,12 +453,15 @@ const redraw = (previous, ventureIds, staffIds) => {
   return draw
 }
 
-// Everything needed to apply a session's plan, or { problem }.
+// Everything needed to apply a session's plan, or { problem }. An extra
+// session runs with its own settings on the programme's calendar.
 const prepare = async (session, rows, fresh) => {
-  const programme = await getProgramme()
-  if (!programme) {
+  const saved = await getProgramme()
+  if (!saved && !session.extra) {
     return { problem: 'Set up the programme first.' }
   }
+  const hostId = await getHostId()
+  const programme = { ...settingsFor(saved, session), host: hostId }
   const [staff, startups] = await Promise.all([
     activeStaff(programme.staff),
     invitedStartups(programme),
@@ -411,13 +484,13 @@ const prepare = async (session, rows, fresh) => {
   if (plan.some(meeting => meeting.endsAt > session.endsAt)) {
     return {
       problem:
-        capacityProblem(
-          { ...programme.toObject(), staff: staffIds },
-          startups.length
-        ) ?? 'The meetings don’t fit in the session.',
+        capacityProblem({ ...programme, staff: staffIds }, startups.length) ??
+        'The meetings don’t fit in the session.',
     }
   }
-  const google = await hostGoogle(programme)
+  // A host who was deactivated or is no longer an admin holds no more
+  // sessions, even while their Google still works.
+  const google = (await canHost(hostId)) ? await hostGoogle(hostId) : null
   return google ? { programme, plan, google } : { problem: hostProblem }
 }
 
@@ -433,19 +506,23 @@ export const runSession = async (session, { fresh = false } = {}) => {
   const { programme, plan, google } = prepared
 
   const tell = []
-  const ctx = { google, programme, session, plan, tell }
+  const googleOf = googlesByHost(programme.host)
+  const ctx = { google, googleOf, programme, session, plan, tell }
   const isGroup = programme.mode === 'GROUP'
   try {
     // A change of mode starts the session's meetings afresh.
     await removeRows(
       rows.filter(r => r.group !== isGroup),
-      { ...ctx, deleteEvents: true }
+      { ...ctx, withEvents: true }
     )
     const current = rows.filter(r => r.group === isGroup)
     await (isGroup ? applyGroup(ctx, current) : applySlots(ctx, current))
   } catch (error) {
-    await sendCancellations(tell, programme)
-    console.error(`Programme session ${session.number} not scheduled:`, error)
+    await sendCancellations(tell, programme, session)
+    console.error(
+      `Programme session ${session.number ?? extraTitle(session)} not scheduled:`,
+      error
+    )
     return failure(
       session,
       `Google Calendar refused a change: ${error.message}`,
@@ -459,7 +536,7 @@ export const runSession = async (session, { fresh = false } = {}) => {
     problem: null,
   })
   await session.save()
-  await sendCancellations(await stillLeaving(session, tell), programme)
+  await sendCancellations(await stillLeaving(session, tell), programme, session)
   await sendSessionEmails(session, programme)
   return {}
 }
@@ -481,18 +558,13 @@ const stillLeaving = async (session, tell) => {
 // Cancels a session: its events come off the calendars and everyone in it
 // is told once.
 export const cancelSession = async session => {
-  const programme = await getProgramme()
+  const saved = await getProgramme()
+  const programme = saved || session.extra ? settingsFor(saved, session) : null
   const rows = await loadRows(session)
-  const google = await hostGoogle(programme)
   const tell = []
-  await removeRows(rows, { google, tell, deleteEvents: false })
-  if (google) {
-    for (const eventId of new Set(rows.map(r => r.googleEventId))) {
-      await google('deleteEvent', eventId).catch(error =>
-        console.error('Programme event not deleted:', error.message)
-      )
-    }
-  }
+  // Staff are told below, once for the session.
+  await removeRows(rows, { tell, withEvents: false })
+  await deleteEvents(rows, googlesByHost(await getHostId()))
   // Staff hear once about the whole session, not once per startup.
   const staff = new Map(
     rows.flatMap(r => r.staff).map(member => [String(member._id), member])
@@ -518,7 +590,7 @@ export const cancelSession = async session => {
   session.set({ status: 'CANCELLED', problem: null })
   await session.save()
   if (programme) {
-    await sendCancellations(tell, programme)
+    await sendCancellations(tell, programme, session)
   }
 }
 
@@ -549,17 +621,36 @@ export const withSession = async (sessionId, work, now = new Date()) => {
   }
 }
 
+// Brings every upcoming scheduled session in line, touching only what
+// changed: after founders join or leave a startup, and after the calendar
+// host changes (each meeting then moves to the new host's calendar).
+export const rerunScheduledSessions = async (now = new Date()) => {
+  const sessions = await ProgrammeSession.find({
+    status: 'SCHEDULED',
+    startsAt: { $gt: now },
+  }).select('_id')
+  for (const { _id } of sessions) {
+    await withSession(_id, session => runSession(session), now)
+  }
+}
+
 // Someone who can no longer run sessions (deactivated, or no longer staff)
 // leaves the programme's staff, and the upcoming sessions they were in move
 // their startups to the others, emailing only the people whose meeting
 // changed.
 export const removeProgrammeStaff = async (userId, now = new Date()) => {
-  const programme = await Programme.findOneAndUpdate(
-    { key: 'programme', staff: userId },
-    { $pull: { staff: userId } },
-    { returnDocument: 'after' }
-  )
-  if (!programme) {
+  const [programme, extras] = await Promise.all([
+    Programme.findOneAndUpdate(
+      { key: 'programme', staff: userId },
+      { $pull: { staff: userId } },
+      { returnDocument: 'after' }
+    ),
+    ProgrammeSession.updateMany(
+      { 'extra.staff': userId },
+      { $pull: { 'extra.staff': userId } }
+    ),
+  ])
+  if (!programme && !extras.modifiedCount) {
     return 0
   }
   const affected = await CheckIn.distinct('session', {
@@ -583,15 +674,17 @@ export const removeProgrammeStaff = async (userId, now = new Date()) => {
 // Schedules the sessions now within their lead time, and retries scheduled
 // ones a change couldn't finish. Run by the background job.
 export const scheduleDueSessions = async (now = new Date()) => {
+  // The bi-weekly sessions are drawn their lead time ahead.
   const programme = await getProgramme()
-  if (!programme) {
-    return 0
-  }
-  const horizon = new Date(now.getTime() + programme.leadDays * DAY_MS)
+  const leadDays = programme?.leadDays ?? 7
+  const horizon = new Date(now.getTime() + leadDays * DAY_MS)
   const due = await ProgrammeSession.find({
     startsAt: { $gt: now },
     $or: [
       { status: 'PLANNED', startsAt: { $lte: horizon } },
+      // An extra session is scheduled when it's saved, whatever the lead
+      // time; one that couldn't be then is tried again.
+      { status: 'PLANNED', extra: { $ne: null } },
       { status: 'SCHEDULED', problem: { $ne: null } },
     ],
   }).sort({ startsAt: 1 })
@@ -661,6 +754,7 @@ export const clearSessions = async (programme, now = new Date()) => {
     return false
   }
   const scheduled = await ProgrammeSession.find({
+    ...REGULAR,
     startsAt: { $gt: now },
     status: 'SCHEDULED',
   }).sort({ startsAt: 1 })
@@ -669,7 +763,8 @@ export const clearSessions = async (programme, now = new Date()) => {
       return false
     }
   }
-  await ProgrammeSession.deleteMany({})
+  // Extra sessions are left as they are.
+  await ProgrammeSession.deleteMany(REGULAR)
   await ProgrammeSession.insertMany(
     sessionDates(programme, await reportsOrigin())
   )

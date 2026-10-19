@@ -96,6 +96,14 @@ npm run migrate:biweekly -w backend
 
 It moves each founder's report onto the startup they are in (or were in most recently). When a startup ends up with two reports for one cycle, it keeps the submitted one, which takes over any review only the other had. A report it can't keep, such as a second report for a cycle or one from a founder who never joined a startup, is copied to `biweeklysubmissions_archive` instead of being deleted. It's safe to run again.
 
+A startup can have more than one mentor, so its mentor is now a list. Move each startup's mentor into it once:
+
+```sh
+npm run migrate:mentors -w backend
+```
+
+It keeps the old `mentor` field, so a server still on the previous version keeps working. It's safe to run again.
+
 ## Bi-weekly reports
 
 A startup's report for each 14-day cycle is due 3 days after the cycle's last day. The API enforces the same rules as the page:

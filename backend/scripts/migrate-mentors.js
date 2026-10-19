@@ -1,11 +1,12 @@
-import Venture from '../models/venture.js'
-
+// Usage: npm run migrate:mentors -w backend
 // A startup had one `mentor`; it now has a list of `mentors`. Copies the old
 // field into the list for startups that have no list yet. The old field is
-// left as it was, so a server still running the previous version against
-// the same database keeps working; this one ignores it. Safe to run again.
-// Returns how many startups changed.
-export const migrateVentureMentors = async () => {
+// left as it was, so a server still on the previous version keeps working.
+// Safe to run again.
+import Venture from '../models/venture.js'
+import { runWithDatabase } from './connect.js'
+
+runWithDatabase(async () => {
   const { modifiedCount } = await Venture.collection.updateMany(
     { mentors: { $exists: false } },
     [
@@ -22,5 +23,5 @@ export const migrateVentureMentors = async () => {
       },
     ]
   )
-  return modifiedCount
-}
+  console.info(`Startups given a list of mentors: ${modifiedCount}`)
+})

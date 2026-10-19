@@ -139,6 +139,17 @@ describe('the Emails page', () => {
     assert.equal(replyTo.body.field, 'sender.replyTo')
   })
 
+  it('treats a section sent as null as empty', async () => {
+    const res = await as(data.users.admin).put(URL, {
+      sender: null,
+      brand: null,
+      rules: null,
+      templates: null,
+    })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.settings.rules.lowPercent, 40)
+  })
+
   it('previews unsaved wording', async () => {
     const page = (await as(data.users.admin).get(URL)).body
     page.settings.templates['mentor-low-score'].subject =
@@ -232,6 +243,10 @@ describe('the parts', () => {
       'NST <no-reply@nstsdc.org>'
     )
     assert.equal(withName('no-reply@nstsdc.org', null), 'no-reply@nstsdc.org')
+    assert.equal(
+      withName('no-reply@nstsdc.org', 'Office, NST'),
+      '"Office, NST" <no-reply@nstsdc.org>'
+    )
   })
 
   it('counts strikes by the rules it is given', () => {

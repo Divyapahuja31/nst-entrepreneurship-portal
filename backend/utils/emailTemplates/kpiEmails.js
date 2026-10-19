@@ -45,6 +45,10 @@ const valuesOf = (props, rules) => ({
   low: rules.lowPercent,
   pass: rules.passPercent,
   strikes: inWords(rules.strikes),
+  run:
+    rules.strikes === 1
+      ? 'one locked evaluation'
+      : `${inWords(rules.strikes)} locked evaluations in a row`,
   mentor: props.mentorName,
   email: props.studentEmail,
   batch: props.batch,

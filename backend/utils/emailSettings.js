@@ -21,6 +21,7 @@ const KPI_PLACEHOLDERS = {
   low: 'The low score line, in percent',
   pass: 'The on-track line, in percent',
   strikes: 'How many grades in a row set off an alert, in words',
+  run: 'That run: "two locked evaluations in a row", or "one locked evaluation"',
 }
 const { student: _about, ...RESULT_PLACEHOLDERS } = KPI_PLACEHOLDERS
 const NAME = { name: 'The recipient’s name' }
@@ -93,7 +94,7 @@ export const EMAIL_CATALOG = [
       intro: {
         label: 'Opening line',
         default:
-          '{student} has scored below {pass}% on {strikes} locked evaluations in a row, most recently on {kpi}.',
+          '{student} has scored below {pass}% on {run}, most recently on {kpi}.',
         multiline: true,
       },
       actionTitle: { label: 'Action: title', default: 'Please follow up' },
@@ -123,7 +124,7 @@ export const EMAIL_CATALOG = [
       intro: {
         label: 'Opening line',
         default:
-          '{student} has scored poorly on {strikes} locked evaluations in a row, most recently {percent}% on {kpi}.',
+          '{student} has scored poorly on {run}, most recently {percent}% on {kpi}.',
         multiline: true,
       },
       actionTitle: { label: 'Action: title', default: 'Please reach out soon' },
@@ -159,7 +160,7 @@ export const EMAIL_CATALOG = [
       intro: {
         label: 'Opening line',
         default:
-          '{student} has scored {low}% or below on {strikes} locked evaluations in a row, most recently on {kpi}.',
+          '{student} has scored {low}% or below on {run}, most recently on {kpi}.',
         multiline: true,
       },
       actionTitle: {
@@ -385,10 +386,10 @@ const parseSender = (sender = {}) => {
   if (fromName.length > 80) {
     return fail('sender.fromName', 'The sender name is too long')
   }
-  if (/[<>"\r\n]/.test(fromName)) {
+  if (/[<>"\\\r\n]/.test(fromName)) {
     return fail(
       'sender.fromName',
-      'The sender name can’t contain quotes, < or >'
+      'The sender name can’t contain quotes, backslashes, < or >'
     )
   }
   if (replyTo && !EMAIL.test(replyTo)) {
@@ -490,11 +491,14 @@ const parseTemplates = (templates = {}) => {
 // Checks what the Emails page sends. Returns { value } in the stored form
 // (null or absent for every default) or { field, error }.
 export const parseEmailSettings = (body = {}) => {
+  // A section sent as null, or as anything but an object, is empty.
+  const section = name =>
+    body?.[name] && typeof body[name] === 'object' ? body[name] : {}
   const parts = {
-    sender: parseSender(body.sender),
-    brand: parseBrand(body.brand),
-    rules: parseRules(body.rules),
-    templates: parseTemplates(body.templates),
+    sender: parseSender(section('sender')),
+    brand: parseBrand(section('brand')),
+    rules: parseRules(section('rules')),
+    templates: parseTemplates(section('templates')),
   }
   const problem = Object.values(parts).find(part => part.error)
   if (problem) {

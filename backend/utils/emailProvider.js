@@ -20,13 +20,16 @@ export const normalizeFrom = value => {
   return name ? `${name} <${match[2]}>` : match[2]
 }
 
-// The sender with another display name, or as it was without one.
+// The sender with another display name, or as it was without one. A name
+// with punctuation in it ("Programme Office, NST") must be quoted, or the
+// header is invalid and Resend refuses every email.
 export const withName = (from, name) => {
   if (!from || !name) {
     return from
   }
   const address = from.match(/<([^<>]+)>$/)?.[1] ?? from
-  return `${name} <${address}>`
+  const display = /^[\w ]+$/.test(name) ? name : `"${name}"`
+  return `${display} <${address}>`
 }
 
 const failure = message => {
@@ -77,11 +80,18 @@ export const createResendProvider = () => ({
 // sending it, so sign-up and reset codes can be read there.
 export const createConsoleProvider = () => ({
   name: 'console',
-  sendEmail: async ({ to, subject, text }) => {
+  sendEmail: async ({ to, subject, text, fromName, replyTo }) => {
     // The plain-text body without its signature (after the "--" line).
     const body = String(text ?? '').split('\n--\n')[0]
+    const sender = [
+      fromName && `From name: ${fromName}`,
+      replyTo && `Reply-To: ${replyTo}`,
+    ]
+      .filter(Boolean)
+      .map(line => `${line}\n`)
+      .join('')
     console.log(
-      `\n----- Email (not sent) -----\nTo: ${to}\nSubject: ${subject}\n\n${body}\n----------------------------\n`
+      `\n----- Email (not sent) -----\nTo: ${to}\n${sender}Subject: ${subject}\n\n${body}\n----------------------------\n`
     )
     return { messageId: null }
   },

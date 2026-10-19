@@ -263,13 +263,13 @@ function BiWeekly({ data: propData }) {
   const embedded = propData !== undefined
   const data = embedded ? propData : loaderData
   const revalidator = useRevalidator()
-  // Staff read the report; the startup's mentor and the board write
+  // Staff read the report; the startup's mentors and the board write
   // observations and evaluations; only the board reopens a cycle.
   const { actor, isStaff } = useAccess()
 
   // Reports belong to the startup and are shared by its co-founders.
   const { venture, coFounders = [] } = data || {}
-  const canReview = canAuthorBiweeklyReview(actor, venture?.mentor)
+  const canReview = canAuthorBiweeklyReview(actor, venture?.mentors)
   const canReopen = canReopenBiweekly(actor)
   const rows = data?.submissions ?? []
   const observations = data?.observations ?? []

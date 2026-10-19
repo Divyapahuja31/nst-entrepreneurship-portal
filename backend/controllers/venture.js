@@ -24,21 +24,25 @@ const mentorSummary = mentor =>
     ? { id: mentor._id, username: mentor.username, email: mentor.email }
     : null
 
+// A startup's mentors, leaving out any account since deleted.
+const mentorSummaries = mentors =>
+  (mentors ?? []).filter(mentor => mentor?._id).map(mentorSummary)
+
 // Students get every startup, to choose one to join. Staff get the startups
-// they may review, with their mentor.
+// they may review, with their mentors.
 export const getVentures = async (req, res) => {
   try {
     const data = await Venture.find(
       isStudent(req.user) ? {} : ventureScope(req.user)
     )
-      .select('_id name campus stage industry mentor')
+      .select('_id name campus stage industry mentors')
       .populate([
         { path: 'campus', select: 'name' },
         { path: 'industry', select: 'name' },
         { path: 'founders', populate: { path: 'user', select: 'username' } },
         ...(isStudent(req.user)
           ? []
-          : [{ path: 'mentor', select: 'username email' }]),
+          : [{ path: 'mentors', select: 'username email' }]),
       ])
 
     const venture = data.map(data => {
@@ -54,7 +58,9 @@ export const getVentures = async (req, res) => {
         industry: data.industry?.name || '-',
         founders: founders.map(founder => founder.username).join(', ') || '-',
         team: founders.length,
-        ...(isStudent(req.user) ? {} : { mentor: mentorSummary(data.mentor) }),
+        ...(isStudent(req.user)
+          ? {}
+          : { mentors: mentorSummaries(data.mentors) }),
       }
     })
 
@@ -77,7 +83,7 @@ const ventureDetail = venture => ({
   stage: stageLabel(venture.stage),
   website: venture.website || null,
   createdAt: venture.createdAt,
-  mentor: mentorSummary(venture.mentor),
+  mentors: mentorSummaries(venture.mentors),
 })
 
 export const getVentureById = async (req, res) => {
@@ -99,7 +105,7 @@ export const getVentureById = async (req, res) => {
       .populate([
         { path: 'campus', select: 'name' },
         { path: 'industry', select: 'name' },
-        { path: 'mentor', select: 'username email' },
+        { path: 'mentors', select: 'username email' },
       ])
       .populate({
         path: 'founders',
@@ -243,11 +249,12 @@ export const getMentors = async (req, res) => {
   }
 }
 
-// Assigns (or, with null, removes) a startup's mentor. Board only.
-export const setVentureMentor = async (req, res) => {
+// Sets who mentors a startup: mentorIds is the whole list, possibly
+// empty. Board only.
+export const setVentureMentors = async (req, res) => {
   try {
     const { ventureId } = req.params
-    const mentorId = req.body?.mentorId || null
+    const { mentorIds } = req.body ?? {}
 
     if (!canManageVentures(req.user)) {
       return res
@@ -257,29 +264,41 @@ export const setVentureMentor = async (req, res) => {
     if (!mongoose.isValidObjectId(ventureId)) {
       return res.status(400).json({ error: 'Valid ventureId is required' })
     }
-    if (mentorId && !(await isActiveMentor(mentorId))) {
-      return res.status(400).json({ error: 'Choose an active mentor account' })
+    if (!Array.isArray(mentorIds)) {
+      return res.status(400).json({ error: 'mentorIds must be a list' })
+    }
+    const ids = [...new Set(mentorIds.map(String))]
+    for (const id of ids) {
+      if (!(await isActiveMentor(id))) {
+        return res
+          .status(400)
+          .json({ error: 'Choose active mentor accounts only' })
+      }
     }
 
     const previous = await Venture.findByIdAndUpdate(ventureId, {
-      $set: { mentor: mentorId },
-    }).select('mentor')
+      $set: { mentors: ids },
+    }).select('mentors')
     if (!previous) {
       return res.status(404).json({ error: 'Venture not found' })
     }
-    // Check-ins live on the old mentor's calendar; the new one schedules
-    // their own.
-    if (String(previous.mentor) !== String(mentorId)) {
-      await cancelFutureCheckIns({ venture: previous._id })
+    // A mentor's check-ins live on their own calendar; those of a mentor
+    // taken off the startup are cancelled. The others' stay.
+    const removed = previous.mentors.filter(id => !ids.includes(String(id)))
+    if (removed.length) {
+      await cancelFutureCheckIns({
+        venture: previous._id,
+        mentor: { $in: removed },
+      })
     }
     const venture = await Venture.findById(ventureId).populate(
-      'mentor',
+      'mentors',
       'username email'
     )
 
-    return res.status(200).json({ mentor: mentorSummary(venture.mentor) })
+    return res.status(200).json({ mentors: mentorSummaries(venture.mentors) })
   } catch (error) {
-    console.error('Error assigning mentor:', error)
-    return res.status(500).json({ error: 'Could not assign the mentor' })
+    console.error('Error assigning mentors:', error)
+    return res.status(500).json({ error: 'Could not assign the mentors' })
   }
 }

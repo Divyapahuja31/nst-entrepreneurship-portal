@@ -19,7 +19,7 @@ const STATUSES = ['DRAFT', 'WAITING_FOR_APPROVAL', 'REJECTED', 'ACCEPTED']
 const ALL_STATUSES = [...STATUSES, 'GRADED']
 
 const kpiContext = (who, { status, isLocked, isPastDue, personal }) => ({
-  ventureMentorId: ACTORS.mentor.id,
+  ventureMentorIds: [ACTORS.mentor.id],
   isMember: MEMBERS.has(who),
   kpiFounderId: personal ? ACTORS.owner.id : null,
   status,
@@ -94,7 +94,7 @@ describe('KPI permissions follow the matrix', () => {
 
   it('canAddKpi: staff by assignment, students for their startup or themselves', () => {
     const target = (who, founderId = null) => ({
-      ventureMentorId: ACTORS.mentor.id,
+      ventureMentorIds: [ACTORS.mentor.id],
       isMember: MEMBERS.has(who),
       founderId,
     })
@@ -137,12 +137,29 @@ describe('KPI permissions follow the matrix', () => {
   it('a mentor id is never matched by a missing assignment', () => {
     const ctx = {
       ...kpiContext('mentor', { status: 'ACCEPTED' }),
-      ventureMentorId: null,
+      ventureMentorIds: [],
     }
     assert.equal(can.canEvaluateKpi(ACTORS.mentor, ctx), false)
     assert.equal(
       can.isMentorOf({ id: undefined, role: 'mentor' }, undefined),
       false
+    )
+    assert.equal(can.isMentorOf({ id: undefined, role: 'mentor' }, []), false)
+  })
+
+  it('every mentor of a startup has the same rights over it', () => {
+    const ctx = {
+      ...kpiContext('otherMentor', { status: 'ACCEPTED' }),
+      ventureMentorIds: [ACTORS.mentor.id, ACTORS.otherMentor.id],
+    }
+    for (const actor of [ACTORS.mentor, ACTORS.otherMentor]) {
+      assert.equal(can.canReadKpi(actor, ctx), true, actor.id)
+      assert.equal(can.canEvaluateKpi(actor, ctx), true, actor.id)
+    }
+    // Populated mentors match by their _id.
+    assert.equal(
+      can.isMentorOf(ACTORS.otherMentor, [{ _id: ACTORS.otherMentor.id }]),
+      true
     )
   })
 })
@@ -159,7 +176,10 @@ describe('startups', () => {
   }
   it('canReadVenture', () => {
     for (const [who, actor] of Object.entries(ACTORS)) {
-      const venture = { mentorId: ACTORS.mentor.id, isMember: MEMBERS.has(who) }
+      const venture = {
+        mentorIds: [ACTORS.mentor.id],
+        isMember: MEMBERS.has(who),
+      }
       assert.equal(can.canReadVenture(actor, venture), expectRead[who], who)
     }
   })
@@ -263,7 +283,7 @@ describe('check-ins', () => {
       )
       assert.equal(
         can.canReadCheckIns(actor, {
-          mentorId: ACTORS.mentor.id,
+          mentorIds: [ACTORS.mentor.id],
           isMember: MEMBERS.has(who),
         }),
         ['admin', 'board', 'mentor', 'owner', 'teammate'].includes(who),

@@ -22,7 +22,7 @@ import {
   reviewJoinRequest,
 } from '../controllers/application.js'
 
-import { getMentors, setVentureMentor } from '../controllers/venture.js'
+import { getMentors, setVentureMentors } from '../controllers/venture.js'
 
 // Mounted behind requireRole(...STAFF_ROLES). Each handler limits mentors to
 // the startups assigned to them; routes for the board or admins only say so.
@@ -39,10 +39,10 @@ router.patch('/proposals/:proposalId/review', reviewProposal)
 router.patch('/join-requests/:requestId/review', reviewJoinRequest)
 
 router.get('/mentors', getMentors)
-router.patch(
-  '/ventures/:ventureId/mentor',
+router.put(
+  '/ventures/:ventureId/mentors',
   requireRole(...BOARD_ROLES),
-  setVentureMentor
+  setVentureMentors
 )
 
 router.use('/accounts', requireRole(ROLES.ADMIN), accounts)

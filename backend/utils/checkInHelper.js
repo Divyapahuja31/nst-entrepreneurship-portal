@@ -186,9 +186,11 @@ export const transcriptDueAt = (scheduledAt, durationMinutes) =>
       TRANSCRIPT_GRACE_MS
   )
 
-// The CheckIn fields for a check-in's event.
+// The CheckIn fields for a check-in's event, on the calendar of `mentor`,
+// one of the startup's mentors.
 export const checkInFields = ({
   venture,
+  mentor,
   event,
   durationMinutes,
   timeZone,
@@ -196,7 +198,7 @@ export const checkInFields = ({
   const scheduledAt = eventStart(event)
   return {
     venture: venture._id,
-    mentor: venture.mentor,
+    mentor,
     scheduledAt,
     originalStartAt: event.originalStartTime
       ? new Date(event.originalStartTime.dateTime)
@@ -286,8 +288,8 @@ const googleOrNull = async mentorId => {
   }
 }
 
-// Cancels the upcoming mentor check-ins matching `filter` (e.g. a startup
-// whose mentor changed, or a mentor who left). Removing them from Google is best
+// Cancels the upcoming mentor check-ins matching `filter` (e.g. a mentor
+// taken off a startup, or a mentor who left). Removing them from Google is best
 // effort: the portal's record is cancelled either way.
 export const cancelFutureCheckIns = async filter => {
   const now = new Date()

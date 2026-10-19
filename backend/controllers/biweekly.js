@@ -46,7 +46,10 @@ export const getBiWeeklyData = async (req, res) => {
 
     if (
       isStaff(req.user) &&
-      !canReadVenture(req.user, { mentorId: venture?.mentor, isMember: false })
+      !canReadVenture(req.user, {
+        mentorIds: venture?.mentors,
+        isMember: false,
+      })
     ) {
       return res
         .status(403)
@@ -186,7 +189,7 @@ export const submitBiWeeklyCycle = async (req, res) => {
 
 // For staff acting on a startup's report. parseBody checks the rest of the
 // request before anything is created; it returns { error } or values passed
-// back as `parsed`. isAllowed(user, ventureMentorId) says whether this
+// back as `parsed`. isAllowed(user, ventureMentorIds) says whether this
 // caller may act on that startup.
 const getOrCreateSubmissionForStaff = async (
   req,
@@ -219,9 +222,9 @@ const getOrCreateSubmissionForStaff = async (
     return null
   }
 
-  if (!isAllowed(req.user, venture.mentor)) {
+  if (!isAllowed(req.user, venture.mentors)) {
     res.status(403).json({
-      error: "Only this startup's mentor or the academic board can do this",
+      error: "Only this startup's mentors or the academic board can do this",
     })
     return null
   }

@@ -6,6 +6,7 @@ import { CYCLES } from '@nst/shared/biweeklyCycles.js'
 import app from '../app.js'
 import CheckIn from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
+import Venture from '../models/venture.js'
 import GoogleCredential from '../models/googleCredential.js'
 import { GoogleError, REQUIRED_SCOPES } from '../utils/googleWorkspace.js'
 import {
@@ -26,6 +27,8 @@ const as = user => ({
     request(app).post(url).set('Cookie', cookieFor(user)).send(body),
   patch: (url, body) =>
     request(app).patch(url).set('Cookie', cookieFor(user)).send(body),
+  put: (url, body) =>
+    request(app).put(url).set('Cookie', cookieFor(user)).send(body),
   delete: url => request(app).delete(url).set('Cookie', cookieFor(user)),
 })
 
@@ -66,7 +69,7 @@ const legacySeries = async () => {
   })
   const series = await CheckInSeries.create({
     venture: venture._id,
-    mentor: venture.mentor,
+    mentor: data.users.mentor._id,
     googleEventId: event.id,
     startAt,
     durationMinutes: 30,
@@ -76,6 +79,7 @@ const legacySeries = async () => {
     (await calendar('listInstances', event.id)).map(instance => ({
       ...checkInFields({
         venture,
+        mentor: data.users.mentor._id,
         event: { ...instance, hangoutLink: event.hangoutLink },
         durationMinutes: 30,
         timeZone,
@@ -418,18 +422,80 @@ describe('the bi-weekly report', () => {
   })
 })
 
+const setMentors = mentors =>
+  as(data.users.board).put(
+    `/api/admin/ventures/${data.ventures.alpha._id}/mentors`,
+    { mentorIds: mentors.map(mentor => mentor._id) }
+  )
+
+describe('a startup with more than one mentor', () => {
+  beforeEach(async () => {
+    await connectCalendar(data.users.otherMentor)
+    await setMentors([data.users.mentor, data.users.otherMentor])
+  })
+
+  it('each mentor schedules on their own calendar and changes only their own', async () => {
+    const mine = (await schedule(data.users.mentor)).body.checkIns[0]
+    const res = await schedule(data.users.otherMentor, { startAt: inDays(4) })
+    assert.equal(res.status, 201)
+    const theirs = res.body.checkIns[0]
+    assert.equal(theirs.mentor.email, 'max@newtonschool.co')
+
+    const moved = await as(data.users.otherMentor).patch(
+      `/api/checkins/${mine._id}`,
+      { startAt: inDays(3) }
+    )
+    const cancelled = await as(data.users.otherMentor).delete(
+      `/api/checkins/${mine._id}`
+    )
+    assert.deepEqual([moved.status, cancelled.status], [409, 409])
+
+    const own = await as(data.users.otherMentor).delete(
+      `/api/checkins/${theirs._id}`
+    )
+    assert.equal(own.status, 200)
+  })
+
+  it('both read the startup; taking one off cancels only their check-ins', async () => {
+    await schedule(data.users.mentor)
+    await schedule(data.users.otherMentor, { startAt: inDays(4) })
+    const url = `/api/checkins?ventureId=${data.ventures.alpha._id}`
+    for (const user of [data.users.mentor, data.users.otherMentor]) {
+      assert.equal((await as(user).get(url)).status, 200, user.email)
+    }
+
+    const res = await setMentors([data.users.mentor])
+    assert.equal(res.status, 200)
+    assert.deepEqual(
+      res.body.mentors.map(m => m.email),
+      ['mo@newtonschool.co']
+    )
+    const left = await CheckIn.find({ status: 'SCHEDULED' }).populate('mentor')
+    assert.deepEqual(
+      left.map(c => c.mentor.email),
+      ['mo@newtonschool.co']
+    )
+    assert.equal((await as(data.users.otherMentor).get(url)).status, 403)
+  })
+
+  it("deactivating one mentor keeps the startup's other", async () => {
+    await as(data.users.admin).delete(
+      `/api/admin/accounts/${data.users.otherMentor._id}`
+    )
+    const venture = await Venture.findById(data.ventures.alpha._id)
+    assert.deepEqual(venture.mentors.map(String), [
+      String(data.users.mentor._id),
+    ])
+  })
+})
+
 describe('when a startup loses its mentor', () => {
   it('reassigning the mentor cancels upcoming check-ins on the old calendar', async () => {
     const { series } = await legacySeries()
     await schedule(data.users.mentor)
-    const res = await as(data.users.board).patch(
-      `/api/admin/ventures/${data.ventures.alpha._id}/mentor`,
-      {
-        mentorId: data.users.otherMentor._id,
-      }
-    )
+    const res = await setMentors([data.users.otherMentor])
     assert.equal(res.status, 200)
-    assert.equal(res.body.mentor.email, 'max@newtonschool.co')
+    assert.equal(res.body.mentors[0].email, 'max@newtonschool.co')
 
     assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 0)
     assert.deepEqual(callsTo('deleteEvent')[0].args, [series.googleEventId])
@@ -439,10 +505,7 @@ describe('when a startup loses its mentor', () => {
 
   it('reassigning the same mentor leaves them alone', async () => {
     await schedule(data.users.mentor)
-    await as(data.users.board).patch(
-      `/api/admin/ventures/${data.ventures.alpha._id}/mentor`,
-      { mentorId: data.users.mentor._id }
-    )
+    await setMentors([data.users.mentor])
     assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 1)
   })
 

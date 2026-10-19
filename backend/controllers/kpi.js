@@ -51,8 +51,8 @@ import { queueLockedKpiEmails } from '../utils/kpiLockEmails.js'
 
 const STUDENT_SETTABLE_STATUSES = ['DRAFT', 'SUBMIT', 'WAITING_FOR_APPROVAL']
 
-// The startup's mentor comes along so the UI can apply the same rules.
-const VENTURE_FIELDS = 'name mentor'
+// The startup's mentors come along so the UI can apply the same rules.
+const VENTURE_FIELDS = 'name mentors'
 
 // Loads the KPI in req.params.kpiId with its permission context. Sends 400,
 // 404 or 403 (when the caller may not even see it) and returns null instead.
@@ -127,11 +127,11 @@ export const getAllKPIs = async (req, res) => {
 
 // Why the caller can't create a KPI for this startup (and member), or null.
 const newKPITargetError = async (user, ventureId, founderId) => {
-  const { venture, mentorId, isMember } = await ventureAccess(user, ventureId)
+  const { venture, mentorIds, isMember } = await ventureAccess(user, ventureId)
   if (!venture) {
     return { status: 404, message: 'Venture not found' }
   }
-  if (!canAddKpi(user, { ventureMentorId: mentorId, isMember, founderId })) {
+  if (!canAddKpi(user, { ventureMentorIds: mentorIds, isMember, founderId })) {
     return {
       status: 403,
       message: 'You are not authorized to create this KPI for this venture',
@@ -374,7 +374,10 @@ export const getFounderKPIs = async (req, res) => {
     // Students see only their own; staff, the startups they may review.
     const allowed = isStudent(req.user)
       ? String(actualUserId) === String(req.user.id)
-      : canReadVenture(req.user, { mentorId: venture.mentor, isMember: false })
+      : canReadVenture(req.user, {
+          mentorIds: venture.mentors,
+          isMember: false,
+        })
     if (!allowed) {
       return res.status(403).json({
         success: false,

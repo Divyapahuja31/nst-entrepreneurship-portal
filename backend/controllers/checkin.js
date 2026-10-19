@@ -30,7 +30,7 @@ const DEFAULT_DURATION = 30
 const MIN_DURATION = 15
 const MAX_DURATION = 180
 
-const VENTURE_FIELDS = 'name mentor createdAt'
+const VENTURE_FIELDS = 'name mentors createdAt'
 
 const sameId = (a, b) => String(a) === String(b)
 
@@ -139,17 +139,19 @@ const findManagedVenture = async (req, res, ventureId) => {
     res.status(404).json({ error: 'Venture not found' })
     return null
   }
-  if (!canManageCheckIns(req.user, venture.mentor)) {
+  if (!canManageCheckIns(req.user, venture.mentors)) {
     res
       .status(403)
-      .json({ error: 'Only the startup mentor schedules its check-ins' })
+      .json({ error: "Only the startup's mentors schedule its check-ins" })
     return null
   }
   return venture
 }
 
 // A check-in the caller may change, with its startup. Sends the error
-// response and returns null otherwise. A programme meeting is moved and
+// response and returns null otherwise. A mentor changes only the check-ins
+// on their own calendar, while they mentor the startup. A programme meeting
+// is moved and
 // cancelled only through its session; its staff write its notes and check
 // its transcript (`programme: true`).
 const findManagedCheckIn = async (req, res, { programme = false } = {}) => {
@@ -167,15 +169,15 @@ const findManagedCheckIn = async (req, res, { programme = false } = {}) => {
   if (checkIn.session) {
     return programmeCheckIn(req, res, { checkIn, venture, programme })
   }
-  if (!venture || !canManageCheckIns(req.user, venture.mentor)) {
+  if (!venture || !canManageCheckIns(req.user, venture.mentors)) {
     res
       .status(403)
-      .json({ error: 'Only the startup mentor changes its check-ins' })
+      .json({ error: "Only the startup's mentors change its check-ins" })
     return null
   }
-  if (!sameId(checkIn.mentor, venture.mentor)) {
+  if (!sameId(checkIn.mentor, req.user.id)) {
     res.status(409).json({
-      error: "This check-in is on the previous mentor's calendar",
+      error: "This check-in is on another mentor's calendar",
     })
     return null
   }
@@ -195,12 +197,12 @@ const listForVenture = async (req, res, ventureId) => {
   if (!mongoose.isValidObjectId(ventureId)) {
     return res.status(400).json({ error: 'Valid ventureId is required' })
   }
-  const venture = await Venture.findById(ventureId).select('mentor')
+  const venture = await Venture.findById(ventureId).select('mentors')
   if (!venture) {
     return res.status(404).json({ error: 'Venture not found' })
   }
   if (
-    !canReadCheckIns(req.user, { mentorId: venture.mentor, isMember: false })
+    !canReadCheckIns(req.user, { mentorIds: venture.mentors, isMember: false })
   ) {
     return res
       .status(403)
@@ -310,6 +312,7 @@ export const createCheckIns = async (req, res) => {
       const checkIn = await CheckIn.create({
         ...checkInFields({
           venture,
+          mentor: req.user.id,
           event,
           durationMinutes: time.durationMinutes,
           timeZone,
@@ -422,13 +425,18 @@ export const endCheckInSeries = async (req, res) => {
     if (!series) {
       return res.status(404).json({ error: 'Recurring check-in not found' })
     }
-    const venture = await Venture.findById(series.venture).select('mentor')
-    if (!venture || !canManageCheckIns(req.user, venture.mentor)) {
+    const venture = await Venture.findById(series.venture).select('mentors')
+    if (!venture || !canManageCheckIns(req.user, venture.mentors)) {
       return res
         .status(403)
-        .json({ error: 'Only the startup mentor changes its check-ins' })
+        .json({ error: "Only the startup's mentors change its check-ins" })
     }
-    if (series.status !== 'ACTIVE' || !sameId(series.mentor, venture.mentor)) {
+    if (!sameId(series.mentor, req.user.id)) {
+      return res
+        .status(409)
+        .json({ error: "This check-in is on another mentor's calendar" })
+    }
+    if (series.status !== 'ACTIVE') {
       return res
         .status(409)
         .json({ error: 'This recurring check-in has already ended' })
@@ -457,12 +465,12 @@ export const getCheckIn = async (req, res) => {
     if (!checkIn) {
       return res.status(404).json({ error: 'Check-in not found' })
     }
-    const { mentorId, isMember } = await ventureAccess(
+    const { mentorIds, isMember } = await ventureAccess(
       req.user,
       checkIn.venture
     )
     const runsIt = checkIn.session && canRunCheckIn(req.user, checkIn.staff)
-    if (!runsIt && !canReadCheckIns(req.user, { mentorId, isMember })) {
+    if (!runsIt && !canReadCheckIns(req.user, { mentorIds, isMember })) {
       return res.status(403).json({ error: 'Forbidden' })
     }
     return res.json({ checkIn })

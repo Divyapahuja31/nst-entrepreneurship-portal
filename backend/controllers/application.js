@@ -173,7 +173,7 @@ const joinRequestReviewError = async (user, joinRequest) => {
   if (!canReviewJoinRequest(user, venture?.mentors)) {
     return {
       status: 403,
-      error: "Only this startup's mentor or the academic board can review it",
+      error: "Only this startup's mentors or the academic board can review it",
     }
   }
   return null

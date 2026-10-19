@@ -607,7 +607,7 @@ const setKPILock = (locked, canChange, refusal) => async (req, res) => {
 export const lockKPI = setKPILock(
   true,
   canLockKpi,
-  'Only a graded KPI can be locked, by its mentor or the academic board'
+  'Only a graded KPI can be locked, by its mentors or the academic board'
 )
 
 export const unlockKPI = setKPILock(

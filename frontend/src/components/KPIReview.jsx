@@ -258,7 +258,7 @@ export default function KPIReview({
       setSuccessMsg(
         locked
           ? 'KPI locked. Its grade is final.'
-          : 'KPI unlocked. Its mentor can change the grade again.'
+          : 'KPI unlocked. Its mentors can change the grade again.'
       )
       revalidator.revalidate()
     } catch (err) {

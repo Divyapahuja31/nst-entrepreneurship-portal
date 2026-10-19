@@ -340,11 +340,13 @@ export default function CheckInsSection({
   }
 
   // A founder's record can hold an earlier startup's check-ins, and
-  // programme meetings change only from the Programme page.
+  // programme meetings change only from the Programme page. A mentor moves
+  // only the check-ins on their own calendar, not another mentor's.
   const managesRow = checkIn =>
     canManage &&
     !checkIn.session &&
-    String(checkIn.venture?._id ?? checkIn.venture) === String(venture.id)
+    String(checkIn.venture?._id ?? checkIn.venture) === String(venture.id) &&
+    canManageCheckIns(actor, checkIn.mentor?._id ?? checkIn.mentor)
   // Who writes a meeting's notes: its mentor, or a programme meeting's staff.
   const runsRow = checkIn =>
     checkIn.session

@@ -1,8 +1,9 @@
 import { Router } from 'express'
+import { loadEmailSettings } from '../utils/emailSettings.js'
 import { EMAIL_PREVIEWS } from '../utils/emailTemplates/previews.js'
 
 // Development only (see routes/index.js): every email template with sample
-// data and a score slider, at /api/dev/emails.
+// data and a score slider, at /api/dev/emails, with the saved email settings.
 
 const router = Router()
 
@@ -65,12 +66,15 @@ const page = base => `<!doctype html>
 
 router.get('/', (req, res) => res.type('html').send(page(req.baseUrl)))
 
-router.get('/:name', (req, res) => {
+router.get('/:name', async (req, res) => {
   const preview = EMAIL_PREVIEWS[req.params.name]
   if (!preview) {
     return res.status(404).json({ error: 'No such email template' })
   }
-  const email = preview.render(clampScore(req.query.score))
+  const email = preview.render(
+    clampScore(req.query.score),
+    await loadEmailSettings()
+  )
   if (req.query.format === 'json') {
     return res.json(email)
   }

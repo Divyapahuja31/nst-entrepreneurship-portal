@@ -1,5 +1,6 @@
 import EmailNotification from '../models/emailNotification.js'
 import { getEmailProvider } from './emailProvider.js'
+import { loadEmailSettings } from './emailSettings.js'
 import {
   boardLowScoreEmail,
   mentorFollowUpEmail,
@@ -71,11 +72,13 @@ const markSent = async (entry, messageId) => {
 // { skipped: true } when this recipient already got it for dedupeKey and
 // { messageId } once sent; throws when the provider can't send it.
 // Subjects are logged, so they must never contain a secret such as a code.
+// sender is { fromName, replyTo } from the email settings.
 export const deliver = async ({
   type,
   to,
   recipientUserId = null,
   dedupeKey = null,
+  sender = {},
   email: { subject, html, text },
 }) => {
   const recipientEmail = String(to).trim().toLowerCase()
@@ -100,6 +103,8 @@ export const deliver = async ({
     subject,
     html,
     text,
+    fromName: sender.fromName ?? null,
+    replyTo: sender.replyTo ?? null,
   })
 
   if (error) {
@@ -122,47 +127,65 @@ export const deliver = async ({
 
 // ---------------------------------------------- KPI and programme emails
 // recipient: { email, userId? }. For a KPI email dedupeKey identifies the
-// KPI.
+// KPI. key names the email in the settings: one an admin switched off is
+// not sent and returns { skipped: true, disabled: true }.
 
 const toRecipient =
-  (type, template) =>
-  ({ recipient, dedupeKey, ...props }) =>
-    deliver({
+  (type, key, template) =>
+  async ({ recipient, dedupeKey, ...props }) => {
+    const settings = await loadEmailSettings()
+    if (!settings.templates[key].enabled) {
+      return { skipped: true, disabled: true }
+    }
+    return deliver({
       type,
       to: recipient.email,
       recipientUserId: recipient.userId,
       dedupeKey,
-      email: template(props),
+      sender: settings.sender,
+      email: template(props, settings),
     })
+  }
 
 export const sendStudentResult = toRecipient(
   'KPI_SCORED_STUDENT',
+  'student-result',
   studentResultEmail
 )
 export const sendMentorFollowUp = toRecipient(
   'CONSECUTIVE_MID_SCORE_MENTOR',
+  'mentor-follow-up',
   mentorFollowUpEmail
 )
 export const sendMentorLowScore = toRecipient(
   'CONSECUTIVE_LOW_SCORE_MENTOR',
+  'mentor-low-score',
   mentorLowScoreEmail
 )
 export const sendBoardLowScore = toRecipient(
   'CONSECUTIVE_LOW_SCORE_BOARD',
+  'board-low-score',
   boardLowScoreEmail
 )
 
 // ------------------------------------------------------------ code emails
 
+// Always sent: they can't be switched off.
 const codeEmail =
   (type, template) =>
-  ({ to, userId, username, otp, expiresInMinutes }) =>
-    deliver({
+  async ({ to, userId, username, otp, expiresInMinutes }) => {
+    const settings = await loadEmailSettings()
+    return deliver({
       type,
       to,
       recipientUserId: userId,
-      email: template({ recipientName: username, code: otp, expiresInMinutes }),
+      sender: settings.sender,
+      email: template(
+        { recipientName: username, code: otp, expiresInMinutes },
+        settings
+      ),
     })
+  }
 
 export const sendResetPasswordOtpEmail = codeEmail(
   'PASSWORD_RESET',
@@ -179,10 +202,16 @@ export const sendSignupOtpEmail = codeEmail(
 
 export const sendFounderSession = toRecipient(
   'SESSION_FOUNDER',
+  'session-founder',
   founderSessionEmail
 )
-export const sendStaffSession = toRecipient('SESSION_STAFF', staffSessionEmail)
+export const sendStaffSession = toRecipient(
+  'SESSION_STAFF',
+  'session-staff',
+  staffSessionEmail
+)
 export const sendSessionCancelled = toRecipient(
   'SESSION_CANCELLED',
+  'session-cancelled',
   sessionCancelledEmail
 )

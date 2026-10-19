@@ -30,6 +30,7 @@ import PageAccounts from '../pages/admin/PageAccounts.jsx'
 import PageProgramme from '../pages/admin/PageProgramme.jsx'
 import PageExtraSessions from '../pages/admin/PageExtraSessions.jsx'
 import PageSetup from '../pages/admin/PageSetup.jsx'
+import PageEmails from '../pages/admin/PageEmails.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -62,6 +63,7 @@ import { accountsLoader } from '../api/accounts.js'
 import { programmeLoader } from '../api/programme.js'
 import { extraSessionsLoader } from '../api/extraSessions.js'
 import { setupLoader } from '../api/setup.js'
+import { emailsLoader } from '../api/emails.js'
 import { whenAuthReady } from '../stores/auth.js'
 
 // Runs a route's loader only for the roles RequireRole lets through, once
@@ -259,6 +261,11 @@ export const router = createBrowserRouter([
                 path: '/admin/setup',
                 Component: PageSetup,
                 loader: forRoles([ROLES.ADMIN], setupLoader),
+              },
+              {
+                path: '/admin/emails',
+                Component: PageEmails,
+                loader: forRoles([ROLES.ADMIN], emailsLoader),
               },
             ],
           },

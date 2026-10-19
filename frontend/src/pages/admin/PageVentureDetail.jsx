@@ -4,6 +4,7 @@ import { canManageVentures } from '@nst/shared/permissions.js'
 
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Dialog,
@@ -12,7 +13,6 @@ import {
   DialogContentText,
   DialogTitle,
   Link,
-  MenuItem,
   Tab,
   Tabs,
   TextField,
@@ -29,7 +29,7 @@ import { PeopleIcon } from '../../components/icons'
 import { normalizeWebsite } from '../../components/proposalFormConfig.js'
 import { formatDate } from '../../components/kpiStatus'
 import BiWeekly from './PageReportBiWeekly'
-import { getMentors, setVentureMentor } from '../../api/venture'
+import { getMentors, setVentureMentors } from '../../api/venture'
 import useAccess from '../../hooks/useAccess'
 
 const founderColumns = [
@@ -50,19 +50,21 @@ function Fact({ label, children }) {
   )
 }
 
-// Who mentors the startup, and (for the board) a way to change it.
+const mentorLabel = mentor => `${mentor.username} · ${mentor.email}`
+
+// Who mentors the startup, and (for the board) a way to change them.
 function MentorCard({ venture }) {
   const { actor } = useAccess()
   const revalidator = useRevalidator()
   const [open, setOpen] = useState(false)
   const [mentors, setMentors] = useState(null)
-  const [choice, setChoice] = useState('')
+  const [choice, setChoice] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const mentor = venture.mentor
+  const assigned = venture.mentors ?? []
 
   const openDialog = async () => {
-    setChoice(mentor?.id ?? '')
+    setChoice(assigned)
     setError('')
     setOpen(true)
     const result = await getMentors()
@@ -75,7 +77,10 @@ function MentorCard({ venture }) {
 
   const save = async () => {
     setSaving(true)
-    const result = await setVentureMentor(venture.id, choice)
+    const result = await setVentureMentors(
+      venture.id,
+      choice.map(mentor => mentor.id)
+    )
     setSaving(false)
     if (result.error) {
       setError(result.error)
@@ -88,16 +93,16 @@ function MentorCard({ venture }) {
   return (
     <>
       <SectionCard
-        title="Mentor"
+        title={assigned.length > 1 ? 'Mentors' : 'Mentor'}
         subtitle={
-          mentor
-            ? `${mentor.username} · ${mentor.email}`
+          assigned.length
+            ? assigned.map(mentorLabel).join(', ')
             : 'No mentor yet. Only the academic board can review this startup until one is assigned.'
         }
         action={
           canManageVentures(actor) && (
             <Button variant="outlined" onClick={openDialog}>
-              {mentor ? 'Change Mentor' : 'Assign Mentor'}
+              {assigned.length ? 'Change Mentors' : 'Assign Mentors'}
             </Button>
           )
         }
@@ -110,31 +115,34 @@ function MentorCard({ venture }) {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Mentor for {venture.name}</DialogTitle>
+        <DialogTitle>Mentors for {venture.name}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            The mentor reviews this startup&apos;s KPIs and bi-weekly reports.
+            Each mentor reviews this startup&apos;s KPIs and bi-weekly reports,
+            and schedules check-ins on their own calendar. Taking a mentor off
+            cancels their upcoming check-ins.
           </DialogContentText>
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
-          <TextField
-            select
-            fullWidth
-            label="Mentor"
-            value={mentors ? choice : ''}
+          <Autocomplete
+            multiple
+            options={mentors ?? []}
+            value={choice}
             disabled={!mentors}
-            onChange={event => setChoice(event.target.value)}
-          >
-            <MenuItem value="">No mentor</MenuItem>
-            {(mentors ?? []).map(option => (
-              <MenuItem key={option.id} value={option.id}>
-                {option.username} · {option.email}
-              </MenuItem>
-            ))}
-          </TextField>
+            onChange={(_, picked) => setChoice(picked)}
+            getOptionLabel={mentorLabel}
+            isOptionEqualToValue={(a, b) => String(a.id) === String(b.id)}
+            renderInput={params => (
+              <TextField
+                {...params}
+                label="Mentors"
+                helperText="Leave empty for no mentor."
+              />
+            )}
+          />
         </DialogContent>
         <DialogActions>
           <Button variant="outlined" onClick={() => setOpen(false)}>

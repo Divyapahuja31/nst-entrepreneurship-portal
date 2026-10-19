@@ -13,7 +13,7 @@ import {
 } from './emailService.js'
 
 // The emails sent once a KPI's grade is locked: the result to its students
-// and, after a run of poor grades, an alert to the mentor or the academic
+// and, after a run of poor grades, an alert to the mentors or the academic
 // board. Started by the lock route (controllers/kpi.js), which has already
 // checked that the caller may lock the KPI.
 
@@ -51,13 +51,15 @@ const findStudents = async kpi => {
     .filter(user => user && !user.deletedAt)
 }
 
-// The startup's own mentor, or null. Never someone else's mentor.
-const findMentor = venture =>
-  venture.mentor && mongoose.isValidObjectId(venture.mentor)
-    ? User.findOne({ _id: venture.mentor, deletedAt: null })
+// The startup's own mentors, possibly none. Never someone else's mentor.
+const findMentors = venture => {
+  const ids = (venture.mentors ?? []).filter(id => mongoose.isValidObjectId(id))
+  return ids.length
+    ? User.find({ _id: { $in: ids }, deletedAt: null })
         .select('username email')
         .lean()
-    : null
+    : []
+}
 
 const findBoard = async () => {
   const role = await Role.findOne({ name: ROLES.ACADEMIC_BOARD }).lean()
@@ -85,7 +87,7 @@ const listOr = (values, fallback) =>
   [...new Set(values.filter(Boolean))].join(', ') || fallback
 
 // What every email about this grade says.
-const describe = ({ kpi, students, mentor }) => {
+const describe = ({ kpi, students, mentors }) => {
   const venture = kpi.venture
   const founder = kpi.founder ? students[0] : null
   return {
@@ -107,7 +109,10 @@ const describe = ({ kpi, students, mentor }) => {
         students.map(student => student.batch?.name),
         NOT_RECORDED
       ),
-      mentorName: mentor ? mentor.username || mentor.email : UNASSIGNED,
+      mentorName: listOr(
+        mentors.map(mentor => mentor.username || mentor.email),
+        UNASSIGNED
+      ),
       dashboardUrl: `${appUrl()}/admin/venture/${venture._id}`,
     },
   }
@@ -162,12 +167,13 @@ const emailBoard = (about, board, send = sendBoardLowScore) => {
   )
 }
 
-// Without a mentor the board is told instead. A low score then goes out as
-// the board's own alert under the same key, so a member who already got that
-// alert for this KPI isn't emailed twice.
-const emailMentor = (about, mentor, board) => {
+// Every mentor of the startup is told. Without one the board is told
+// instead. A low score then goes out as the board's own alert under the same
+// key, so a member who already got that alert for this KPI isn't emailed
+// twice.
+const emailMentors = (about, mentors, board) => {
   const low = about.result.percentage <= LOW_PERCENT
-  if (!mentor) {
+  if (!mentors.length) {
     return emailBoard(
       about,
       board,
@@ -175,25 +181,30 @@ const emailMentor = (about, mentor, board) => {
     )
   }
   const send = low ? sendMentorLowScore : sendMentorFollowUp
-  return sendAll('mentor alert', [
-    send({
-      recipient: recipient(mentor),
-      dedupeKey: about.dedupeKey,
-      ...about.result,
-      ...about.staff,
-    }),
-  ])
+  return sendAll(
+    'mentor alert',
+    mentors.map(mentor =>
+      send({
+        recipient: recipient(mentor),
+        dedupeKey: about.dedupeKey,
+        ...about.result,
+        ...about.staff,
+      })
+    )
+  )
 }
 
 // The board goes first so a redirected mentor alert can skip anyone it has
 // just reached. Returns how many emails failed.
-const escalate = async (about, due, mentor) => {
+const escalate = async (about, due, mentors) => {
   if (!due.board && !due.mentor) {
     return 0
   }
   const board = await findBoard()
   const boardFailed = due.board ? await emailBoard(about, board) : 0
-  const mentorFailed = due.mentor ? await emailMentor(about, mentor, board) : 0
+  const mentorFailed = due.mentor
+    ? await emailMentors(about, mentors, board)
+    : 0
   return boardFailed + mentorFailed
 }
 
@@ -201,20 +212,20 @@ const escalate = async (about, due, mentor) => {
 // email is logged and the rest still go. Returns { success, error? }.
 export const sendLockedKpiEmails = async kpiId => {
   try {
-    const kpi = await KPI.findById(kpiId).populate('venture', 'name mentor')
+    const kpi = await KPI.findById(kpiId).populate('venture', 'name mentors')
     if (!kpi?.isLocked || kpi.status !== 'GRADED' || !kpi.venture) {
       return { success: false, error: 'The KPI is not locked and graded' }
     }
-    const [students, mentor, run] = await Promise.all([
+    const [students, mentors, run] = await Promise.all([
       findStudents(kpi),
-      findMentor(kpi.venture),
+      findMentors(kpi.venture),
       findRun(kpi),
     ])
-    const about = describe({ kpi, students, mentor })
+    const about = describe({ kpi, students, mentors })
 
     const failed =
       (await emailStudents(about, students, kpi._id)) +
-      (await escalate(about, escalationsFor(run, kpi._id), mentor))
+      (await escalate(about, escalationsFor(run, kpi._id), mentors))
     return failed
       ? { success: false, error: `${failed} email(s) could not be sent` }
       : { success: true }

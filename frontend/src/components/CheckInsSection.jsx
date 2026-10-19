@@ -200,14 +200,14 @@ const emptyText = (canManage, isStaff) => {
     return 'Meet now, or schedule one for later. It goes on your Google Calendar with a Meet link, and every founder gets the invite.'
   }
   if (isStaff) {
-    return 'Check-ins appear here once a programme session or the startup’s mentor schedules them.'
+    return 'Check-ins appear here once a programme session or one of the startup’s mentors schedules them.'
   }
   return 'Nothing is scheduled yet. Meetings with your mentor and programme sessions appear here, and on your Google Calendar.'
 }
 
 // A startup's check-ins (or, without `venture`, a founder's across
-// startups): programme sessions and the mentor's own. The startup's mentor
-// schedules, moves and cancels their own ones here.
+// startups): programme sessions and the mentors' own. Each of the startup's
+// mentors schedules, moves and cancels their own ones here.
 export default function CheckInsSection({
   checkIns,
   venture,
@@ -218,9 +218,9 @@ export default function CheckInsSection({
   const { actor, isStaff } = useAccess()
   const revalidator = useRevalidator()
   const [searchParams, setSearchParams] = useSearchParams()
-  // The mentor arrives as an id or as { id, username, email }.
-  const mentorId = venture?.mentor?.id ?? venture?.mentor
-  const canManage = Boolean(venture) && canManageCheckIns(actor, mentorId)
+  // Mentors arrive as ids or as { id, username, email }.
+  const mentorIds = (venture?.mentors ?? []).map(m => m?.id ?? m)
+  const canManage = Boolean(venture) && canManageCheckIns(actor, mentorIds)
 
   const [outcome] = useState(
     () => CALENDAR_OUTCOMES[searchParams.get('calendar')]
@@ -340,11 +340,13 @@ export default function CheckInsSection({
   }
 
   // A founder's record can hold an earlier startup's check-ins, and
-  // programme meetings change only from the Programme page.
+  // programme meetings change only from the Programme page. A mentor moves
+  // only the check-ins on their own calendar, not another mentor's.
   const managesRow = checkIn =>
     canManage &&
     !checkIn.session &&
-    String(checkIn.venture?._id ?? checkIn.venture) === String(venture.id)
+    String(checkIn.venture?._id ?? checkIn.venture) === String(venture.id) &&
+    canManageCheckIns(actor, checkIn.mentor?._id ?? checkIn.mentor)
   // Who writes a meeting's notes: its mentor, or a programme meeting's staff.
   const runsRow = checkIn =>
     checkIn.session

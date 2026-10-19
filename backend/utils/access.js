@@ -22,7 +22,7 @@ export const ventureScope = actor => {
     return {}
   }
   if (isMentor(actor)) {
-    return { mentor: actor.id }
+    return { mentors: actor.id }
   }
   return { _id: { $in: [] } }
 }
@@ -38,18 +38,18 @@ export const isVentureMember = async (userId, ventureId) =>
 
 const idOf = value => value?._id ?? value ?? null
 
-// The startup (with its mentor) and whether the caller is one of its
+// The startup (with its mentors) and whether the caller is one of its
 // founders. venture is null when it doesn't exist.
 export const ventureAccess = async (actor, ventureOrId) => {
   const ventureId = idOf(ventureOrId)
   const venture = mongoose.isValidObjectId(ventureId)
-    ? await Venture.findById(ventureId).select('mentor')
+    ? await Venture.findById(ventureId).select('mentors')
     : null
   const isMember =
     Boolean(venture) &&
     isStudent(actor) &&
     (await isVentureMember(actor.id, venture._id))
-  return { venture, mentorId: venture?.mentor ?? null, isMember }
+  return { venture, mentorIds: venture?.mentors ?? [], isMember }
 }
 
 export const isPastDue = (dueDate, now = Date.now()) =>
@@ -57,9 +57,9 @@ export const isPastDue = (dueDate, now = Date.now()) =>
 
 // The KPI context the shared can*Kpi rules take.
 export const kpiContext = async (actor, kpi) => {
-  const { mentorId, isMember } = await ventureAccess(actor, kpi.venture)
+  const { mentorIds, isMember } = await ventureAccess(actor, kpi.venture)
   return {
-    ventureMentorId: mentorId,
+    ventureMentorIds: mentorIds,
     isMember,
     kpiFounderId: idOf(kpi.founder),
     status: kpi.status,

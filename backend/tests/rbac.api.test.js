@@ -250,7 +250,9 @@ describe('applications', () => {
     })
     assert.equal(ok.status, 200)
     const venture = await Venture.findById(ok.body.proposal.venture)
-    assert.equal(String(venture.mentor), String(data.users.otherMentor._id))
+    assert.deepEqual(venture.mentors.map(String), [
+      String(data.users.otherMentor._id),
+    ])
   })
 
   it('a mentor who accepts a proposal becomes its mentor', async () => {
@@ -262,7 +264,9 @@ describe('applications', () => {
     )
     assert.equal(res.status, 200)
     const venture = await Venture.findById(res.body.proposal.venture)
-    assert.equal(String(venture.mentor), String(data.users.mentor._id))
+    assert.deepEqual(venture.mentors.map(String), [
+      String(data.users.mentor._id),
+    ])
   })
 
   it("join requests go to the startup's own mentor", async () => {
@@ -387,7 +391,7 @@ describe('accounts', () => {
       batch: String(batch._id),
     })
     const alpha = await Venture.findById(data.ventures.alpha._id)
-    assert.equal(alpha.mentor, null)
+    assert.deepEqual(alpha.mentors, [])
   })
 
   it('a staff member made a student needs a batch, and gets its campus', async () => {
@@ -507,13 +511,32 @@ describe('accounts', () => {
     assert.equal(again.status, 400)
   })
 
-  it('assigning a mentor is for the board only', async () => {
-    const url = `/api/admin/ventures/${data.ventures.beta._id}/mentor`
-    const body = { mentorId: String(data.users.mentor._id) }
-    assert.equal((await as(data.users.mentor).patch(url, body)).status, 403)
-    const ok = await as(data.users.board).patch(url, body)
+  it('assigning mentors is for the board only', async () => {
+    const url = `/api/admin/ventures/${data.ventures.beta._id}/mentors`
+    const { mentor, otherMentor } = data.users
+    const body = { mentorIds: [String(otherMentor._id), String(mentor._id)] }
+    assert.equal((await as(mentor).put(url, body)).status, 403)
+    const ok = await as(data.users.board).put(url, body)
     assert.equal(ok.status, 200)
-    assert.equal(ok.body.mentor.email, data.users.mentor.email)
+    assert.deepEqual(
+      ok.body.mentors.map(m => m.email),
+      [otherMentor.email, mentor.email]
+    )
+    // Both now see Beta's KPIs.
+    const kpis = await as(mentor).get(
+      `/api/kpis/venture/${data.ventures.beta._id}`
+    )
+    assert.equal(kpis.status, 200)
+  })
+
+  it('a startup takes only active mentor accounts', async () => {
+    const url = `/api/admin/ventures/${data.ventures.beta._id}/mentors`
+    const notMentor = { mentorIds: [String(data.users.board._id)] }
+    assert.equal((await as(data.users.board).put(url, notMentor)).status, 400)
+    const notList = { mentorIds: String(data.users.mentor._id) }
+    assert.equal((await as(data.users.board).put(url, notList)).status, 400)
+    const none = await as(data.users.board).put(url, { mentorIds: [] })
+    assert.deepEqual(none.body.mentors, [])
   })
 })
 

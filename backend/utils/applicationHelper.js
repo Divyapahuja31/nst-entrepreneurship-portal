@@ -75,7 +75,7 @@ export const createVentureFromProposal = async (
   mentorId
 ) => {
   const venture = await Venture.create({
-    mentor: mentorId,
+    mentors: [mentorId],
     name: proposal.startupName,
     description: proposal.description,
     campus: proposal.campus,

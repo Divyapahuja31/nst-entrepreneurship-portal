@@ -23,7 +23,7 @@ Every account has exactly one of four roles.
 |---|---|---|
 | Admin (`admin`) | Program leads | Everything the academic board can do, plus accounts and roles |
 | Academic Board (`academic_board`) | Faculty | Final evaluation authority: reviews every startup and is the only role that can unlock a final grade |
-| Mentor (`mentor`) | Newton School staff | Reviews only the startups assigned to them, until a grade is locked |
+| Mentor (`mentor`) | Newton School staff | Reviews only the startups assigned to them, until a grade is locked. A startup can have several mentors, each with the same rights over it |
 | Student (`student`) | ADYPU students | Works on their own startup: KPIs, evidence, bi-weekly reports and applications |
 
 Staff means admin, academic board and mentor. The board means admin and academic board.
@@ -37,8 +37,8 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Read the account activity log | ✅ | ❌ | ❌ | ❌ |
 | Read startups, KPIs, bi-weekly reports, founders, overview | all | all | assigned startups | own startup |
 | Create a startup (Add Founder) | ✅ | ✅ | as its mentor | ❌ |
-| Assign a startup's mentor, remove founders | ✅ | ✅ | ❌ | ❌ |
-| Approve a startup proposal | ✅ (picks a mentor) | ✅ (picks a mentor) | ✅ (becomes its mentor) | ❌ |
+| Assign a startup's mentors, remove founders | ✅ | ✅ | ❌ | ❌ |
+| Approve a startup proposal | ✅ (picks its first mentor) | ✅ (picks its first mentor) | ✅ (becomes its first mentor) | ❌ |
 | Review a request to join a startup | ✅ | ✅ | assigned startups | ❌ |
 | Create a KPI | any startup | any startup | assigned startups | own startup; personal KPIs only for themselves |
 | Edit or delete a KPI | any, even locked | any, even locked | assigned, while unlocked | own, while a draft, awaiting approval or rejected, not locked or past due |
@@ -67,7 +67,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 
 - **Sign-up:** only emails from the domains an admin allows on **School Setup** (`/admin/setup`) can sign up or sign in with Google; a new database starts with `@newtonschool.co` and `@adypu.edu.in`. Accounts from a domain marked Mentor (`@newtonschool.co` at first) start as mentors and everyone else as students. Mentors aren't asked for a campus or batch at sign-up; students choose both. Admin and academic board are never inferred from an email. School Setup is also where admins add campuses and batches.
 - **Changes:** an admin uses **Accounts & Roles** (`/admin/accounts`). Staff have no campus or batch, so making someone staff clears theirs, and making a staff member a student asks for their batch. They can't change or deactivate their own account, and the last admin can't be demoted or deactivated. Every role change, new account and deactivation is written to an audit log that only admins can read.
-- **Deactivation** keeps the record (KPIs and reviews point at it), signs the person out everywhere, removes them from their startup and leaves the startups they mentored without a mentor until the board assigns one.
+- **Deactivation** keeps the record (KPIs and reviews point at it), signs the person out everywhere, removes them from their startup and takes them off the startups they mentored. Those startups keep their other mentors; one left with none has no mentor until the board assigns one.
 
 ### The first admin
 
@@ -96,6 +96,14 @@ npm run migrate:biweekly -w backend
 
 It moves each founder's report onto the startup they are in (or were in most recently). When a startup ends up with two reports for one cycle, it keeps the submitted one, which takes over any review only the other had. A report it can't keep, such as a second report for a cycle or one from a founder who never joined a startup, is copied to `biweeklysubmissions_archive` instead of being deleted. It's safe to run again.
 
+A startup can have more than one mentor, so its mentor is now a list. Move each startup's mentor into it once:
+
+```sh
+npm run migrate:mentors -w backend
+```
+
+It keeps the old `mentor` field, so a server still on the previous version keeps working. It's safe to run again.
+
 ## Bi-weekly reports
 
 A startup's report for each 14-day cycle is due 3 days after the cycle's last day. The API enforces the same rules as the page:
@@ -114,8 +122,8 @@ Under `npm run dev` nothing is sent: each email is printed in the backend's term
 | When | Who | Email |
 |---|---|---|
 | A KPI's grade is locked | Its founder, or every active founder for a startup-wide KPI | The result, with score and status |
-| That grade is the second in a row below 70% | The startup's mentor | Follow-up (above 40%) or low score (40% or below) |
-| That grade is the second in a row at 40% or below | Every academic board member | Low-score notification with the student, batch and mentor |
+| That grade is the second in a row below 70% | Every mentor of the startup | Follow-up (above 40%) or low score (40% or below) |
+| That grade is the second in a row at 40% or below | Every academic board member | Low-score notification with the student, batch and mentors |
 | Sign-up and forgot password | The account | The 6-digit code |
 
 - Grades count in order of due date, separately for the startup as a whole and for each founder's own KPIs. Once an alert is sent its count starts again from zero ([`kpiEscalation.js`](backend/utils/kpiEscalation.js)).
@@ -163,13 +171,13 @@ Extra sessions have no session number. The unique index on session numbers from 
 
 ## Mentor check-ins (Google Calendar and Meet)
 
-Besides the programme, a startup's mentor can schedule their own check-ins with it.
+Besides the programme, each of a startup's mentors can schedule their own check-ins with it.
 
-A startup's mentor holds check-ins from the startup's **Check-Ins** tab: **Meet Now** starts one at once and opens Meet, and **Schedule** puts one at any future time. Check-ins are the mentor's own meetings, apart from the bi-weekly cycles and reports. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. Each check-in is a single meeting that can be moved or cancelled. Check-ins that repeated, from before repeating was removed, can still be moved, cancelled or ended.
+A startup's mentors hold check-ins from the startup's **Check-Ins** tab: **Meet Now** starts one at once and opens Meet, and **Schedule** puts one at any future time. Check-ins are the mentor's own meetings, apart from the bi-weekly cycles and reports. Each one is an event with a Google Meet link on the mentor's own Google Calendar, and every active founder of the startup is invited, so it appears on their calendars too. Each check-in is a single meeting that can be moved or cancelled. Check-ins that repeated, from before repeating was removed, can still be moved, cancelled or ended.
 
-- Only the startup's mentor schedules, because the events live on their calendar. Founders see their check-ins at `/checkins` and on their overview. Staff see them on the startup and on each founder's profile, and a mentor sees all of theirs on their Overview.
+- Only the startup's mentors schedule, because the events live on their calendars. A mentor moves or cancels only the check-ins on their own calendar, not another mentor's. Founders see their check-ins at `/checkins` and on their overview. Staff see them on the startup and on each founder's profile, and a mentor sees all of theirs on their Overview.
 - Google is written first. If it refuses a change, the portal saves nothing and shows Google's reason.
-- When a startup's mentor changes, or the mentor is deactivated or loses the mentor role, their upcoming check-ins for it are cancelled. Removing them from Google is best effort.
+- When a mentor is taken off a startup, deactivated or loses the mentor role, their upcoming check-ins for it are cancelled. The other mentors' stay. Removing them from Google is best effort.
 - The invitees are the startup's active founders. When a founder joins or leaves, the startup's upcoming check-ins and drawn programme sessions are updated to match ([`meetingInvites.js`](backend/utils/meetingInvites.js)); this is best effort.
 
 ### Transcripts and notes

@@ -51,7 +51,7 @@ const ventureColumns = [
   { key: 'stage', label: 'Stage' },
   { key: 'industry', label: 'Industry' },
   { key: 'founders', label: 'Founders' },
-  { key: 'mentorName', label: 'Mentor' },
+  { key: 'mentorName', label: 'Mentors' },
   { key: 'team', label: 'Team', align: 'right' },
 ]
 
@@ -124,7 +124,7 @@ function MentorPicker({ mentors, value, onChange }) {
       label="Mentor"
       value={value}
       onChange={event => onChange(event.target.value)}
-      helperText="The mentor reviews this startup's KPIs and reports."
+      helperText="Reviews this startup's KPIs and reports. More mentors can be added from the startup's page."
       sx={{ mt: 2 }}
     >
       {mentors.map(mentor => (
@@ -146,7 +146,9 @@ export default function PageVentures() {
 
   const ventureRows = ventures.map(venture => ({
     ...venture,
-    mentorName: venture.mentor?.username ?? 'Unassigned',
+    mentorName:
+      (venture.mentors ?? []).map(mentor => mentor.username).join(', ') ||
+      'Unassigned',
   }))
 
   const [tab, setTab] = React.useState(0)

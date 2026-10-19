@@ -671,10 +671,11 @@ describe('programme meetings and the rest of the portal', () => {
 
   it("a new mentor for a startup leaves the programme's meetings alone", async () => {
     await save()
-    await as(data.users.board).patch(
-      `/api/admin/ventures/${data.ventures.alpha._id}/mentor`,
-      { mentorId: data.users.otherMentor._id }
+    const res = await as(data.users.board).put(
+      `/api/admin/ventures/${data.ventures.alpha._id}/mentors`,
+      { mentorIds: [data.users.otherMentor._id] }
     )
+    assert.equal(res.status, 200)
     assert.equal(await CheckIn.countDocuments({ status: 'SCHEDULED' }), 2)
   })
 

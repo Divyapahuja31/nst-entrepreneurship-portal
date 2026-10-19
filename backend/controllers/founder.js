@@ -172,7 +172,7 @@ const createFounderAndVenture = async ({
       campus: batchDoc.campus,
       stage,
       industry: industryDoc._id,
-      mentor: mentorId,
+      mentors: [mentorId],
     })
 
     await addFounderToVenture(user._id, venture._id)

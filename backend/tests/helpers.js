@@ -246,7 +246,7 @@ export const seed = async () => {
       name,
       campus: campus._id,
       industry: industry._id,
-      mentor: mentorId,
+      mentors: [mentorId],
     })
   const alpha = await venture('Alpha', mentor._id)
   const beta = await venture('Beta', otherMentor._id)

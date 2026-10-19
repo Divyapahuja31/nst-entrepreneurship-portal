@@ -613,7 +613,7 @@ export default function PageAccounts() {
                 {roleLabel(confirming.account.role)} →{' '}
                 {roleLabel(confirming.role)}. {ROLE_SUMMARY[confirming.role]}.
                 {confirming.account.role === ROLES.MENTOR &&
-                  ' Their startups will need a new mentor.'}
+                  ' They come off their startups, and those they mentored alone will need a new mentor.'}
                 {STAFF_ROLES.includes(confirming.role) &&
                   confirming.account.batch &&
                   ' Staff have no campus or batch, so theirs is cleared.'}
@@ -649,7 +649,7 @@ export default function PageAccounts() {
                 They are signed out and can&apos;t sign in again. Their KPIs and
                 reviews stay, but they leave their startup
                 {confirming.account.role === ROLES.MENTOR &&
-                  ' and the startups they mentor need a new mentor'}
+                  ' and come off the startups they mentor, which keep any other mentors'}
                 .
               </DialogContentText>
             </DialogContent>

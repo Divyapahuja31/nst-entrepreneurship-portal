@@ -20,6 +20,7 @@
     "migrate:rbac": "node scripts/migrate-rbac.js",
     "migrate:biweekly": "node scripts/migrate-biweekly.js",
     "migrate:email": "node scripts/migrate-email-notifications.js",
+    "migrate:mentors": "node scripts/migrate-mentors.js",
     "make-admin": "node scripts/make-admin.js"
   },
   "dependencies": {

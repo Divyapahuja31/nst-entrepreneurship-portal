@@ -23,7 +23,7 @@ import {
 } from '../api/kpi'
 import useAccess from '../hooks/useAccess'
 import KpiLockAction from './KpiLockAction'
-import { mentorIdOf, staffKpiContext } from './kpiAccess'
+import { mentorIdsOf, staffKpiContext } from './kpiAccess'
 import AddKpi from './AddKpi'
 import EmptyState from './EmptyState'
 import KPIEvaluateDialog from './KPIEvaluateDialog'
@@ -104,9 +104,9 @@ export default function KPIReview({
   // Who may review, lock or add KPIs depends on whether the startup is
   // assigned to this mentor (the board may always).
   const { actor } = useAccess()
-  const contextOf = kpi => staffKpiContext(kpi, venture?.mentor)
+  const contextOf = kpi => staffKpiContext(kpi, venture?.mentors)
   const mayAddKpi = canAddKpi(actor, {
-    ventureMentorId: mentorIdOf(venture?.mentor),
+    ventureMentorIds: mentorIdsOf(venture?.mentors),
     isMember: false,
     founderId: null,
   })
@@ -258,7 +258,7 @@ export default function KPIReview({
       setSuccessMsg(
         locked
           ? 'KPI locked. Its grade is final.'
-          : 'KPI unlocked. Its mentor can change the grade again.'
+          : 'KPI unlocked. Its mentors can change the grade again.'
       )
       revalidator.revalidate()
     } catch (err) {

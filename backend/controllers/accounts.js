@@ -57,10 +57,10 @@ const activeAdminCount = async () => {
 }
 
 // Startups stay with a mentor only while they are an active mentor, and so
-// do the check-ins on their calendar.
+// do the check-ins on their calendar. Their other mentors stay.
 const releaseMentoredVentures = userId =>
   Promise.all([
-    Venture.updateMany({ mentor: userId }, { $set: { mentor: null } }),
+    Venture.updateMany({ mentors: userId }, { $pull: { mentors: userId } }),
     cancelFutureCheckIns({ mentor: userId }),
   ])
 

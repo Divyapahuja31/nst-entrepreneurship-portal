@@ -60,17 +60,19 @@ export const isStaff = actor => STAFF_ROLES.includes(actor?.role)
 export const isBoard = actor => BOARD_ROLES.includes(actor?.role)
 export const isAdmin = actor => actor?.role === ROLES.ADMIN
 
-// A mentor acting on a startup assigned to them.
-export const isMentorOf = (actor, mentorId) =>
-  isMentor(actor) && sameId(mentorId, actor.id)
+// A mentor acting on a startup assigned to them. mentorIds are the
+// startup's mentors: a list, or a single id.
+export const isMentorOf = (actor, mentorIds) =>
+  isMentor(actor) &&
+  [mentorIds].flat().some(id => sameId(id?._id ?? id, actor.id))
 
 // ---------------------------------------------------------------- startups
 
-// venture: { mentorId, isMember } where isMember says whether the actor is
+// venture: { mentorIds, isMember } where isMember says whether the actor is
 // an active founder of it.
-export const canReadVenture = (actor, { mentorId, isMember }) =>
+export const canReadVenture = (actor, { mentorIds, isMember }) =>
   isBoard(actor) ||
-  isMentorOf(actor, mentorId) ||
+  isMentorOf(actor, mentorIds) ||
   (isStudent(actor) && Boolean(isMember))
 
 // Assign mentors and remove founders.
@@ -82,7 +84,7 @@ export const canCreateVenture = (actor, mentorId) =>
 
 // ------------------------------------------------------------------- KPIs
 //
-// A KPI context is { ventureMentorId, isMember, kpiFounderId, status,
+// A KPI context is { ventureMentorIds, isMember, kpiFounderId, status,
 // isLocked, isPastDue }, built from the KPI and its startup.
 
 // A student's own KPI: a startup KPI of their startup, or a personal KPI
@@ -94,14 +96,14 @@ const ownsKpi = (actor, { isMember, kpiFounderId }) =>
 
 export const canReadKpi = (actor, ctx) =>
   isBoard(actor) ||
-  isMentorOf(actor, ctx.ventureMentorId) ||
+  isMentorOf(actor, ctx.ventureMentorIds) ||
   ownsKpi(actor, ctx)
 
-// target: { ventureMentorId, isMember, founderId } for the KPI to create;
+// target: { ventureMentorIds, isMember, founderId } for the KPI to create;
 // students may create personal KPIs only for themselves.
-export const canAddKpi = (actor, { ventureMentorId, isMember, founderId }) =>
+export const canAddKpi = (actor, { ventureMentorIds, isMember, founderId }) =>
   isBoard(actor) ||
-  isMentorOf(actor, ventureMentorId) ||
+  isMentorOf(actor, ventureMentorIds) ||
   ownsKpi(actor, { isMember, kpiFounderId: founderId })
 
 const studentMayChange = (actor, ctx) =>
@@ -112,7 +114,7 @@ const studentMayChange = (actor, ctx) =>
 
 export const canEditKpi = (actor, ctx) =>
   isBoard(actor) ||
-  (isMentorOf(actor, ctx.ventureMentorId) && !ctx.isLocked) ||
+  (isMentorOf(actor, ctx.ventureMentorIds) && !ctx.isLocked) ||
   studentMayChange(actor, ctx)
 
 export const canDeleteKpi = canEditKpi
@@ -123,16 +125,16 @@ export const canSubmitKpiForApproval = (actor, ctx) =>
   !ctx.isLocked &&
   !ctx.isPastDue
 
-// Accept, reject, grade and re-grade. The assigned mentor may revise a grade
+// Accept, reject, grade and re-grade. An assigned mentor may revise a grade
 // until the KPI is locked; after that only the board may.
 export const canEvaluateKpi = (actor, ctx) =>
-  isBoard(actor) || (isMentorOf(actor, ctx.ventureMentorId) && !ctx.isLocked)
+  isBoard(actor) || (isMentorOf(actor, ctx.ventureMentorIds) && !ctx.isLocked)
 
 // Locking makes a grade final, so only a graded KPI can be locked.
 export const canLockKpi = (actor, ctx) =>
   !ctx.isLocked &&
   ctx.status === 'GRADED' &&
-  (isBoard(actor) || isMentorOf(actor, ctx.ventureMentorId))
+  (isBoard(actor) || isMentorOf(actor, ctx.ventureMentorIds))
 
 export const canUnlockKpi = (actor, ctx) =>
   Boolean(ctx.isLocked) && isBoard(actor)
@@ -169,8 +171,8 @@ export const canApply = actor => isStudent(actor)
 
 export const canReviewApplication = actor => isStaff(actor)
 
-export const canReviewJoinRequest = (actor, ventureMentorId) =>
-  isBoard(actor) || isMentorOf(actor, ventureMentorId)
+export const canReviewJoinRequest = (actor, ventureMentorIds) =>
+  isBoard(actor) || isMentorOf(actor, ventureMentorIds)
 
 // The board assigns a mentor when it accepts a proposal; a mentor who
 // accepts one becomes its mentor.
@@ -189,8 +191,8 @@ export const canSubmitBiweekly = (actor, { isMember }) =>
   isStudent(actor) && Boolean(isMember)
 
 // Observations and evaluations of a startup's report.
-export const canAuthorBiweeklyReview = (actor, ventureMentorId) =>
-  isBoard(actor) || isMentorOf(actor, ventureMentorId)
+export const canAuthorBiweeklyReview = (actor, ventureMentorIds) =>
+  isBoard(actor) || isMentorOf(actor, ventureMentorIds)
 
 // Reopening a submitted report unlocks it for the students.
 export const canReopenBiweekly = actor => isBoard(actor)
@@ -198,13 +200,14 @@ export const canReopenBiweekly = actor => isBoard(actor)
 // -------------------------------------------------------------- check-ins
 
 // A mentor's own check-ins are events on their Google Calendar, so only the
-// startup's mentor schedules, moves or cancels them and writes their notes.
+// startup's mentors schedule them, and each moves or cancels only their own
+// and writes their notes (canManageCheckIns(actor, checkIn.mentor)).
 // Programme sessions are on the admin's calendar. Mentors and admins
 // connect a calendar.
 export const canConnectCalendar = actor => isMentor(actor) || isAdmin(actor)
 
-export const canManageCheckIns = (actor, ventureMentorId) =>
-  isMentorOf(actor, ventureMentorId)
+export const canManageCheckIns = (actor, mentorIds) =>
+  isMentorOf(actor, mentorIds)
 
 // The programme: its calendar, sessions, staff and invitations.
 export const canManageProgramme = actor => isAdmin(actor)

@@ -27,15 +27,15 @@ export const applyToVenture = async (ventureId, message) => {
 export const ventureDetailLoader = async ({ params }) => {
   const [{ data: ventureData }, biweeklyRes, kpisRes, checkIns] =
     await Promise.all([
-    api.get(`/ventures/${params.ventureId}`),
-    api
-      .get('/biweekly', { params: { ventureId: params.ventureId } })
-      .catch(() => ({ data: null })),
-    api
-      .get(`/kpis/venture/${params.ventureId}`)
-      .catch(() => ({ data: { data: [] } })),
-    loadCheckIns({ ventureId: params.ventureId }),
-  ])
+      api.get(`/ventures/${params.ventureId}`),
+      api
+        .get('/biweekly', { params: { ventureId: params.ventureId } })
+        .catch(() => ({ data: null })),
+      api
+        .get(`/kpis/venture/${params.ventureId}`)
+        .catch(() => ({ data: { data: [] } })),
+      loadCheckIns({ ventureId: params.ventureId }),
+    ])
 
   return {
     ...ventureData,
@@ -99,13 +99,14 @@ export const getMentors = async () => {
   }
 }
 
-export const setVentureMentor = async (ventureId, mentorId) => {
+// Sets the startup's whole list of mentors, possibly empty.
+export const setVentureMentors = async (ventureId, mentorIds) => {
   try {
-    const { data } = await api.patch(`/admin/ventures/${ventureId}/mentor`, {
-      mentorId: mentorId || null,
+    const { data } = await api.put(`/admin/ventures/${ventureId}/mentors`, {
+      mentorIds,
     })
-    return { mentor: data.mentor }
+    return { mentors: data.mentors }
   } catch (err) {
-    return toError(err, 'Could not assign the mentor')
+    return toError(err, 'Could not assign the mentors')
   }
 }

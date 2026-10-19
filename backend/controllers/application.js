@@ -169,11 +169,11 @@ const joinRequestReviewError = async (user, joinRequest) => {
   if (stateError) {
     return stateError
   }
-  const venture = await Venture.findById(joinRequest.venture).select('mentor')
-  if (!canReviewJoinRequest(user, venture?.mentor)) {
+  const venture = await Venture.findById(joinRequest.venture).select('mentors')
+  if (!canReviewJoinRequest(user, venture?.mentors)) {
     return {
       status: 403,
-      error: "Only this startup's mentor or the academic board can review it",
+      error: "Only this startup's mentors or the academic board can review it",
     }
   }
   return null

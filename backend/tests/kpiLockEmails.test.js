@@ -123,6 +123,25 @@ describe('alerts after a run of poor grades', () => {
     assert.match(board.text, /Email: olu@adypu\.edu\.in/)
   })
 
+  it('reach every mentor of the startup', async () => {
+    await Venture.updateOne(
+      { _id: data.ventures.alpha._id },
+      { $push: { mentors: data.users.otherMentor._id } }
+    )
+    await lockRun(30, 20)
+    for (const mentor of [MENTOR, 'max@newtonschool.co']) {
+      assert.deepEqual(
+        subjects(mentor),
+        ["Attention Required: Alpha's Evaluation Score is Below 40%"],
+        mentor
+      )
+    }
+    assert.match(
+      to(BOARD)[0].text,
+      /Mentor: (Mo Mentor, Max Mentor|Max Mentor, Mo Mentor)/
+    )
+  })
+
   it('reach only the mentor after two middling grades', async () => {
     await lockRun(60, 50)
     assert.deepEqual(subjects(MENTOR), [
@@ -150,7 +169,7 @@ describe('alerts after a run of poor grades', () => {
   it('go to the board instead when there is no mentor, once each', async () => {
     await Venture.updateOne(
       { _id: data.ventures.alpha._id },
-      { $set: { mentor: null } }
+      { $set: { mentors: [] } }
     )
     await lockRun(30, 20)
     assert.equal(to(MENTOR).length, 0)
@@ -163,7 +182,7 @@ describe('alerts after a run of poor grades', () => {
   it('send a middling run to the board when there is no mentor', async () => {
     await Venture.updateOne(
       { _id: data.ventures.alpha._id },
-      { $set: { mentor: null } }
+      { $set: { mentors: [] } }
     )
     await lockRun(60, 50)
     assert.deepEqual(subjects(BOARD), [

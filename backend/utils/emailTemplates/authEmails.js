@@ -2,6 +2,7 @@ import { DEFAULT_EMAIL_SETTINGS } from '../emailSettings.js'
 import {
   actionCard,
   escapeHtml,
+  escapeLines,
   fill,
   heading,
   layout,
@@ -32,7 +33,7 @@ const codeEmail = (
     body: [
       heading(title),
       paragraph(`Hi ${escapeHtml(recipientName || 'there')},`),
-      paragraph(escapeHtml(intro)),
+      paragraph(escapeLines(intro)),
       codeBlock(code),
       actionCard({
         tone: 'info',

@@ -1,10 +1,15 @@
 import * as React from 'react'
-import { useLoaderData } from 'react-router'
+import { useBlocker, useLoaderData } from 'react-router'
 
 import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControlLabel,
   MenuItem,
   Slider,
@@ -342,7 +347,7 @@ function EmailsSection({ emails, form, setForm, failure, selected, select }) {
                   helperText={errorFor(failure, path)}
                 />
                 <ResetButton
-                  show={own[field.name] !== field.default}
+                  show={own.enabled && own[field.name] !== field.default}
                   onClick={() => setField(field.name, field.default)}
                 />
               </Box>
@@ -365,7 +370,8 @@ function EmailsSection({ emails, form, setForm, failure, selected, select }) {
             ))}
           </Box>
         </Box>
-        <Preview email={email} form={form} />
+        {/* A new email starts its own preview, not the last one's. */}
+        <Preview key={email.key} email={email} form={form} />
       </Box>
     </SectionCard>
   )
@@ -383,6 +389,20 @@ export default function PageEmails() {
   const [failure, setFailure] = React.useState(null)
   const [notice, setNotice] = React.useState('')
   const dirty = !same(form, formOf(page.settings))
+
+  // Unsaved changes aren't lost by leaving the page by mistake.
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty && currentLocation.pathname !== nextLocation.pathname
+  )
+  React.useEffect(() => {
+    if (!dirty) {
+      return undefined
+    }
+    const warn = event => event.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
 
   const save = async () => {
     setSaving(true)
@@ -464,6 +484,32 @@ export default function PageEmails() {
           select={setSelected}
         />
       </Box>
+
+      <Dialog
+        open={blocker.state === 'blocked'}
+        onClose={() => blocker.reset?.()}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Leave without saving?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Your changes to the emails are not saved yet. Leaving discards them.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => blocker.reset?.()}>
+            Stay
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => blocker.proceed?.()}
+          >
+            Leave
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

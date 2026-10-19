@@ -233,6 +233,36 @@ describe('sending with the settings', () => {
 })
 
 describe('the parts', () => {
+  it('keeps an admin’s line breaks and doesn’t double their punctuation', async () => {
+    const { resolveEmailSettings } = await import('../utils/emailSettings.js')
+    const { studentResultEmail } =
+      await import('../utils/emailTemplates/kpiEmails.js')
+    const settings = resolveEmailSettings({
+      brand: { footer: 'Line one\nLine <two>' },
+      templates: {
+        'student-result': {
+          onTrackTitle: 'Great work!',
+          onTrackBody: 'Keep going.\nSee you soon.',
+        },
+      },
+    })
+    const email = studentResultEmail(
+      {
+        studentName: 'Priya',
+        score: 90,
+        totalMarks: 100,
+        percentage: 90,
+        evaluationName: 'KPI',
+        dashboardUrl: 'https://p.example',
+      },
+      settings
+    )
+    assert.match(email.html, /Keep going\.<br>See you soon\./)
+    assert.match(email.html, /Line one<br>Line &lt;two&gt;/)
+    assert.match(email.text, /Great work! Keep going\./)
+    assert.doesNotMatch(email.text, /!\./)
+  })
+
   it('names the sender without changing the address', () => {
     assert.equal(
       withName('Portal <no-reply@nstsdc.org>', 'NST Programme'),

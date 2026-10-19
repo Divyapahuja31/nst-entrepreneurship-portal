@@ -4,6 +4,7 @@ import {
   button,
   detailsTable,
   escapeHtml,
+  escapeLines,
   fill,
   heading,
   layout,
@@ -11,6 +12,7 @@ import {
   plainText,
   scoreCard,
   scoreStatus,
+  titled,
 } from './layout.js'
 
 // Each template takes plain values and the email settings (their wording,
@@ -96,12 +98,12 @@ export const studentResultEmail = (
     body: [
       heading(words.heading),
       paragraph(`Hi ${escapeHtml(props.studentName)},`),
-      paragraph(escapeHtml(words.intro)),
+      paragraph(escapeLines(words.intro)),
       scoreCard(props, rules),
       actionCard({
         tone: tone === 'success' ? 'info' : tone,
         title: advice.title,
-        body: escapeHtml(advice.body),
+        body: escapeLines(advice.body),
       }),
       button({ href: props.dashboardUrl, label: words.button }),
     ].join(''),
@@ -113,7 +115,7 @@ export const studentResultEmail = (
       words.intro,
       scoreLine(props),
       '',
-      `${advice.title}. ${advice.body}`,
+      titled(advice.title, advice.body),
       '',
       `${words.button}: ${props.dashboardUrl}`,
     ],
@@ -132,13 +134,13 @@ const mentorEmail = (key, tone, props, settings) => {
     brand,
     body: [
       heading(words.subject),
-      paragraph(escapeHtml(words.intro)),
+      paragraph(escapeLines(words.intro)),
       scoreCard(props, rules),
       detailsTable(resultRows(props, rules)),
       actionCard({
         tone,
         title: words.actionTitle,
-        body: escapeHtml(words.actionBody),
+        body: escapeLines(words.actionBody),
       }),
       button({ href: props.dashboardUrl, label: words.button }),
     ].join(''),
@@ -150,7 +152,7 @@ const mentorEmail = (key, tone, props, settings) => {
       `Evaluation: ${props.evaluationName}`,
       scoreLine(props),
       '',
-      `${words.actionTitle}: ${words.actionBody}`,
+      titled(words.actionTitle, words.actionBody, ':'),
       '',
       `${words.button}: ${props.dashboardUrl}`,
     ],
@@ -187,13 +189,13 @@ export const boardLowScoreEmail = (
     brand,
     body: [
       heading(words.heading),
-      paragraph(escapeHtml(words.intro)),
+      paragraph(escapeLines(words.intro)),
       scoreCard(props, rules),
       detailsTable(rows),
       actionCard({
         tone: 'danger',
         title: words.actionTitle,
-        body: escapeHtml(
+        body: escapeLines(
           props.mentorName === 'Unassigned'
             ? words.noMentorBody
             : words.actionBody

@@ -35,6 +35,14 @@ export const escapeHtml = value =>
       ]
   )
 
+// Text an admin may break into lines: escaped, with its line breaks kept.
+export const escapeLines = value => escapeHtml(value).replace(/\r?\n/g, '<br>')
+
+// "Title. Body" for the plain-text part, without doubling the title's own
+// punctuation ("Great work!" stays "Great work! Body").
+export const titled = (title, body, separator = '.') =>
+  /[.!?:]$/.test(title) ? `${title} ${body}` : `${title}${separator} ${body}`
+
 export const paragraph = html =>
   `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:${COLORS.text};">${html}</p>`
 
@@ -131,7 +139,7 @@ export const layout = ({
         ${body}
       </td></tr>
       <tr><td style="padding:16px 8px;font-size:12px;line-height:1.6;color:${COLORS.secondary};text-align:center;">
-        ${escapeHtml(brand.footer)}
+        ${escapeLines(brand.footer)}
       </td></tr>
     </table>
   </td></tr>

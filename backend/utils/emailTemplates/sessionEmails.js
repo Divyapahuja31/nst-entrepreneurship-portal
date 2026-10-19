@@ -3,6 +3,7 @@ import {
   button,
   detailsTable,
   escapeHtml,
+  escapeLines,
   fill,
   heading,
   layout,
@@ -52,7 +53,7 @@ export const founderSessionEmail = (
       paragraph(escapeHtml(intro)),
       detailsTable(rows),
       button({ href: props.meetUrl, label: 'Join Google Meet' }),
-      paragraph(escapeHtml(note)),
+      paragraph(escapeLines(note)),
     ].join(''),
   })
   const text = plainText(
@@ -94,7 +95,7 @@ export const staffSessionEmail = (props, settings = DEFAULT_EMAIL_SETTINGS) => {
       ...(props.meetUrl
         ? [button({ href: props.meetUrl, label: 'Join Google Meet' })]
         : []),
-      paragraph(escapeHtml(note)),
+      paragraph(escapeLines(note)),
     ].join(''),
   })
   const text = plainText(
@@ -133,7 +134,7 @@ export const sessionCancelledEmail = (
       heading('Session cancelled'),
       paragraph(`Hi ${escapeHtml(props.recipientName)},`),
       paragraph(escapeHtml(body)),
-      paragraph(escapeHtml(note)),
+      paragraph(escapeLines(note)),
     ].join(''),
   })
   const text = plainText([`Hi ${props.recipientName},`, '', body, note], brand)

@@ -1,12 +1,14 @@
 // When a run of locked KPI grades should alert the mentor or the academic
 // board. Pure, so it is tested without a database.
 
-// At or below this percentage a grade is a low score, below PASS_PERCENT a
-// middling one.
-export const LOW_PERCENT = 40
-export const PASS_PERCENT = 70
-// Consecutive low or middling grades that trigger an alert.
-export const STRIKES_TO_ESCALATE = 2
+// The defaults, which admins can change on the Emails page: at or below
+// lowPercent a grade is a low score, below passPercent a middling one, and
+// `strikes` low or middling grades in a row set off an alert.
+export const DEFAULT_RULES = Object.freeze({
+  lowPercent: 40,
+  passPercent: 70,
+  strikes: 2,
+})
 
 // KPIs are graded out of 100 unless a total is given. Multiplying first
 // keeps whole scores exact: (40 / 100) * 100 is 40.00000000000001, which
@@ -31,28 +33,36 @@ export const sortForEscalation = kpis =>
 
 // A low grade is a strike for both, a middling one for the mentor only (and
 // clears the board's run), a passing one clears both.
-export const nextStrikes = ({ mentor, board }, percentage) => {
-  if (percentage <= LOW_PERCENT) {
+export const nextStrikes = (
+  { mentor, board },
+  percentage,
+  rules = DEFAULT_RULES
+) => {
+  if (percentage <= rules.lowPercent) {
     return { mentor: mentor + 1, board: board + 1 }
   }
-  if (percentage < PASS_PERCENT) {
+  if (percentage < rules.passPercent) {
     return { mentor: mentor + 1, board: 0 }
   }
   return { mentor: 0, board: 0 }
 }
 
 // Which alerts the KPI `currentId` sets off, given every locked, graded KPI
-// in its run (including itself). A run of STRIKES_TO_ESCALATE alerts once
-// and then counts again from zero, and only the KPI that completes the run
+// in its run (including itself). A run of rules.strikes alerts once and
+// then counts again from zero, and only the KPI that completes the run
 // alerts, so re-checking older KPIs never sends anything.
-export const escalationsFor = (kpis, currentId) => {
+export const escalationsFor = (kpis, currentId, rules = DEFAULT_RULES) => {
   const due = { mentor: false, board: false }
   let strikes = { mentor: 0, board: 0 }
   for (const kpi of sortForEscalation(kpis)) {
-    strikes = nextStrikes(strikes, percentageOf(kpi.score, kpi.totalMarks))
+    strikes = nextStrikes(
+      strikes,
+      percentageOf(kpi.score, kpi.totalMarks),
+      rules
+    )
     const isCurrent = idOf(kpi) === String(currentId)
     for (const who of ['mentor', 'board']) {
-      if (strikes[who] >= STRIKES_TO_ESCALATE) {
+      if (strikes[who] >= rules.strikes) {
         due[who] ||= isCurrent
         strikes = { ...strikes, [who]: 0 }
       }

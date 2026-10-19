@@ -1,8 +1,10 @@
+import { DEFAULT_EMAIL_SETTINGS } from '../emailSettings.js'
 import {
   actionCard,
   button,
   detailsTable,
   escapeHtml,
+  fill,
   heading,
   layout,
   paragraph,
@@ -11,157 +13,200 @@ import {
   scoreStatus,
 } from './layout.js'
 
-// Each template takes plain values and returns { subject, html, text }.
+// Each template takes plain values and the email settings (their wording,
+// header, footer and alert rules) and returns { subject, html, text }.
 // studentName is who the grade is about: a founder for their own KPI, the
 // startup for a startup-wide one.
+
+const WORDS = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+]
+const inWords = number => WORDS[number] ?? String(number)
+
+// What the placeholders in a KPI email's text stand for.
+const valuesOf = (props, rules) => ({
+  name: props.studentName,
+  student: props.studentName,
+  startup: props.ventureName,
+  kpi: props.evaluationName,
+  score: props.score,
+  total: props.totalMarks,
+  percent: Math.round(props.percentage),
+  low: rules.lowPercent,
+  pass: rules.passPercent,
+  strikes: inWords(rules.strikes),
+  mentor: props.mentorName,
+  email: props.studentEmail,
+  batch: props.batch,
+})
+
+// The template's text with its placeholders filled in.
+const wordingOf = (key, props, settings) => {
+  const values = valuesOf(props, settings.rules)
+  const { enabled: _enabled, ...fields } = settings.templates[key]
+  return Object.fromEntries(
+    Object.entries(fields).map(([name, value]) => [name, fill(value, values)])
+  )
+}
 
 const scoreLine = ({ score, totalMarks, percentage }) =>
   `Score: ${score} / ${totalMarks} (${Math.round(percentage)}%)`
 
-const resultRows = props => [
+const resultRows = (props, rules) => [
   ['Evaluation', props.evaluationName],
   ...(props.ventureName ? [['Startup', props.ventureName]] : []),
   ['Score', `${props.score} / ${props.totalMarks}`],
   ['Percentage', `${Math.round(props.percentage)}%`],
-  ['Status', scoreStatus(props.percentage).label],
+  ['Status', scoreStatus(props.percentage, rules).label],
 ]
 
-const STUDENT_ADVICE = {
-  success: {
-    title: 'Great work',
-    body: 'Keep the momentum going on your next KPIs.',
-  },
-  warning: {
-    title: 'Room to improve',
-    body: 'Read the feedback on this KPI and talk to your mentor about what to focus on next.',
-  },
-  danger: {
-    title: 'This score needs attention',
-    body: 'Please read the feedback on this KPI and set up time with your mentor soon to plan your next steps.',
-  },
+const ADVICE = {
+  success: ['onTrackTitle', 'onTrackBody'],
+  warning: ['improveTitle', 'improveBody'],
+  danger: ['lowTitle', 'lowBody'],
 }
 
-export const studentResultEmail = props => {
-  const subject = 'Your Entrepreneurship Evaluation Result is Ready'
-  const { tone } = scoreStatus(props.percentage)
-  const advice = STUDENT_ADVICE[tone]
+export const studentResultEmail = (
+  props,
+  settings = DEFAULT_EMAIL_SETTINGS
+) => {
+  const { brand, rules } = settings
+  const words = wordingOf('student-result', props, settings)
+  const { tone } = scoreStatus(props.percentage, rules)
+  const [titleField, bodyField] = ADVICE[tone]
+  const advice = { title: words[titleField], body: words[bodyField] }
   const html = layout({
-    title: subject,
+    title: words.subject,
     preheader: `Your result for ${props.evaluationName} is ready.`,
+    brand,
     body: [
-      heading('Your evaluation result is ready'),
+      heading(words.heading),
       paragraph(`Hi ${escapeHtml(props.studentName)},`),
-      paragraph(
-        `Your KPI <strong>${escapeHtml(props.evaluationName)}</strong> has been graded and the grade is now final.`
-      ),
-      scoreCard(props),
+      paragraph(escapeHtml(words.intro)),
+      scoreCard(props, rules),
       actionCard({
         tone: tone === 'success' ? 'info' : tone,
         title: advice.title,
         body: escapeHtml(advice.body),
       }),
-      button({ href: props.dashboardUrl, label: 'View your KPIs' }),
+      button({ href: props.dashboardUrl, label: words.button }),
     ].join(''),
   })
-  const text = plainText([
-    `Hi ${props.studentName},`,
-    '',
-    `Your KPI "${props.evaluationName}" has been graded and the grade is now final.`,
-    scoreLine(props),
-    '',
-    `${advice.title}. ${advice.body}`,
-    '',
-    `View your KPIs: ${props.dashboardUrl}`,
-  ])
-  return { subject, html, text }
+  const text = plainText(
+    [
+      `Hi ${props.studentName},`,
+      '',
+      words.intro,
+      scoreLine(props),
+      '',
+      `${advice.title}. ${advice.body}`,
+      '',
+      `${words.button}: ${props.dashboardUrl}`,
+    ],
+    brand
+  )
+  return { subject: words.subject, html, text }
 }
 
 // The mentor emails differ only in their wording and tone.
-const mentorEmail = ({ subject, intro, tone, title, body, props }) => {
+const mentorEmail = (key, tone, props, settings) => {
+  const { brand, rules } = settings
+  const words = wordingOf(key, props, settings)
   const html = layout({
-    title: subject,
-    preheader: intro,
+    title: words.subject,
+    preheader: words.intro,
+    brand,
     body: [
-      heading(subject),
-      paragraph(escapeHtml(intro)),
-      scoreCard(props),
-      detailsTable(resultRows(props)),
-      actionCard({ tone, title, body: escapeHtml(body) }),
-      button({ href: props.dashboardUrl, label: 'Open the startup' }),
+      heading(words.subject),
+      paragraph(escapeHtml(words.intro)),
+      scoreCard(props, rules),
+      detailsTable(resultRows(props, rules)),
+      actionCard({
+        tone,
+        title: words.actionTitle,
+        body: escapeHtml(words.actionBody),
+      }),
+      button({ href: props.dashboardUrl, label: words.button }),
     ].join(''),
   })
-  const text = plainText([
-    intro,
-    '',
-    `Evaluation: ${props.evaluationName}`,
-    scoreLine(props),
-    '',
-    `${title}: ${body}`,
-    '',
-    `Open the startup: ${props.dashboardUrl}`,
-  ])
-  return { subject, html, text }
+  const text = plainText(
+    [
+      words.intro,
+      '',
+      `Evaluation: ${props.evaluationName}`,
+      scoreLine(props),
+      '',
+      `${words.actionTitle}: ${words.actionBody}`,
+      '',
+      `${words.button}: ${props.dashboardUrl}`,
+    ],
+    brand
+  )
+  return { subject: words.subject, html, text }
 }
 
-// Two locked grades in a row below 70%.
-export const mentorFollowUpEmail = props =>
-  mentorEmail({
-    subject: `Action Required: Connect with ${props.studentName} Regarding Evaluation`,
-    intro: `${props.studentName} has scored below 70% on two locked evaluations in a row, most recently on ${props.evaluationName}.`,
-    tone: 'warning',
-    title: 'Please follow up',
-    body: 'Set up a check-in to go through the feedback and agree on what to improve before the next evaluation.',
-    props,
-  })
+// A run of locked grades below the on-track line.
+export const mentorFollowUpEmail = (props, settings = DEFAULT_EMAIL_SETTINGS) =>
+  mentorEmail('mentor-follow-up', 'warning', props, settings)
 
-// Two locked grades in a row with the latest at or below 40%.
-export const mentorLowScoreEmail = props =>
-  mentorEmail({
-    subject: `Attention Required: ${props.studentName}'s Evaluation Score is Below 40%`,
-    intro: `${props.studentName} has scored poorly on two locked evaluations in a row, most recently ${Math.round(props.percentage)}% on ${props.evaluationName}.`,
-    tone: 'danger',
-    title: 'Please reach out soon',
-    body: 'Meet them this week to understand what is blocking them and agree on a recovery plan.',
-    props,
-  })
+// A run of locked grades with the latest a low score.
+export const mentorLowScoreEmail = (props, settings = DEFAULT_EMAIL_SETTINGS) =>
+  mentorEmail('mentor-low-score', 'danger', props, settings)
 
-// Two locked grades in a row at or below 40%.
-export const boardLowScoreEmail = props => {
-  const subject = `Academic Board Notification: ${props.studentName}'s Evaluation Score is Below 40%`
-  const intro = `${props.studentName} has scored 40% or below on two locked evaluations in a row, most recently on ${props.evaluationName}.`
+// A run of low scores.
+export const boardLowScoreEmail = (
+  props,
+  settings = DEFAULT_EMAIL_SETTINGS
+) => {
+  const { brand, rules } = settings
+  const words = wordingOf('board-low-score', props, settings)
   const rows = [
     ['Student', props.studentName],
     ['Email', props.studentEmail],
     ['Batch', props.batch],
     ['Mentor', props.mentorName],
-    ...resultRows(props),
+    ...resultRows(props, rules),
   ]
   const html = layout({
-    title: subject,
-    preheader: intro,
+    title: words.subject,
+    preheader: words.intro,
+    brand,
     body: [
-      heading('Consecutive low scores'),
-      paragraph(escapeHtml(intro)),
-      scoreCard(props),
+      heading(words.heading),
+      paragraph(escapeHtml(words.intro)),
+      scoreCard(props, rules),
       detailsTable(rows),
       actionCard({
         tone: 'danger',
-        title: 'Board review suggested',
+        title: words.actionTitle,
         body: escapeHtml(
           props.mentorName === 'Unassigned'
-            ? 'This startup has no mentor. Please assign one and review its progress.'
-            : `Please review this startup's progress with ${props.mentorName}.`
+            ? words.noMentorBody
+            : words.actionBody
         ),
       }),
-      button({ href: props.dashboardUrl, label: 'Open the startup' }),
+      button({ href: props.dashboardUrl, label: words.button }),
     ].join(''),
   })
-  const text = plainText([
-    intro,
-    '',
-    ...rows.map(([label, value]) => `${label}: ${value}`),
-    '',
-    `Open the startup: ${props.dashboardUrl}`,
-  ])
-  return { subject, html, text }
+  const text = plainText(
+    [
+      words.intro,
+      '',
+      ...rows.map(([label, value]) => `${label}: ${value}`),
+      '',
+      `${words.button}: ${props.dashboardUrl}`,
+    ],
+    brand
+  )
+  return { subject: words.subject, html, text }
 }

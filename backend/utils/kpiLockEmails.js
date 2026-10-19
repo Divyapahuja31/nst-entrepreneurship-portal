@@ -4,7 +4,8 @@ import Founder from '../models/founder.js'
 import KPI from '../models/kpi.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
-import { LOW_PERCENT, escalationsFor, percentageOf } from './kpiEscalation.js'
+import { escalationsFor, percentageOf } from './kpiEscalation.js'
+import { loadEmailSettings } from './emailSettings.js'
 import {
   sendBoardLowScore,
   sendMentorFollowUp,
@@ -172,7 +173,7 @@ const emailBoard = (about, board, send = sendBoardLowScore) => {
 // key, so a member who already got that alert for this KPI isn't emailed
 // twice.
 const emailMentors = (about, mentors, board) => {
-  const low = about.result.percentage <= LOW_PERCENT
+  const low = about.result.percentage <= about.rules.lowPercent
   if (!mentors.length) {
     return emailBoard(
       about,
@@ -216,16 +217,17 @@ export const sendLockedKpiEmails = async kpiId => {
     if (!kpi?.isLocked || kpi.status !== 'GRADED' || !kpi.venture) {
       return { success: false, error: 'The KPI is not locked and graded' }
     }
-    const [students, mentors, run] = await Promise.all([
+    const [students, mentors, run, { rules }] = await Promise.all([
       findStudents(kpi),
       findMentors(kpi.venture),
       findRun(kpi),
+      loadEmailSettings(),
     ])
-    const about = describe({ kpi, students, mentors })
+    const about = { ...describe({ kpi, students, mentors }), rules }
 
     const failed =
       (await emailStudents(about, students, kpi._id)) +
-      (await escalate(about, escalationsFor(run, kpi._id), mentors))
+      (await escalate(about, escalationsFor(run, kpi._id, rules), mentors))
     return failed
       ? { success: false, error: `${failed} email(s) could not be sent` }
       : { success: true }

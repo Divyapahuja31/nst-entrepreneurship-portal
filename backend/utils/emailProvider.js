@@ -1,7 +1,10 @@
 import { Resend } from 'resend'
 
 // A provider sends one email and never throws:
-//   { name, sendEmail({ to, subject, html, text }) => { messageId?, error? } }
+//   { name, sendEmail({ to, subject, html, text, fromName?, replyTo? })
+//     => { messageId?, error? } }
+// fromName replaces the name in EMAIL_FROM; the address stays, since Resend
+// only sends from a verified domain.
 // Resend sends them; under `npm run dev` they are printed instead (see
 // defaultProvider). Tests swap in a fake with setEmailProvider.
 
@@ -15,6 +18,15 @@ export const normalizeFrom = value => {
   }
   const name = match[1].replace(/^"|"$/g, '').trim()
   return name ? `${name} <${match[2]}>` : match[2]
+}
+
+// The sender with another display name, or as it was without one.
+export const withName = (from, name) => {
+  if (!from || !name) {
+    return from
+  }
+  const address = from.match(/<([^<>]+)>$/)?.[1] ?? from
+  return `${name} <${address}>`
 }
 
 const failure = message => {
@@ -36,9 +48,9 @@ const resendClient = apiKey => {
 
 export const createResendProvider = () => ({
   name: 'resend',
-  sendEmail: async ({ to, subject, html, text }) => {
+  sendEmail: async ({ to, subject, html, text, fromName, replyTo }) => {
     const apiKey = process.env.RESEND_API_KEY?.trim()
-    const from = normalizeFrom(process.env.EMAIL_FROM)
+    const from = withName(normalizeFrom(process.env.EMAIL_FROM), fromName)
     if (!apiKey || !from) {
       return failure('RESEND_API_KEY and EMAIL_FROM must both be set')
     }
@@ -49,6 +61,7 @@ export const createResendProvider = () => ({
         subject,
         html,
         text,
+        ...(replyTo && { replyTo }),
       })
       if (error) {
         return failure(error.message || 'Resend rejected the email')

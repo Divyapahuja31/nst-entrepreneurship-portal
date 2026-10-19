@@ -1,7 +1,9 @@
+import { DEFAULT_EMAIL_SETTINGS } from '../emailSettings.js'
 import {
   button,
   detailsTable,
   escapeHtml,
+  fill,
   heading,
   layout,
   paragraph,
@@ -9,16 +11,22 @@ import {
 } from './layout.js'
 
 // Programme session emails. Each template takes plain values (dates already
-// formatted in the programme's time zone) and returns { subject, html, text }.
-// An extra session passes its title as sessionName; a bi-weekly one doesn't.
+// formatted in the programme's time zone) and the email settings, and returns
+// { subject, html, text }. An extra session passes its title as sessionName;
+// a bi-weekly one doesn't. Admins change each one's closing note.
 
 const startups = count => (count === 1 ? '1 startup' : `${count} startups`)
 
-const REPLACES =
-  'If you got an earlier email about this session, this one replaces it. The invite is on your Google Calendar too.'
+const noteOf = (key, props, settings) =>
+  fill(settings.templates[key].note, { name: props.recipientName })
 
 // To a founder: their startup's slot, or the group session.
-export const founderSessionEmail = props => {
+export const founderSessionEmail = (
+  props,
+  settings = DEFAULT_EMAIL_SETTINGS
+) => {
+  const { brand } = settings
+  const note = noteOf('session-founder', props, settings)
   const name = props.sessionName
   let what = props.group ? 'Bi-weekly group session' : 'Your bi-weekly check-in'
   if (name) {
@@ -37,30 +45,36 @@ export const founderSessionEmail = props => {
   const html = layout({
     title: subject,
     preheader: `${props.day}, ${props.time}. Join on Google Meet.`,
+    brand,
     body: [
       heading(what),
       paragraph(`Hi ${escapeHtml(props.recipientName)},`),
       paragraph(escapeHtml(intro)),
       detailsTable(rows),
       button({ href: props.meetUrl, label: 'Join Google Meet' }),
-      paragraph(escapeHtml(REPLACES)),
+      paragraph(escapeHtml(note)),
     ].join(''),
   })
-  const text = plainText([
-    `Hi ${props.recipientName},`,
-    '',
-    intro,
-    ...rows.map(([label, value]) => `${label}: ${value}`),
-    '',
-    `Join Google Meet: ${props.meetUrl}`,
-    '',
-    REPLACES,
-  ])
+  const text = plainText(
+    [
+      `Hi ${props.recipientName},`,
+      '',
+      intro,
+      ...rows.map(([label, value]) => `${label}: ${value}`),
+      '',
+      `Join Google Meet: ${props.meetUrl}`,
+      '',
+      note,
+    ],
+    brand
+  )
   return { subject, html, text }
 }
 
 // To a staff member: the startups they meet, or the group session.
-export const staffSessionEmail = props => {
+export const staffSessionEmail = (props, settings = DEFAULT_EMAIL_SETTINGS) => {
+  const { brand } = settings
+  const note = noteOf('session-staff', props, settings)
   const name = props.sessionName
   const title = name ?? 'Your bi-weekly session'
   const subject = `${title}: ${props.day}`
@@ -71,6 +85,7 @@ export const staffSessionEmail = props => {
   const html = layout({
     title: subject,
     preheader: intro,
+    brand,
     body: [
       heading(title),
       paragraph(`Hi ${escapeHtml(props.recipientName)},`),
@@ -79,24 +94,32 @@ export const staffSessionEmail = props => {
       ...(props.meetUrl
         ? [button({ href: props.meetUrl, label: 'Join Google Meet' })]
         : []),
-      paragraph(escapeHtml(REPLACES)),
+      paragraph(escapeHtml(note)),
     ].join(''),
   })
-  const text = plainText([
-    `Hi ${props.recipientName},`,
-    '',
-    intro,
-    ...rows.map(([time, name]) => `${time}  ${name}`),
-    ...(props.meetUrl ? ['', `Join Google Meet: ${props.meetUrl}`] : []),
-    '',
-    REPLACES,
-  ])
+  const text = plainText(
+    [
+      `Hi ${props.recipientName},`,
+      '',
+      intro,
+      ...rows.map(([time, name]) => `${time}  ${name}`),
+      ...(props.meetUrl ? ['', `Join Google Meet: ${props.meetUrl}`] : []),
+      '',
+      note,
+    ],
+    brand
+  )
   return { subject, html, text }
 }
 
 // To anyone whose meeting was cancelled, or who was taken off the invite
 // list.
-export const sessionCancelledEmail = props => {
+export const sessionCancelledEmail = (
+  props,
+  settings = DEFAULT_EMAIL_SETTINGS
+) => {
+  const { brand } = settings
+  const note = noteOf('session-cancelled', props, settings)
   const name = props.sessionName
   const subject = `Cancelled: ${name ?? 'bi-weekly session'}, ${props.day}, ${props.time}`
   const body = props.ventureName
@@ -105,20 +128,14 @@ export const sessionCancelledEmail = props => {
   const html = layout({
     title: subject,
     preheader: body,
+    brand,
     body: [
       heading('Session cancelled'),
       paragraph(`Hi ${escapeHtml(props.recipientName)},`),
       paragraph(escapeHtml(body)),
-      paragraph(
-        'It has been taken off your Google Calendar. You’ll get a new email if you’re invited again.'
-      ),
+      paragraph(escapeHtml(note)),
     ].join(''),
   })
-  const text = plainText([
-    `Hi ${props.recipientName},`,
-    '',
-    body,
-    'It has been taken off your Google Calendar. You’ll get a new email if you’re invited again.',
-  ])
+  const text = plainText([`Hi ${props.recipientName},`, '', body, note], brand)
   return { subject, html, text }
 }

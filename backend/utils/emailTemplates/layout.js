@@ -1,4 +1,4 @@
-import { LOW_PERCENT, PASS_PERCENT } from '../kpiEscalation.js'
+import { DEFAULT_BRAND, DEFAULT_RULES } from '../emailSettings.js'
 
 // Building blocks every email shares. Email clients ignore <style> blocks
 // and most modern CSS, so everything is a table with inline styles, in the
@@ -41,12 +41,21 @@ export const paragraph = html =>
 export const heading = text =>
   `<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:600;color:${COLORS.text};">${escapeHtml(text)}</h1>`
 
+// Fills an admin's text: each {name} becomes values.name. A name without a
+// value stays as typed. The result is plain text; escape it for HTML.
+export const fill = (template, values) =>
+  String(template ?? '').replace(/\{([^{}]*)\}/g, (token, name) =>
+    Object.hasOwn(values, name) && values[name] !== undefined
+      ? String(values[name])
+      : token
+  )
+
 // The label and tone a percentage gets everywhere: the pill, the action card.
-export const scoreStatus = percentage => {
-  if (percentage <= LOW_PERCENT) {
-    return { label: '40% or below', tone: 'danger' }
+export const scoreStatus = (percentage, rules = DEFAULT_RULES) => {
+  if (percentage <= rules.lowPercent) {
+    return { label: `${rules.lowPercent}% or below`, tone: 'danger' }
   }
-  if (percentage < PASS_PERCENT) {
+  if (percentage < rules.passPercent) {
     return { label: 'Needs improvement', tone: 'warning' }
   }
   return { label: 'On track', tone: 'success' }
@@ -55,13 +64,13 @@ export const scoreStatus = percentage => {
 const pill = ({ label, tone }) =>
   `<span style="display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;color:${TONES[tone].color};background:${TONES[tone].fill};">${escapeHtml(label)}</span>`
 
-export const scoreCard = ({ score, totalMarks, percentage }) => `
+export const scoreCard = ({ score, totalMarks, percentage }, rules) => `
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:${COLORS.page};border-radius:12px;">
   <tr><td style="padding:24px;text-align:center;">
     <div style="font-size:13px;color:${COLORS.secondary};text-transform:uppercase;letter-spacing:0.5px;">Score</div>
     <div style="margin:8px 0;font-size:36px;font-weight:700;color:${COLORS.text};">${escapeHtml(score)}<span style="font-size:20px;color:${COLORS.secondary};"> / ${escapeHtml(totalMarks)}</span></div>
     <div style="margin:0 0 12px;font-size:15px;color:${COLORS.secondary};">${escapeHtml(Math.round(percentage))}%</div>
-    ${pill(scoreStatus(percentage))}
+    ${pill(scoreStatus(percentage, rules))}
   </td></tr>
 </table>`
 
@@ -94,12 +103,15 @@ export const button = ({ href, label }) => `
   </td></tr>
 </table>`
 
-export const FOOTER_TEXT =
-  'This is an automated notification from the NST Entrepreneurship Program. Please do not reply to this email. If you have questions, contact your mentor.'
-
 // A whole email. preheader is the preview line inboxes show after the
-// subject; body is HTML.
-export const layout = ({ title, preheader, body }) => `<!doctype html>
+// subject; body is HTML. brand is the header and footer from the email
+// settings.
+export const layout = ({
+  title,
+  preheader,
+  body,
+  brand = DEFAULT_BRAND,
+}) => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -112,14 +124,14 @@ export const layout = ({ title, preheader, body }) => `<!doctype html>
   <tr><td align="center" style="padding:32px 16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
       <tr><td style="padding:0 8px 16px;">
-        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:${COLORS.text};">NEWTON SCHOOL OF TECHNOLOGY</div>
-        <div style="font-size:13px;color:${COLORS.secondary};">Entrepreneurship Program</div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:${COLORS.text};">${escapeHtml(brand.title)}</div>
+        <div style="font-size:13px;color:${COLORS.secondary};">${escapeHtml(brand.subtitle)}</div>
       </td></tr>
       <tr><td style="padding:32px;background:${COLORS.surface};border-radius:16px;font-family:${FONT};">
         ${body}
       </td></tr>
       <tr><td style="padding:16px 8px;font-size:12px;line-height:1.6;color:${COLORS.secondary};text-align:center;">
-        ${FOOTER_TEXT}
+        ${escapeHtml(brand.footer)}
       </td></tr>
     </table>
   </td></tr>
@@ -128,12 +140,12 @@ export const layout = ({ title, preheader, body }) => `<!doctype html>
 </html>`
 
 // The plain-text part sent alongside the HTML.
-export const plainText = lines =>
+export const plainText = (lines, brand = DEFAULT_BRAND) =>
   [
-    'NEWTON SCHOOL OF TECHNOLOGY | Entrepreneurship Program',
+    `${brand.title} | ${brand.subtitle}`,
     '',
     ...lines,
     '',
     '--',
-    FOOTER_TEXT,
+    brand.footer,
   ].join('\n')

@@ -35,6 +35,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Staff pages (`/admin/*`) | ✅ | ✅ | ✅ | ❌ |
 | Accounts & Roles: list, create, deactivate, change roles (never their own, never the last admin) | ✅ | ❌ | ❌ | ❌ |
 | Read the account activity log | ✅ | ❌ | ❌ | ❌ |
+| Change the emails: sender name, header and footer, KPI alert rules, wording, which are sent | ✅ | ❌ | ❌ | ❌ |
 | Read startups, KPIs, bi-weekly reports, founders, overview | all | all | assigned startups | own startup |
 | Create a startup (Add Founder) | ✅ | ✅ | as its mentor | ❌ |
 | Assign a startup's mentors, remove founders | ✅ | ✅ | ❌ | ❌ |
@@ -124,13 +125,23 @@ Under `npm run dev` nothing is sent: each email is printed in the backend's term
 | A KPI's grade is locked | Its founder, or every active founder for a startup-wide KPI | The result, with score and status |
 | That grade is the second in a row below 70% | Every mentor of the startup | Follow-up (above 40%) or low score (40% or below) |
 | That grade is the second in a row at 40% or below | Every academic board member | Low-score notification with the student, batch and mentors |
+| A programme or extra session is scheduled, changed or cancelled | Its founders and staff | Their slot, schedule or the cancellation |
 | Sign-up and forgot password | The account | The 6-digit code |
+
+The 40%, 70% and "second in a row" above are the defaults. Admins change them, and everything else below, on the **Emails** page (`/admin/emails`):
+
+- **Sender and footer:** the sender's name (the address stays `EMAIL_FROM`, since Resend only sends from a verified domain), a reply-to address, and the header and footer lines every email shares.
+- **KPI alert rules:** the low score line, the on-track line and how many grades in a row set off an alert.
+- **Wording:** each email's subject, opening line, advice and button, with placeholders such as `{student}`, `{kpi}` and `{percent}` filled in when it's sent. An unknown placeholder is refused. Session emails let admins change their closing note; their date, time and Meet link are always filled in.
+- **Which are sent:** any email but the sign-up and password reset codes can be switched off.
+
+The page previews each email with sample data before saving. Only what differs from a default is stored (the `EmailSettings` model, [`backend/utils/emailSettings.js`](backend/utils/emailSettings.js)), and every email reads the saved settings when it is sent.
 
 - Grades count in order of due date, separately for the startup as a whole and for each founder's own KPIs. Once an alert is sent its count starts again from zero ([`kpiEscalation.js`](backend/utils/kpiEscalation.js)).
 - A startup without a mentor has its mentor alerts sent to the board instead, and a board member who already got the low-score alert for that KPI isn't emailed again.
 - The emails go out on the server after a successful lock, never from the browser, and one failed email doesn't stop the others.
 - Every email is logged (the `EmailNotification` model) as pending, then sent or failed. A recipient gets at most one sent email of each type per KPI; a unique index enforces it, and a failed email can be retried. Admins read the whole log at `GET /api/notifications/emails`, anyone else only their own emails.
-- In development, `/api/dev/emails` (also on the Vite port) shows every template with sample data and a score slider.
+- In development, `/api/dev/emails` (also on the Vite port) shows every template with sample data and a score slider, with the saved settings.
 
 To create the log's indexes on an existing database, run this once. It's safe to run again.
 

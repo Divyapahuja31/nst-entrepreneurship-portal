@@ -90,16 +90,18 @@ const geminiClient = () => {
   return gemini.client
 }
 
-const geminiExtractor = async ({
+// Exported for scripts/demo-kpi-bot.js, which shows its answer.
+export const geminiExtractor = async ({
   text,
   meetingDate,
   founders,
   timeZone,
   identified,
   signal,
+  model,
 }) => {
   const response = await geminiClient().models.generateContent({
-    model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+    model: model || process.env.GEMINI_MODEL || DEFAULT_MODEL,
     // Display names are typed by the speakers, so they stay with the data,
     // not in the instructions.
     contents: `Meeting date: ${meetingDate}\n\n<signed_in_speakers>\n${JSON.stringify(identified ?? [])}\n</signed_in_speakers>\n\n<transcript>\n${text}\n</transcript>`,
@@ -358,6 +360,12 @@ const kpiDocument = (kpi, founder, checkIn, meetingDate) => ({
   status: 'DRAFT',
 })
 
+const isValidKpi = doc =>
+  new KPI(doc).validate().then(
+    () => true,
+    () => false
+  )
+
 const skippedGoal = (kpi, reason) => ({
   speaker: String(kpi?.speaker ?? '').slice(0, LIMITS.speaker),
   title: String(kpi?.title ?? '').slice(0, LIMITS.title),
@@ -394,7 +402,7 @@ const saveKpis = async (
       continue
     }
     const doc = kpiDocument(kpi, match.founder, checkIn, meetingDate)
-    if (new KPI(doc).validateSync()) {
+    if (!(await isValidKpi(doc))) {
       skipped.push(skippedGoal(kpi, 'Invalid KPI'))
       continue
     }

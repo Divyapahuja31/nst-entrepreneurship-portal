@@ -213,10 +213,26 @@ const checkInSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    // The KPI bot's working state (Gemini's raw answer, its lease) and the
-    // speakers' Google account IDs are not for the API.
+    // The KPI bot's working state (Gemini's raw answer, its lease, its
+    // errors) and the speakers' Google account IDs are not for the API; what
+    // the bot did is, as `kpiBot`, so the mentor sees goals it couldn't place.
     toJSON: {
       transform: (doc, ret) => {
+        const run = ret.kpiExtraction
+        if (run) {
+          ret.kpiBot = {
+            status: run.status,
+            created: run.created ?? 0,
+            skipped: (run.skipped || []).map(({ speaker, title, reason }) => ({
+              speaker,
+              title,
+              reason,
+            })),
+            // A skip's reason is written for people ("None of the startup's
+            // founders spoke in this meeting"); a failure's is Gemini's.
+            ...(run.status === 'SKIPPED' && { reason: run.error }),
+          }
+        }
         delete ret.kpiExtraction
         for (const entry of ret.transcript?.entries || []) {
           delete entry.googleId

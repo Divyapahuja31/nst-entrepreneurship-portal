@@ -542,11 +542,52 @@ describe('review findings', () => {
     const one = await as(data.users.owner)(`/api/checkins/${checkIn._id}`)
     assert.equal(one.status, 200)
     assert.equal(one.body.checkIn.kpiExtraction, undefined)
+    // What the bot did is shown, without Gemini's answer or the lease.
+    assert.deepEqual(one.body.checkIn.kpiBot, {
+      status: 'DONE',
+      created: 2,
+      skipped: [
+        {
+          speaker: 'Olu Owner',
+          title: 'Goal for Olu Owner',
+          reason: 'Quote not found in the transcript',
+        },
+      ],
+    })
     const list = await as(data.users.owner)('/api/checkins')
     assert.ok(list.body.checkIns.length)
     for (const listed of list.body.checkIns) {
       assert.equal(listed.kpiExtraction, undefined)
     }
+  })
+
+  it("shows why the bot skipped a meeting, but not Gemini's errors", async () => {
+    const skipped = await readyCheckIn({
+      transcript: {
+        status: 'READY',
+        text: '[00:00] Mo Mentor: Hello.',
+        entries: [{ speaker: 'Mo Mentor', text: 'Hello.' }],
+      },
+    })
+    await extractCheckInKpis()
+    setKpiExtractor(async () => {
+      throw new Error('Gemini said something internal')
+    })
+    const failed = await readyCheckIn({ googleEventId: 'event2' })
+    await extractCheckInKpis()
+    const as = id =>
+      request(app)
+        .get(`/api/checkins/${id}`)
+        .set('Cookie', cookieFor(data.users.mentor))
+    const one = (await as(skipped._id)).body.checkIn.kpiBot
+    assert.equal(one.status, 'SKIPPED')
+    assert.equal(
+      one.reason,
+      "None of the startup's founders spoke in this meeting"
+    )
+    const two = (await as(failed._id)).body.checkIn.kpiBot
+    assert.equal(two.status, 'FAILED')
+    assert.equal(two.reason, undefined)
   })
 
   it('names a quote spanning two lines as such', async () => {
@@ -776,5 +817,77 @@ describe('full review', () => {
     assert.equal(run.status, 'DONE')
     assert.equal(run.created, 1)
     assert.ok(morning)
+  })
+})
+
+describe('second review', () => {
+  // A meeting where a guest without an account speaks too.
+  const withGuest = said => ({
+    transcript: {
+      status: 'READY',
+      text: [
+        '[00:00] Mo Mentor: Olu, ship the pricing page by the 8th please.',
+        `[00:10] Olu Owner: ${said}`,
+        '[00:20] Rahul (Guest): I will intro you to two angel investors.',
+      ].join('\n'),
+      entries: [
+        {
+          speaker: 'Mo Mentor',
+          text: 'Olu, ship the pricing page by the 8th please.',
+        },
+        { speaker: 'Olu Owner', googleId: GOOGLE_IDS['Olu Owner'], text: said },
+        {
+          speaker: 'Rahul (Guest)',
+          text: 'I will intro you to two angel investors.',
+        },
+      ],
+    },
+  })
+
+  it('keeps two goals that quote the same sentence', async () => {
+    const said = 'We will ship the app and reach 200 users by the 8th.'
+    setKpiExtractor(
+      fake([
+        goal('Olu Owner', said, { title: 'Ship the app' }),
+        goal('Olu Owner', said, { title: 'Reach 200 users' }),
+      ])
+    )
+    const checkIn = await readyCheckIn(withGuest(said))
+    await extractCheckInKpis()
+    const run = (await CheckIn.findById(checkIn._id)).kpiExtraction
+    assert.equal(run.created, 2)
+    assert.deepEqual(
+      (await KPI.find({ scope: 'FOUNDER' }).distinct('title')).sort(),
+      ['Reach 200 users', 'Ship the app']
+    )
+  })
+
+  it("takes a goal from the founder's or the mentor's words, never a guest's", async () => {
+    setKpiExtractor(
+      fake([
+        goal('Olu Owner', 'ship the pricing page by the 8th please', {
+          title: 'Pricing page',
+        }),
+        goal('Olu Owner', 'I will intro you to two angel investors', {
+          title: 'Meet two angels',
+        }),
+      ])
+    )
+    const checkIn = await readyCheckIn(withGuest('Sure, will do that.'))
+    await extractCheckInKpis()
+    const run = (await CheckIn.findById(checkIn._id)).kpiExtraction
+    assert.equal(run.created, 1)
+    assert.deepEqual(await KPI.find({ scope: 'FOUNDER' }).distinct('title'), [
+      'Pricing page',
+    ])
+    assert.deepEqual(
+      run.skipped.map(s => [s.title, s.reason]),
+      [
+        [
+          'Meet two angels',
+          "Quote isn't from the startup's founders or mentors",
+        ],
+      ]
+    )
   })
 })

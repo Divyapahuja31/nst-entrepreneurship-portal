@@ -3,17 +3,19 @@ import { GoogleGenAI } from '@google/genai'
 import CheckIn from '../models/checkIn.js'
 import Founder from '../models/founder.js'
 import KPI from '../models/kpi.js'
+import User from '../models/user.js'
 import { DEFAULT_TIME_ZONE, zonedDate } from './programme.js'
 
 // Turns each READY check-in transcript into draft KPIs for the startup's
 // founders: Gemini lists the goals each speaker agreed to, and each speaker
-// is matched to a founder of the check-in's startup. A speaker signed in to
-// Meet is matched by their Google account (User.googleId), so a goal is
-// never given to the wrong founder by a lookalike name. Only a guest
-// speaker, or a founder who signed up without Google, is matched by name,
+// is matched to a founder of the check-in's startup. A founder with a Google
+// account on the portal (User.googleId) is only ever the speaker signed in
+// to Meet with it, so a goal is never given to the wrong founder by a
+// lookalike name. Only a founder with no Google account is matched by name,
 // then by the username of their email (so "vansh K" is
-// vansh.k@adypu.edu.in). A group session asks Gemini once and shares the
-// goals out among its startups.
+// vansh.k@adypu.edu.in). Each goal must quote a line said by one of the
+// startup's founders or the people running the meeting. A group session
+// asks Gemini once and shares the goals out among its startups.
 //
 // utils/jobs.js runs it after the transcript poll; tests call
 // extractCheckInKpis directly with a fake extractor (setKpiExtractor).
@@ -253,17 +255,23 @@ const isNamed = (founder, speaker, accounts) =>
 
 // Meet transcripts often have two spaces in a row where Gemini copies one,
 // so quotes are compared with spacing evened out.
-const evenSpaces = value => value.replace(/\s+/gu, ' ').trim()
+const evenSpaces = value =>
+  String(value ?? '')
+    .replace(/\s+/gu, ' ')
+    .trim()
 
-// The speakers of the transcript lines ("[12:05] Name: text") that contain
-// the quote.
-const speakersOf = (quote, text) => {
+// The transcript entries whose text contains the quote.
+const entriesWith = (quote, entries) => {
   const wanted = evenSpaces(quote)
-  return text
-    .split('\n')
-    .filter(line => evenSpaces(line).includes(wanted))
-    .map(line => line.replace(/^\[\d+:\d{2}\] /u, '').split(': ')[0])
+  return (entries || []).filter(entry =>
+    evenSpaces(entry.text).includes(wanted)
+  )
 }
+
+// Whether one of `people` said this entry, judged by the entry's own
+// account, so a guest who shares a founder's name isn't taken for them.
+const saidBy = (entry, people) =>
+  Boolean(matchSpeaker(entry.speaker, people, speakerAccounts([entry])).founder)
 
 const isDate = value =>
   /^\d{4}-\d{2}-\d{2}$/u.test(value) &&
@@ -305,23 +313,25 @@ const keepable = kpis =>
   )
 
 // Why a goal's quote doesn't back it, or null.
-function quoteProblem(quote, { text, otherFounders, accounts }) {
+function quoteProblem(quote, { entries, founders, staff, otherFounders }) {
   if (quote.trim().length < MIN_QUOTE_LENGTH) {
     return 'Quote too short to back a KPI'
   }
   if (quote.includes('\n')) {
     return 'Quote must come from one line of the transcript'
   }
-  const speakers = speakersOf(quote, text)
-  if (!speakers.length) {
+  const lines = entriesWith(quote, entries)
+  if (!lines.length) {
     return 'Quote not found in the transcript'
   }
-  // In a group session another startup's founder may say something similar;
-  // their words are never this startup's KPI. The mentor's words are fine.
-  const othersOnly = speakers.every(speaker =>
-    otherFounders.some(founder => isNamed(founder, speaker, accounts))
-  )
-  return othersOnly ? "Quote is from another startup's founder" : null
+  // A goal is the founders' own words, or set for them by whoever runs the
+  // meeting; never a guest's, nor (in a group session) another startup's.
+  if (lines.some(entry => saidBy(entry, [...founders, ...staff]))) {
+    return null
+  }
+  return lines.every(entry => saidBy(entry, otherFounders))
+    ? "Quote is from another startup's founder"
+    : "Quote isn't from the startup's founders or mentors"
 }
 
 // Why a goal can't be saved for its founder, or null.
@@ -343,9 +353,12 @@ function problemWith(kpi, context) {
 }
 
 const kpiDocument = (kpi, founder, checkIn, meetingDate) => ({
-  // The same check-in, founder and quote always give the same id, so a
-  // retry never adds a KPI twice.
-  _id: sha256(`${checkIn._id}:${founder.user._id}:${kpi.quote}`).slice(0, 24),
+  // The same check-in, founder, quote and title always give the same id, so
+  // a retry (which reuses Gemini's stored answer) never adds a KPI twice,
+  // while two goals from one sentence stay two.
+  _id: sha256(
+    `${checkIn._id}:${founder.user._id}:${kpi.quote}:${kpi.title}`
+  ).slice(0, 24),
   title: kpi.title.trim(),
   description: `${kpi.description.trim() || kpi.title.trim()}\n\nMeeting: ${meetingDate}\nFrom the transcript: "${kpi.quote.trim()}"`,
   targetValue: kpi.targetValue.trim(),
@@ -379,10 +392,10 @@ const skippedGoal = (kpi, reason) => ({
 // including ones an earlier, interrupted try saved.
 const saveKpis = async (
   kpis,
-  { checkIn, founders, otherFounders, meetingDate }
+  { checkIn, founders, staff, otherFounders, meetingDate }
 ) => {
-  const text = checkIn.transcript.text
-  const accounts = speakerAccounts(checkIn.transcript.entries)
+  const entries = checkIn.transcript.entries
+  const accounts = speakerAccounts(entries)
   const skipped = []
   const saved = new Set()
   for (const kpi of kpis) {
@@ -396,8 +409,10 @@ const saveKpis = async (
     ) {
       continue
     }
+    // Who said it first: that is what a mentor can act on.
     const reason =
-      problemWith(kpi, { text, otherFounders, accounts }) || match.reason
+      match.reason ||
+      problemWith(kpi, { entries, founders, staff, otherFounders })
     if (reason) {
       skipped.push(skippedGoal(kpi, reason))
       continue
@@ -451,6 +466,18 @@ const sameMeeting = checkIn =>
         status: { $ne: 'CANCELLED' },
       }
     : { _id: checkIn._id }
+
+// The people running the meeting (its mentors, and the admin hosting a
+// programme session), shaped like founders for matchSpeaker.
+const staffOf = async checkIn => {
+  const ids = [checkIn.mentor, ...(checkIn.staff || []), checkIn.host].filter(
+    Boolean
+  )
+  const users = await User.find({ _id: { $in: ids } })
+    .select('username email googleId')
+    .lean()
+  return users.map(user => ({ user }))
+}
 
 const activeFounders = filter =>
   Founder.find({ ...filter, status: 'ACTIVE' })
@@ -546,6 +573,7 @@ const runOne = async checkIn => {
   const result = await saveKpis(kpis, {
     checkIn,
     founders,
+    staff: await staffOf(checkIn),
     otherFounders,
     meetingDate,
   })

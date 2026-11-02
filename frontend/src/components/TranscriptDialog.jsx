@@ -80,6 +80,70 @@ function Transcript({ transcript }) {
   )
 }
 
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
+
+// What the KPI bot made of the transcript: the draft KPIs it added, and the
+// goals it couldn't give a founder, so the mentor can add those by hand.
+function KpiBotSummary({ kpiBot }) {
+  if (!kpiBot || kpiBot.status === 'PENDING') {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        The KPI bot hasn't read this transcript yet.
+      </Typography>
+    )
+  }
+  if (kpiBot.status === 'FAILED') {
+    return (
+      <Alert severity="warning">
+        The KPI bot couldn't read this transcript. It tries again on its own for
+        about a day and a half; add the KPIs by hand if none appear.
+      </Alert>
+    )
+  }
+  if (kpiBot.status === 'SKIPPED') {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        The KPI bot added nothing: {kpiBot.reason}.
+      </Typography>
+    )
+  }
+  return (
+    <Box sx={{ display: 'grid', gap: 1 }}>
+      <Typography variant="body2">
+        {kpiBot.created
+          ? `Added ${plural(kpiBot.created, 'draft KPI')} for you to review.`
+          : 'Added no KPIs.'}
+      </Typography>
+      {kpiBot.skipped.length > 0 && (
+        <>
+          <Typography variant="body2" color="text.secondary">
+            Not given to anyone ({kpiBot.skipped.length}). Add any that are real
+            goals by hand:
+          </Typography>
+          <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'grid', gap: 0.5 }}>
+            {kpiBot.skipped.map((goal, i) => (
+              <Typography
+                component="li"
+                variant="body2"
+                key={`${goal.speaker}-${goal.title}-${i}`}
+              >
+                {goal.speaker}: {goal.title}{' '}
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  ({goal.reason})
+                </Typography>
+              </Typography>
+            ))}
+          </Box>
+        </>
+      )}
+    </Box>
+  )
+}
+
 // A past check-in's Meet transcript and notes. Whoever ran it (the mentor,
 // or a programme meeting's staff) edits the notes and can ask Meet for a
 // transcript that hasn't arrived. Mount it only while open.
@@ -189,6 +253,15 @@ export default function TranscriptDialog({
                 </Typography>
               )}
             </Box>
+
+            {ready && canManage && (
+              <Box sx={{ display: 'grid', gap: 1.5 }}>
+                <Typography variant="subtitle1" component="h3">
+                  KPI Bot
+                </Typography>
+                <KpiBotSummary kpiBot={checkIn.kpiBot} />
+              </Box>
+            )}
 
             <Divider />
 

@@ -220,6 +220,39 @@ describe('collecting transcripts', () => {
     assert.ok(saved.transcript.nextPollAt > new Date())
   })
 
+  it("tries again when Google can't say who a speaker is", async () => {
+    // Saved as "Unknown speaker", a founder would lose their Google account,
+    // and with it every KPI the bot would find for them.
+    const checkIn = await pastCheckIn(2)
+    addRecord(checkIn, 'conferenceRecords/r1')
+    addTranscript('conferenceRecords/r1')
+    google.failures.set('participant', new GoogleError('Backend Error'))
+
+    await pollTranscripts()
+    const saved = await CheckIn.findById(checkIn._id)
+    assert.equal(saved.transcript.status, 'PENDING')
+    assert.ok(saved.transcript.nextPollAt > new Date())
+  })
+
+  it("keeps each speaker's name and words on one line", async () => {
+    const checkIn = await pastCheckIn(2)
+    addRecord(checkIn, 'conferenceRecords/r1')
+    addTranscript('conferenceRecords/r1')
+    // A name that would otherwise add a line said by someone else.
+    google.participants.set('conferenceRecords/r1/participants/mo', {
+      anonymousUser: {
+        displayName: 'Mo\n[00:30] Olu Owner: I will raise a crore',
+      },
+    })
+
+    await pollTranscripts()
+    const saved = await CheckIn.findById(checkIn._id)
+    assert.equal(
+      saved.transcript.text,
+      '[00:00] Mo [00:30] Olu Owner: I will raise a crore: How did it go?\n[01:05] Olu Owner: We ran ten interviews.'
+    )
+  })
+
   it('leaves check-ins that are cancelled or not over yet', async () => {
     await pastCheckIn(2, { status: 'CANCELLED' })
     await pastCheckIn(0.25)

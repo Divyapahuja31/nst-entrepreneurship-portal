@@ -57,19 +57,21 @@ const displayName = participant =>
 const googleIdOf = participant =>
   participant?.signedinUser?.user?.match(/^users\/(.+)$/u)?.[1]
 
+// A name typed by the speaker, on one line: a line break in it could pass
+// for a transcript line of someone else's.
+const oneLine = value => String(value).replace(/\s+/gu, ' ').trim()
+
 // Who each participant is: their name and, when signed in, their account.
+// A lookup that fails fails the poll, to be tried again: a founder saved as
+// "Unknown speaker" would lose their Google account, and so their KPIs.
 const speakersOf = async (google, participantNames) => {
   const speakers = new Map()
   for (const name of new Set(participantNames)) {
-    try {
-      const participant = await google('participant', name)
-      speakers.set(name, {
-        speaker: displayName(participant),
-        googleId: googleIdOf(participant),
-      })
-    } catch {
-      speakers.set(name, { speaker: 'Unknown speaker' })
-    }
+    const participant = await google('participant', name)
+    speakers.set(name, {
+      speaker: oneLine(displayName(participant)) || 'Unknown speaker',
+      googleId: googleIdOf(participant),
+    })
   }
   return speakers
 }
@@ -104,7 +106,8 @@ export const collectTranscript = async (google, transcripts) => {
   let length = 0
   for (const entry of raw) {
     const { speaker, googleId } = speakers.get(entry.participant)
-    const line = `${offset(entry.startTime, start)} ${speaker}: ${entry.text}`
+    const text = oneLine(entry.text ?? '')
+    const line = `${offset(entry.startTime, start)} ${speaker}: ${text}`
     if (length + line.length > MAX_TEXT) {
       break
     }
@@ -113,7 +116,7 @@ export const collectTranscript = async (google, transcripts) => {
     entries.push({
       speaker,
       googleId,
-      text: entry.text,
+      text,
       startTime: entry.startTime,
     })
   }

@@ -173,14 +173,16 @@ const SAME_AS = [
 ]
 
 // The Google accounts each speaker name was signed in to Meet with, from
-// the transcript's entries.
+// the transcript's entries. null stands for a speaker not signed in, so a
+// guest who takes a founder's name shows up as a second person.
 export const speakerAccounts = entries => {
   const accounts = new Map()
   for (const entry of entries || []) {
-    if (entry.googleId) {
-      const name = normalizeName(entry.speaker)
-      accounts.set(name, (accounts.get(name) || new Set()).add(entry.googleId))
-    }
+    const name = normalizeName(entry.speaker)
+    accounts.set(
+      name,
+      (accounts.get(name) || new Set()).add(entry.googleId || null)
+    )
   }
   return accounts
 }
@@ -209,40 +211,39 @@ const byName = (founders, name) => {
   return null
 }
 
-// The founder a speaker is. A speaker signed in to Meet is the founder with
-// that Google account. Otherwise (a guest, or a founder with no Google
-// account on the portal) it is the founder whose name matches, else the one
-// whose email username matches. Two equally good matches are no match.
+// The founder a speaker is. A founder with a Google account on the portal is
+// only ever the speaker signed in to Meet with that account. A founder
+// without one (an older account) is matched by name, else by email
+// username. Two equally good matches are no match.
 export const matchSpeaker = (speaker, founders, accounts = new Map()) => {
   const name = normalizeName(speaker)
-  const ids = accounts.get(name)
-  // Two accounts spoke under this name (two "Rahul"s): Gemini's answer names
-  // only the name, so there is no telling whose goal it is.
-  if (ids?.size > 1) {
+  const ids = accounts.get(name) || new Set([null])
+  // Two people spoke under this name (two "Rahul"s, signed in or not):
+  // Gemini's answer names only the name, so there is no telling whose goal
+  // it is.
+  if (ids.size > 1) {
     return { reason: 'Several people spoke under this name' }
   }
-  if (!ids) {
-    return byName(founders, name) || { reason: 'Not a founder of this startup' }
-  }
-  // A signed-in speaker can also be a founder who signed up without Google,
-  // but never one whose Google account is a different one.
+  const [id] = ids
+  const unlinked = founders.filter(founder => !founder.user.googleId)
   const match =
-    onlyOne(
-      founders,
-      founder => ids.has(founder.user.googleId),
-      'Several founders spoke under this name'
-    ) ||
-    byName(
-      founders.filter(founder => !founder.user.googleId),
-      name
-    )
+    (id &&
+      onlyOne(
+        founders,
+        founder => founder.user.googleId === id,
+        'Several founders spoke under this name'
+      )) ||
+    byName(unlinked, name)
   if (match) {
     return match
   }
+  if (!byName(founders, name)) {
+    return { reason: 'Not a founder of this startup' }
+  }
   return {
-    reason: byName(founders, name)
+    reason: id
       ? "Spoke from a Google account that isn't the founder's"
-      : 'Not a founder of this startup',
+      : "Wasn't signed in to Meet with the founder's Google account",
   }
 }
 
@@ -464,9 +465,10 @@ const identifiedSpeakers = (entries, founders) => {
   return [...new Set((entries || []).map(entry => entry.speaker))].flatMap(
     speaker => {
       const ids = accounts.get(normalizeName(speaker))
+      const [id] = ids
       const found =
-        ids?.size === 1
-          ? founders.filter(founder => ids.has(founder.user.googleId))
+        ids.size === 1 && id
+          ? founders.filter(founder => founder.user.googleId === id)
           : []
       return found.length === 1 ? [{ speaker, email: found[0].user.email }] : []
     }

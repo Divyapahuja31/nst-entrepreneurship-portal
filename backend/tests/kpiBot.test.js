@@ -29,10 +29,21 @@ const TEXT = [
   '[00:30] Oz Outsider: We will close two pilots.',
 ].join('\n')
 
-const ENTRIES = TEXT.split('\n').map(line => ({
-  speaker: line.slice(8, line.indexOf(': ')),
-  text: line.slice(line.indexOf(': ') + 2),
-}))
+// Signed in to Meet with the Google accounts helpers.js gives students;
+// Vansh has none on the portal, so he is matched by name.
+const GOOGLE_IDS = {
+  'Olu Owner': 'google-olu@adypu.edu.in',
+  'Oz Outsider': 'google-oz@adypu.edu.in',
+}
+
+const ENTRIES = TEXT.split('\n').map(line => {
+  const speaker = line.slice(8, line.indexOf(': '))
+  return {
+    speaker,
+    ...(GOOGLE_IDS[speaker] && { googleId: GOOGLE_IDS[speaker] }),
+    text: line.slice(line.indexOf(': ') + 2),
+  }
+})
 
 const goal = (speaker, quote, extra = {}) => ({
   speaker,
@@ -99,7 +110,11 @@ describe('matching speakers to founders', () => {
       .populate('user', 'username email googleId')
       .lean()
 
-  it('matches by name, then by email username', async () => {
+  it('matches a founder without a Google account by name, then by email username', async () => {
+    await User.updateOne(
+      { _id: data.users.owner._id },
+      { $unset: { googleId: 1 } }
+    )
     const alpha = await founders()
     assert.equal(
       matchSpeaker('olu  owner', alpha).founder.user.username,
@@ -133,10 +148,28 @@ describe('matching speakers to founders', () => {
       matchSpeaker('Olu Owner', alpha, accounts).reason,
       "Spoke from a Google account that isn't the founder's"
     )
-    // A guest (no account) is still matched by name.
+    // A guest (no account) using Olu's name isn't Olu: Olu has a Google
+    // account, so only that account is Olu.
     assert.equal(
-      matchSpeaker('Olu Owner', alpha).founder.user.username,
-      'Olu Owner'
+      matchSpeaker(
+        'Olu Owner',
+        alpha,
+        speakerAccounts([{ speaker: 'Olu Owner' }])
+      ).reason,
+      "Wasn't signed in to Meet with the founder's Google account"
+    )
+  })
+
+  it('wont pick between a founder and a guest who used the same name', async () => {
+    await User.updateOne({ _id: data.users.owner._id }, { googleId: 'olu-id' })
+    const alpha = await founders()
+    const accounts = speakerAccounts([
+      { speaker: 'Olu Owner', googleId: 'olu-id' },
+      { speaker: 'Olu Owner' },
+    ])
+    assert.equal(
+      matchSpeaker('Olu Owner', alpha, accounts).reason,
+      'Several people spoke under this name'
     )
   })
 
@@ -679,7 +712,13 @@ describe('full review', () => {
       transcript: {
         status: 'READY',
         text,
-        entries: [{ speaker: 'Olu Owner', text: text.slice(19) }],
+        entries: [
+          {
+            speaker: 'Olu Owner',
+            googleId: GOOGLE_IDS['Olu Owner'],
+            text: text.slice(19),
+          },
+        ],
       },
     })
     await extractCheckInKpis()

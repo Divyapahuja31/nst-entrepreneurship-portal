@@ -12,9 +12,10 @@ const evidenceLinkSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    // The checklist item this link is evidence for. Extra links a student
+    // adds outside the checklist have none.
     check: {
       type: String,
-      required: true,
       trim: true,
     },
     self_confirmed: {

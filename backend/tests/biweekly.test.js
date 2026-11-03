@@ -51,6 +51,26 @@ describe('bi-weekly reports belong to the startup', () => {
     )
   })
 
+  it('saves extra evidence links that are not on the checklist', async () => {
+    const res = await as(data.users.owner).post('/api/biweekly/submission', {
+      cycle_number: 1,
+      progress_summary: 'Studied the funnel',
+      evidence_links: [
+        {
+          title: 'Interviews',
+          url: 'https://example.com/a',
+          check: 'interviews',
+        },
+        { title: 'Funnel sheet', url: 'https://example.com/funnel' },
+      ],
+    })
+    assert.equal(res.status, 200)
+    assert.deepEqual(
+      res.body.submission.evidence_links.map(link => link.check),
+      ['interviews', undefined]
+    )
+  })
+
   it("staff see a founder's startup reports from the founder page", async () => {
     const { owner, board } = data.users
     await as(owner).post('/api/biweekly/submission', {

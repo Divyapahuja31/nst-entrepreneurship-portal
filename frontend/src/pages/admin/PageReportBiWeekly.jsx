@@ -10,6 +10,7 @@ import {
 import toError from '../../api/toError'
 
 import { CYCLES, CYCLE_DAYS } from '@nst/shared/biweeklyCycles.js'
+import { isWebUrl } from '@nst/shared/evidenceLinks.js'
 import {
   PILLAR_WEIGHTS,
   evaluationStatus,
@@ -197,15 +198,6 @@ const CHECKLISTS = [
     ],
   },
 ]
-
-// Evidence URLs are typed by students; only web addresses become links.
-const isWebUrl = value => {
-  try {
-    return ['http:', 'https:'].includes(new URL(value).protocol)
-  } catch {
-    return false
-  }
-}
 
 function computeCycles(startISO) {
   const start = new Date(startISO)

@@ -183,6 +183,12 @@ export const submitBiWeeklyCycle = async (req, res) => {
     })
   } catch (err) {
     console.error('Submit biweekly cycle error:', err)
+    if (err.name === 'ValidationError') {
+      const fields = Object.keys(err.errors ?? {}).join(', ')
+      return res
+        .status(400)
+        .json({ error: `Could not save the report: check ${fields}` })
+    }
     return res.status(500).json({ error: 'Failed to save submission' })
   }
 }

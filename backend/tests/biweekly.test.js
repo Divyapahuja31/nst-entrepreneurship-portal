@@ -71,6 +71,21 @@ describe('bi-weekly reports belong to the startup', () => {
     )
   })
 
+  it('saves a report with an untitled link and a blank row', async () => {
+    const res = await as(data.users.owner).post('/api/biweekly/submission', {
+      cycle_number: 1,
+      evidence_links: [
+        { title: '', url: '' },
+        { title: '', url: 'https://example.com/deck' },
+      ],
+    })
+    assert.equal(res.status, 200)
+    assert.deepEqual(
+      res.body.submission.evidence_links.map(link => link.title),
+      ['https://example.com/deck']
+    )
+  })
+
   it("staff see a founder's startup reports from the founder page", async () => {
     const { owner, board } = data.users
     await as(owner).post('/api/biweekly/submission', {

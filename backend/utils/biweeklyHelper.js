@@ -1,6 +1,10 @@
 import mongoose from 'mongoose'
 import { isStaff, isStudent } from '@nst/shared/permissions.js'
 import {
+  MAX_EVIDENCE_LINKS,
+  cleanEvidenceLinks,
+} from '@nst/shared/evidenceLinks.js'
+import {
   CYCLES,
   cycleDeadline,
   cycleStart,
@@ -44,39 +48,7 @@ export const validateCycleNumber = n => {
   return Number.isInteger(num) && num >= 1 && num <= CYCLES ? num : null
 }
 
-const MAX_EVIDENCE_LINKS = 20
 const DAY_MS = 24 * 60 * 60 * 1000
-
-// Evidence URLs are typed by students and shown to faculty as links, so only
-// web addresses are kept: no javascript:, data: or other schemes.
-const isWebUrl = value => {
-  try {
-    return ['http:', 'https:'].includes(new URL(value).protocol)
-  } catch {
-    return false
-  }
-}
-
-const isValidEvidenceLink = link =>
-  link !== null &&
-  typeof link === 'object' &&
-  (link.url === undefined ||
-    link.url === '' ||
-    (typeof link.url === 'string' && isWebUrl(link.url.trim())))
-
-// Returns an error message, or null when the evidence links are acceptable.
-export const validateEvidenceLinks = links => {
-  if (links === undefined) {
-    return null
-  }
-  if (!Array.isArray(links) || links.length > MAX_EVIDENCE_LINKS) {
-    return `Add at most ${MAX_EVIDENCE_LINKS} evidence links`
-  }
-  if (!links.every(isValidEvidenceLink)) {
-    return 'Evidence links must be web addresses starting with http:// or https://'
-  }
-  return null
-}
 
 // Cycles open every 14 days from the venture's creation, as on the bi-weekly
 // page. A day of slack covers the student's time zone.
@@ -156,9 +128,12 @@ export const parseStudentSubmission = body => {
   }
 
   const picked = pickStudentSubmissionFields(body)
-  const linkError = validateEvidenceLinks(picked.evidence_links)
-  if (linkError) {
-    return { error: linkError }
+  const cleanedLinks = cleanEvidenceLinks(picked.evidence_links)
+  if (cleanedLinks.error) {
+    return { error: cleanedLinks.error }
+  }
+  if (cleanedLinks.links !== undefined) {
+    picked.evidence_links = cleanedLinks.links
   }
   const { data, error } = cleanNumbers(picked)
   if (error) {

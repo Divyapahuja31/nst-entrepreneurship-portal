@@ -8,6 +8,7 @@
     "./permissions.js": "./permissions.js",
     "./biweeklyCycles.js": "./biweeklyCycles.js",
     "./evidenceFiles.js": "./evidenceFiles.js",
+    "./evidenceLinks.js": "./evidenceLinks.js",
     "./evaluationScore.js": "./evaluationScore.js"
   },
   "scripts": {

@@ -104,6 +104,14 @@ npm run migrate:mentors -w backend
 
 It keeps the old `mentor` field, so a server still on the previous version keeps working. It's safe to run again.
 
+A KPI due date picked on the form used to be saved as midnight UTC, so the KPI closed at 5:30 am India time on its due day. New ones are due at the end of the day in India. Move the old ones there once:
+
+```sh
+npm run migrate:kpi-due-dates -w backend
+```
+
+It only moves due dates at exactly midnight UTC, so it's safe to run again.
+
 ## Bi-weekly reports
 
 A startup's report for each 14-day cycle is due 3 days after the cycle's last day. The API enforces the same rules as the page:

@@ -21,6 +21,7 @@
     "migrate:biweekly": "node scripts/migrate-biweekly.js",
     "migrate:email": "node scripts/migrate-email-notifications.js",
     "migrate:mentors": "node scripts/migrate-mentors.js",
+    "migrate:kpi-due-dates": "node scripts/migrate-kpi-due-dates.js",
     "make-admin": "node scripts/make-admin.js",
     "demo:kpi-bot": "node scripts/demo-kpi-bot.js"
   },

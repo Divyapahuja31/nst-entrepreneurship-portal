@@ -4,6 +4,7 @@ import request from 'supertest'
 
 import app from '../app.js'
 import KPI from '../models/kpi.js'
+import { migrateKpiDueDates } from '../utils/kpiDueDateMigration.js'
 import { cookieFor, seed, startDatabase, stopDatabase } from './helpers.js'
 
 let data
@@ -85,5 +86,51 @@ describe('due dates', () => {
     )
     assert.equal(edited.status, 400)
     assert.equal(edited.body.message, 'Choose a valid due date')
+  })
+
+  it('a picked day is due at its end in India, not at UTC midnight', async () => {
+    const created = await as(data.users.owner).post('/api/kpis', {
+      title: 'Ship it',
+      description: 'x',
+      venture: String(data.ventures.alpha._id),
+      dueDate: '2026-11-08',
+    })
+    assert.equal(created.status, 201)
+    // 11:59:59 pm on 8 November in India.
+    assert.equal(created.body.data.dueDate, '2026-11-08T18:29:59.999Z')
+
+    const edited = await as(data.users.owner).put(
+      `/api/kpis/${data.kpis.alphaDraft._id}`,
+      { dueDate: '2026-12-01' }
+    )
+    assert.equal(edited.status, 200)
+    assert.equal(edited.body.data.dueDate, '2026-12-01T18:29:59.999Z')
+  })
+
+  it('moves the KPIs saved at UTC midnight to the end of their day, once', async () => {
+    const old = await KPI.create({
+      title: 'Old',
+      description: 'x',
+      venture: data.ventures.alpha._id,
+      createdBy: data.users.owner._id,
+      dueDate: new Date('2026-11-08T00:00:00Z'),
+    })
+    const timed = await KPI.create({
+      title: 'Timed',
+      description: 'x',
+      venture: data.ventures.alpha._id,
+      createdBy: data.users.owner._id,
+      dueDate: new Date('2026-11-08T12:00:00Z'),
+    })
+    assert.ok((await migrateKpiDueDates()) >= 1)
+    assert.equal(
+      (await KPI.findById(old._id)).dueDate.toISOString(),
+      '2026-11-08T18:29:59.999Z'
+    )
+    assert.equal(
+      (await KPI.findById(timed._id)).dueDate.toISOString(),
+      '2026-11-08T12:00:00.000Z'
+    )
+    assert.equal(await migrateKpiDueDates(), 0)
   })
 })

@@ -112,6 +112,14 @@ npm run migrate:kpi-due-dates -w backend
 
 It only moves due dates at exactly midnight UTC, so it's safe to run again.
 
+A student who left their startup can now propose another, but older databases still have an index that allowed one approved proposal per student. Drop it once:
+
+```sh
+npm run migrate:proposal-index -w backend
+```
+
+It's safe to run again.
+
 ## Bi-weekly reports
 
 A startup's report for each 14-day cycle is due 3 days after the cycle's last day. The API enforces the same rules as the page:

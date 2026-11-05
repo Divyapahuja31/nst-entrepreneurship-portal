@@ -180,7 +180,8 @@ const joinRequestReviewError = async (user, joinRequest) => {
 }
 
 export const reviewJoinRequest = async (req, res) => {
-  let approvedFounderAdded = false
+  // What approving changed, to undo if the review can't be saved.
+  let approval = null
   let joinRequest = null
 
   try {
@@ -206,13 +207,11 @@ export const reviewJoinRequest = async (req, res) => {
     }
 
     if (status === 'APPROVED') {
-      const approvalError = await handleJoinRequestApproval(joinRequest)
-      if (approvalError) {
-        return res
-          .status(approvalError.status)
-          .json({ error: approvalError.error })
+      const approved = await handleJoinRequestApproval(joinRequest)
+      if (approved.error) {
+        return res.status(approved.status).json({ error: approved.error })
       }
-      approvedFounderAdded = true
+      approval = approved
     }
 
     const updatedJoinRequest = await VentureJoinRequest.findOneAndUpdate(
@@ -222,7 +221,7 @@ export const reviewJoinRequest = async (req, res) => {
     )
 
     if (!updatedJoinRequest) {
-      await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
+      await rollbackJoinRequestApproval(joinRequest, approval)
       return res.status(409).json({
         error: 'This join request has already been reviewed',
       })
@@ -240,7 +239,7 @@ export const reviewJoinRequest = async (req, res) => {
 
     return res.status(200).json({ joinRequest: updatedJoinRequest })
   } catch (error) {
-    await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
+    await rollbackJoinRequestApproval(joinRequest, approval)
     console.error('Error reviewing join request:', error)
 
     return res.status(500).json({

@@ -6,7 +6,16 @@ import app from '../app.js'
 import Batch from '../models/batch.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
-import VentureProposal from '../models/ventureProposal.js'
+import VentureProposal, {
+  OLD_APPROVED_INDEX,
+} from '../models/ventureProposal.js'
+import Founder from '../models/founder.js'
+import {
+  handleJoinRequestApproval,
+  rollbackJoinRequestApproval,
+} from '../utils/applicationHelper.js'
+import { deactivateFounder } from '../utils/founderHelper.js'
+import { dropOldApprovedProposalIndex } from '../utils/proposalIndexMigration.js'
 import { cookieFor, seed, startDatabase, stopDatabase } from './helpers.js'
 
 let data
@@ -132,5 +141,91 @@ describe('startup names', () => {
       'A startup with this name already exists'
     )
     assert.equal(await User.countDocuments({ email: 'fay@adypu.edu.in' }), 0)
+  })
+})
+
+describe('proposing again', () => {
+  // Olu founded Alpha from an approved proposal.
+  const approved = () =>
+    VentureProposal.create({
+      ...proposal({ startupName: 'Alpha' }),
+      industry: data.industry._id,
+      campus: data.campus._id,
+      submittedBy: data.users.owner._id,
+      venture: data.ventures.alpha._id,
+      status: 'APPROVED',
+    })
+
+  it('a student who left their startup may propose another', async () => {
+    await approved()
+    const inStartup = await as(data.users.owner).post('/api/proposals', {
+      ...proposal(),
+      campus: String(data.campus._id),
+    })
+    assert.equal(inStartup.status, 409)
+
+    await deactivateFounder(data.users.owner._id)
+    const res = await as(data.users.owner).post('/api/proposals', {
+      ...proposal(),
+      campus: String(data.campus._id),
+    })
+    assert.equal(res.status, 201)
+    const mine = await request(app)
+      .get('/api/proposals/me')
+      .set('Cookie', cookieFor(data.users.owner))
+    assert.equal(mine.body.proposal.startupName, 'Gamma')
+  })
+
+  it('drops the old database rule of one approved proposal ever', async () => {
+    await VentureProposal.collection.createIndex(
+      { submittedBy: 1 },
+      {
+        unique: true,
+        partialFilterExpression: { status: 'APPROVED' },
+        name: OLD_APPROVED_INDEX,
+      }
+    )
+    assert.equal(await dropOldApprovedProposalIndex(), true)
+    assert.equal(await dropOldApprovedProposalIndex(), false)
+  })
+})
+
+describe('undoing a join approval', () => {
+  it("puts a rejoining founder's old record back, not deletes it", async () => {
+    const { applicant } = data.users
+    const venture = data.ventures.alpha._id
+    const joinedAt = new Date('2026-01-05T00:00:00Z')
+    const leftAt = new Date('2026-03-01T00:00:00Z')
+    await Founder.create({
+      user: applicant._id,
+      venture,
+      status: 'INACTIVE',
+      joinedAt,
+      leftAt,
+    })
+    const request = { requestedBy: applicant._id, venture }
+
+    const approval = await handleJoinRequestApproval(request)
+    assert.equal(
+      (await Founder.findOne({ user: applicant._id })).status,
+      'ACTIVE'
+    )
+    await rollbackJoinRequestApproval(request, approval)
+
+    const back = await Founder.findOne({ user: applicant._id, venture })
+    assert.equal(back.status, 'INACTIVE')
+    assert.equal(back.joinedAt.toISOString(), joinedAt.toISOString())
+    assert.equal(back.leftAt.toISOString(), leftAt.toISOString())
+  })
+
+  it("removes a new founder's record", async () => {
+    const { applicant } = data.users
+    const request = {
+      requestedBy: applicant._id,
+      venture: data.ventures.alpha._id,
+    }
+    const approval = await handleJoinRequestApproval(request)
+    await rollbackJoinRequestApproval(request, approval)
+    assert.equal(await Founder.exists({ user: applicant._id }), null)
   })
 })

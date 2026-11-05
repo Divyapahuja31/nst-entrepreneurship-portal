@@ -182,14 +182,10 @@ ventureProposalSchema.index(
   }
 )
 
-ventureProposalSchema.index(
-  { submittedBy: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { status: 'APPROVED' },
-    name: 'unique_approved_proposal_per_user',
-  }
-)
+// A student may have several approved proposals over time: one for each
+// startup they founded and later left. Databases from before this keep the
+// old unique index until `npm run migrate:proposal-index` drops it.
+export const OLD_APPROVED_INDEX = 'unique_approved_proposal_per_user'
 
 export const modelName = 'VentureProposal'
 

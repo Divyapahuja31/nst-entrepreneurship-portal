@@ -79,7 +79,7 @@ describe('locking a KPI', () => {
     assert.equal(row.type, 'KPI_SCORED_STUDENT')
     assert.equal(row.status, 'SENT')
     assert.equal(String(row.recipientUser), String(data.users.owner._id))
-    assert.equal(row.dedupeKey, `kpi:${kpi._id}`)
+    assert.equal(row.dedupeKey, `kpi:${kpi._id}:score:${kpi.score}`)
   })
 
   it('sends nothing when the lock is refused', async () => {
@@ -95,6 +95,13 @@ describe('locking a KPI', () => {
     const [kpi] = await lockRun(90)
     await sendLockedKpiEmails(kpi._id)
     assert.equal(to(STUDENT).length, 1)
+  })
+
+  it('emails a grade the board corrected after unlocking', async () => {
+    const [kpi] = await lockRun(90)
+    await KPI.updateOne({ _id: kpi._id }, { $set: { score: 70 } })
+    await sendLockedKpiEmails(kpi._id)
+    assert.equal(to(STUDENT).length, 2)
   })
 
   it('emails nobody about a KPI that is not locked', async () => {

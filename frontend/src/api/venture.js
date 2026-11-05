@@ -1,6 +1,7 @@
 import { api } from './client'
 import { loadCheckIns } from './checkins'
 import toError from './toError'
+import { withBatch } from '../stores/batch'
 
 export const getVentures = async () => {
   const { data } = await api.get('/ventures')
@@ -47,8 +48,8 @@ export const ventureDetailLoader = async ({ params }) => {
 
 export const venturesPageLoader = async () => {
   const [ventures, applications, mentors] = await Promise.all([
-    api.get('/ventures'),
-    api.get('/admin/applications'),
+    withBatch(params => api.get('/ventures', { params })),
+    withBatch(params => api.get('/admin/applications', { params })),
     api.get('/admin/mentors'),
   ])
 

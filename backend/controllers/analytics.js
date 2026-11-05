@@ -5,7 +5,12 @@ import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
 import startupStage from '../models/enums/startupStage.js'
 import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
-import { scopedVentureIds, ventureScope } from '../utils/access.js'
+import {
+  byBatchStudent,
+  kpisInBatch,
+  listScope,
+  scopedVentureIds,
+} from '../utils/access.js'
 
 // Limits a query to the given startups; null means every startup.
 const inVentures = (ventureIds, field = 'venture') =>
@@ -177,26 +182,41 @@ const queueOf = async (Model, filter, dateField) => {
 
 // Work waiting on staff, so the overview starts with what to act on. Any
 // staff member may take a proposal; the rest is limited to their startups.
-const getActionQueue = async ventureIds => {
+// With a batch, only that batch's students' applications and KPIs count. A
+// join request counts for any startup the caller may see (ownVentureIds),
+// as on the Startups page: a student may ask to join another batch's team.
+const getActionQueue = async (
+  ventureIds,
+  { batchUserIds = null, ownVentureIds = ventureIds } = {}
+) => {
   const scoped = inVentures(ventureIds)
+  const scopedKpis = { ...scoped, ...kpisInBatch(batchUserIds) }
   const [proposals, joinRequests, kpisToGrade, missedDeadlines] =
     await Promise.all([
-      queueOf(VentureProposal, { status: 'PENDING' }, 'createdAt'),
+      queueOf(
+        VentureProposal,
+        { ...byBatchStudent('submittedBy', batchUserIds), status: 'PENDING' },
+        'createdAt'
+      ),
       queueOf(
         VentureJoinRequest,
-        { ...scoped, status: 'PENDING' },
+        {
+          ...inVentures(ownVentureIds),
+          ...byBatchStudent('requestedBy', batchUserIds),
+          status: 'PENDING',
+        },
         'createdAt'
       ),
       queueOf(
         KpiModel,
-        { ...scoped, status: 'WAITING_FOR_APPROVAL' },
+        { ...scopedKpis, status: 'WAITING_FOR_APPROVAL' },
         'submissionDate'
       ),
       // Past the due date and never submitted: the KPI is now locked.
       queueOf(
         KpiModel,
         {
-          ...scoped,
+          ...scopedKpis,
           status: { $in: ['DRAFT', 'REJECTED'] },
           dueDate: { $lt: new Date() },
         },
@@ -209,12 +229,21 @@ const getActionQueue = async ventureIds => {
 // Mentors get the same overview, of the startups assigned to them.
 const getOverview = async (req, res) => {
   try {
-    const ventureIds = await scopedVentureIds(req.user)
+    const { scope, ventureIds, batchId, batchUserIds, error } = await listScope(
+      req.user,
+      req.query
+    )
+    if (error) {
+      return res.status(400).json({ error })
+    }
+    const ownVentureIds = batchId
+      ? await scopedVentureIds(req.user)
+      : ventureIds
     const [{ ventures, students, ventureHealth: health }, kpi, actions] =
       await Promise.all([
-        getFounderPortfolioData(ventureScope(req.user)),
+        getFounderPortfolioData(scope, batchId),
         getMonthlyAverageKPIScores({ ventureIds }),
-        getActionQueue(ventureIds),
+        getActionQueue(ventureIds, { batchUserIds, ownVentureIds }),
       ])
     const checkIns = await getVentureCheckIns(ventures)
 

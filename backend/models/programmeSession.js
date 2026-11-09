@@ -25,6 +25,9 @@ const extraSchema = new mongoose.Schema(
     ],
     excludedFounders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    // Its meetings start with the KPI bot on (a bi-weekly session's always
+    // do; see kpiBotModeFor in utils/programmeScheduler.js).
+    kpiBot: { type: Boolean, default: false },
   },
   { _id: false }
 )

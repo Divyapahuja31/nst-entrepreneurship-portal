@@ -387,6 +387,8 @@ export const parseExtraSession = (body, timeZone, now = new Date()) => {
       endsAt: zonedDate(body.date, body.endTime, timeZone),
       extra: {
         title: typeof body.title === 'string' ? body.title.trim() : '',
+        // Whether its meetings start with the KPI bot on.
+        kpiBot: body.kpiBot === true,
         timeZone,
         mode: body.mode,
         ...numbersOf(body, SLOT_NUMBERS),

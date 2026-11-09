@@ -119,3 +119,14 @@ export const refreshTranscript = async id => {
     return withCode(err, 'Could not check for a transcript')
   }
 }
+
+// Adds the KPI bot to a meeting that isn't a bi-weekly session, so it
+// recommends KPIs from the transcript.
+export const addKpiBot = async id => {
+  try {
+    const { data } = await api.post(`/checkins/${id}/kpi-bot`)
+    return { checkIn: data.checkIn }
+  } catch (err) {
+    return toError(err, 'Could not add the KPI bot')
+  }
+}

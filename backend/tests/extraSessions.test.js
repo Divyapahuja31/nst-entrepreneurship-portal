@@ -122,6 +122,8 @@ describe('adding an extra session', () => {
     assert.equal(meetings[0].durationMinutes, 20)
     assert.equal(String(meetings[0].host), String(admin._id))
     assert.equal(String(meetings[0].mentor), String(board._id))
+    // The KPI bot isn't on unless it was asked for.
+    assert.equal(meetings[0].kpiBotMode, 'OFF')
 
     const [created] = callsTo('createEvent')
     assert.equal(created.token, `refresh-${admin.email}`)
@@ -146,6 +148,26 @@ describe('adding an extra session', () => {
     assert.ok(meetings.every(m => m.group))
     assert.equal(callsTo('createEvent').length, 1)
     assert.equal(callsTo('createEvent')[0].args[0].summary, 'Founder town hall')
+  })
+
+  it('turns the KPI bot on for its meetings when asked, and off again', async () => {
+    await saveProgramme()
+    const res = await as(data.users.admin).post(
+      URL,
+      extra({ mode: 'GROUP', title: 'Founder town hall', kpiBot: true })
+    )
+    assert.equal(res.status, 201)
+    const [session] = await extraSessions()
+    assert.equal(session.extra.kpiBot, true)
+    const modes = async () => (await meetingsOf(session)).map(m => m.kpiBotMode)
+    assert.deepEqual(await modes(), ['ON', 'ON'])
+
+    const off = await as(data.users.admin).put(
+      `${URL}/${session._id}`,
+      extra({ mode: 'GROUP', title: 'Founder town hall', kpiBot: false })
+    )
+    assert.equal(off.status, 200)
+    assert.deepEqual(await modes(), ['OFF', 'OFF'])
   })
 
   it('stays apart from the bi-weekly sessions', async () => {

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  addKpiBot,
   cancelCheckIn,
   createCheckIns,
   endCheckInSeries,
@@ -18,6 +19,7 @@ router.get('/:id', getCheckIn)
 router.patch('/:id', rescheduleCheckIn)
 router.put('/:id/notes', saveCheckInNotes)
 router.post('/:id/transcript/refresh', refreshTranscript)
+router.post('/:id/kpi-bot', addKpiBot)
 router.delete('/:id', cancelCheckIn)
 router.delete('/series/:seriesId', endCheckInSeries)
 

@@ -1,13 +1,17 @@
 import { createHash } from 'node:crypto'
 import { GoogleGenAI } from '@google/genai'
-import CheckIn from '../models/checkIn.js'
+import CheckIn, { KPI_BOT_RUNS } from '../models/checkIn.js'
 import Founder from '../models/founder.js'
 import KPI from '../models/kpi.js'
+import KpiRecommendation from '../models/kpiRecommendation.js'
 import User from '../models/user.js'
 import { DEFAULT_TIME_ZONE, zonedDate } from './programme.js'
 
-// Turns each READY check-in transcript into draft KPIs for the startup's
-// founders: Gemini lists the goals each speaker agreed to, and each speaker
+// Turns each READY check-in transcript into recommended KPIs for the
+// startup's founders (models/kpiRecommendation.js), which they or their
+// mentors accept or dismiss. It reads only meetings the bot is on for
+// (CheckIn.kpiBotMode): every bi-weekly session, and any other meeting
+// someone added it to. Gemini lists the goals each speaker agreed to, and each speaker
 // is matched to a founder of the check-in's startup. A founder with a Google
 // account on the portal (User.googleId) is only ever the speaker signed in
 // to Meet with it, so a goal is never given to the wrong founder by a
@@ -352,10 +356,11 @@ function problemWith(kpi, context) {
   return null
 }
 
-const kpiDocument = (kpi, founder, checkIn, meetingDate) => ({
+const recommendationDocument = (kpi, founder, checkIn, meetingDate) => ({
   // The same check-in, founder, quote and title always give the same id, so
-  // a retry (which reuses Gemini's stored answer) never adds a KPI twice,
-  // while two goals from one sentence stay two.
+  // a retry (which reuses Gemini's stored answer) never suggests a KPI
+  // twice, while two goals from one sentence stay two. Accepting it makes a
+  // KPI with this id too.
   _id: sha256(
     `${checkIn._id}:${founder.user._id}:${kpi.quote}:${kpi.title}`
   ).slice(0, 24),
@@ -367,15 +372,16 @@ const kpiDocument = (kpi, founder, checkIn, meetingDate) => ({
     kpi.dueDate && kpi.dueDate >= meetingDate
       ? endOfDay(kpi.dueDate, checkIn)
       : undefined,
-  scope: 'FOUNDER',
+  quote: kpi.quote.trim(),
+  meetingDate,
   founder: founder.user._id,
   venture: checkIn.venture,
-  createdBy: checkIn.mentor,
-  status: 'DRAFT',
+  checkIn: checkIn._id,
+  status: 'PENDING',
 })
 
-const isValidKpi = doc =>
-  new KPI(doc).validate().then(
+const isValidRecommendation = doc =>
+  new KpiRecommendation(doc).validate().then(
     () => true,
     () => false
   )
@@ -386,10 +392,10 @@ const skippedGoal = (kpi, reason) => ({
   reason,
 })
 
-// Adds this startup's KPIs from the meeting's goals and returns what it
-// could not place. Goals of another startup in a group session are left for
-// that startup's check-in. Counts every KPI of this check-in now saved,
-// including ones an earlier, interrupted try saved.
+// Recommends this startup's KPIs from the meeting's goals and returns what
+// it could not place. Goals of another startup in a group session are left
+// for that startup's check-in. Counts every recommendation of this check-in
+// now saved, including ones an earlier, interrupted try saved.
 const saveKpis = async (
   kpis,
   { checkIn, founders, staff, otherFounders, meetingDate }
@@ -417,12 +423,12 @@ const saveKpis = async (
       skipped.push(skippedGoal(kpi, reason))
       continue
     }
-    const doc = kpiDocument(kpi, match.founder, checkIn, meetingDate)
-    if (!(await isValidKpi(doc))) {
+    const doc = recommendationDocument(kpi, match.founder, checkIn, meetingDate)
+    if (!(await isValidRecommendation(doc))) {
       skipped.push(skippedGoal(kpi, 'Invalid KPI'))
       continue
     }
-    await KPI.updateOne(
+    await KpiRecommendation.updateOne(
       { _id: doc._id },
       { $setOnInsert: doc },
       { upsert: true, setDefaultsOnInsert: true }
@@ -432,7 +438,8 @@ const saveKpis = async (
   return { created: saved.size, skipped }
 }
 
-// What the bot writes under every KPI it makes (see kpiDocument).
+// What the bot writes under every KPI it recommends (see
+// recommendationDocument), which an accepted KPI keeps.
 const BOT_MARK = /\nFrom the transcript: "/u
 
 // KPIs record "Meeting: <date>", so a meeting whose KPIs were already added
@@ -458,7 +465,7 @@ const ownLease = checkIn => ({
 
 // The check-ins that share this meeting: a group session's startups, or
 // just this one.
-const sameMeeting = checkIn =>
+export const sameMeeting = checkIn =>
   checkIn.group
     ? {
         googleEventId: checkIn.googleEventId,
@@ -585,6 +592,7 @@ const claimNext = now =>
   CheckIn.findOneAndUpdate(
     {
       'transcript.status': 'READY',
+      kpiBotMode: { $in: KPI_BOT_RUNS },
       'kpiExtraction.status': { $nin: ['DONE', 'SKIPPED'] },
       'kpiExtraction.attempts': { $not: { $gte: MAX_ATTEMPTS } },
       $or: [

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import CheckIn from '../models/checkIn.js'
 import Founder from '../models/founder.js'
 import KPI from '../models/kpi.js'
+import KpiRecommendation from '../models/kpiRecommendation.js'
 import User from '../models/user.js'
 import {
   extractCheckInKpis,
@@ -72,9 +73,11 @@ const fake =
     return kpis
   }
 
-// A held check-in of Alpha's on 19 October with its transcript ready.
+// A held bi-weekly check-in of Alpha's on 19 October (so the bot is on)
+// with its transcript ready.
 const readyCheckIn = (fields = {}) =>
   CheckIn.create({
+    kpiBotMode: 'AUTO',
     venture: data.ventures.alpha._id,
     mentor: data.users.mentor._id,
     scheduledAt: new Date('2026-10-19T07:30:00Z'),
@@ -201,7 +204,7 @@ describe('extracting KPIs from transcripts', () => {
     ])
     assert.equal(calls[0].meetingDate, '2026-10-19')
 
-    const kpis = await KPI.find({ scope: 'FOUNDER' }).sort({ title: 1 }).lean()
+    const kpis = await KpiRecommendation.find().sort({ title: 1 }).lean()
     assert.deepEqual(
       kpis.map(k => [k.title, String(k.founder)]),
       [
@@ -210,10 +213,13 @@ describe('extracting KPIs from transcripts', () => {
       ]
     )
     const [olu] = kpis
-    assert.equal(olu.scope, 'FOUNDER')
-    assert.equal(olu.status, 'DRAFT')
+    assert.equal(olu.status, 'PENDING')
     assert.equal(String(olu.venture), String(data.ventures.alpha._id))
-    assert.equal(String(olu.createdBy), String(data.users.mentor._id))
+    assert.equal(String(olu.checkIn), String(checkIn._id))
+    assert.equal(olu.meetingDate, '2026-10-19')
+    assert.equal(olu.quote, 'Yes, we will reach 200 users by the 8th.')
+    // Nothing reaches the founders' KPIs until someone accepts it.
+    assert.equal(await KPI.countDocuments({ scope: 'FOUNDER' }), 0)
     assert.equal(olu.targetValue, '200 users')
     assert.equal(olu.dueDate.toISOString(), '2026-11-08T18:29:59.999Z')
     assert.match(olu.description, /\nMeeting: 2026-10-19\n/)
@@ -228,12 +234,29 @@ describe('extracting KPIs from transcripts', () => {
     )
   })
 
+  it("leaves a meeting the bot wasn't added to, until someone adds it", async () => {
+    const checkIn = await readyCheckIn({ kpiBotMode: 'OFF' })
+    assert.deepEqual(await extractCheckInKpis(), { done: 0, failed: 0 })
+    assert.equal(calls.length, 0)
+    assert.equal(
+      (await CheckIn.findById(checkIn._id)).kpiExtraction.status,
+      'PENDING'
+    )
+    const added = await request(app)
+      .post(`/api/checkins/${checkIn._id}/kpi-bot`)
+      .set('Cookie', cookieFor(data.users.mentor))
+    assert.equal(added.status, 200)
+    assert.equal(added.body.checkIn.kpiBot.mode, 'ON')
+    assert.deepEqual(await extractCheckInKpis(), { done: 1, failed: 0 })
+    assert.equal(await KpiRecommendation.countDocuments(), 2)
+  })
+
   it('handles each check-in once', async () => {
     await readyCheckIn()
     await extractCheckInKpis()
     assert.deepEqual(await extractCheckInKpis(), { done: 0, failed: 0 })
     assert.equal(calls.length, 1)
-    assert.equal(await KPI.countDocuments({ scope: 'FOUNDER' }), 2)
+    assert.equal(await KpiRecommendation.countDocuments(), 2)
   })
 
   it("doesn't ask Gemini when no founder of the startup spoke", async () => {
@@ -342,9 +365,9 @@ describe('failures part way through', () => {
 
   it('finishes a half-saved meeting on retry without asking Gemini again', async t => {
     // The database fails on the second KPI of the first try.
-    const realUpdateOne = KPI.updateOne.bind(KPI)
+    const realUpdateOne = KpiRecommendation.updateOne.bind(KpiRecommendation)
     let saves = 0
-    const hiccup = t.mock.method(KPI, 'updateOne', (...args) => {
+    const hiccup = t.mock.method(KpiRecommendation, 'updateOne', (...args) => {
       saves++
       if (saves === 2) {
         throw new Error('Database hiccup')
@@ -356,7 +379,7 @@ describe('failures part way through', () => {
       done: 0,
       failed: 1,
     })
-    assert.equal(await KPI.countDocuments({ scope: 'FOUNDER' }), 1)
+    assert.equal(await KpiRecommendation.countDocuments(), 1)
     hiccup.mock.restore()
 
     assert.deepEqual(await extractCheckInKpis(minutesLater(11)), {
@@ -367,7 +390,7 @@ describe('failures part way through', () => {
     assert.equal(run.status, 'DONE')
     assert.equal(run.created, 2)
     assert.equal(calls.length, 1)
-    assert.equal(await KPI.countDocuments({ scope: 'FOUNDER' }), 2)
+    assert.equal(await KpiRecommendation.countDocuments(), 2)
   })
 
   it("doesn't overwrite a result another server saved after its lease ran out", async () => {
@@ -396,7 +419,7 @@ describe('failures part way through', () => {
     const checkIn = await readyCheckIn()
     await extractCheckInKpis()
     assert.equal((await CheckIn.findById(checkIn._id)).kpiExtraction.created, 1)
-    assert.equal(await KPI.countDocuments({ scope: 'FOUNDER' }), 1)
+    assert.equal(await KpiRecommendation.countDocuments(), 1)
   })
 })
 
@@ -432,13 +455,13 @@ describe('checking what Gemini says', () => {
 
   it('drops a due date before the meeting', async () => {
     await runFor([{ ...GOALS[0], dueDate: '2026-10-01' }])
-    const [kpi] = await KPI.find({ scope: 'FOUNDER' }).lean()
+    const [kpi] = await KpiRecommendation.find().lean()
     assert.equal(kpi.dueDate ?? null, null)
   })
 
   it('uses the title when a goal has no description', async () => {
     await runFor([{ ...GOALS[0], description: '' }])
-    const [kpi] = await KPI.find({ scope: 'FOUNDER' }).lean()
+    const [kpi] = await KpiRecommendation.find().lean()
     assert.ok(kpi.description.startsWith('Goal for Olu Owner\n\nMeeting:'))
   })
 
@@ -523,7 +546,9 @@ describe('review findings', () => {
     })
     await extractCheckInKpis()
     assert.equal(calls[0].meetingDate, '2026-10-19')
-    const kpi = await KPI.findOne({ founder: data.users.owner._id }).lean()
+    const kpi = await KpiRecommendation.findOne({
+      founder: data.users.owner._id,
+    }).lean()
     // London is back on GMT by 8 November.
     assert.equal(kpi.dueDate.toISOString(), '2026-11-08T23:59:59.999Z')
     assert.match(kpi.description, /\nMeeting: 2026-10-19\n/)
@@ -542,8 +567,10 @@ describe('review findings', () => {
     const one = await as(data.users.owner)(`/api/checkins/${checkIn._id}`)
     assert.equal(one.status, 200)
     assert.equal(one.body.checkIn.kpiExtraction, undefined)
+    assert.equal(one.body.checkIn.kpiBotMode, undefined)
     // What the bot did is shown, without Gemini's answer or the lease.
     assert.deepEqual(one.body.checkIn.kpiBot, {
+      mode: 'AUTO',
       status: 'DONE',
       created: 2,
       skipped: [
@@ -625,7 +652,9 @@ describe('review findings', () => {
     const runOf = async id => (await CheckIn.findById(id)).kpiExtraction
     assert.equal((await runOf(alpha._id)).created, 2)
     assert.equal((await runOf(beta._id)).created, 1)
-    const [oz] = await KPI.find({ founder: data.users.outsider._id }).lean()
+    const [oz] = await KpiRecommendation.find({
+      founder: data.users.outsider._id,
+    }).lean()
     assert.equal(String(oz.venture), String(data.ventures.beta._id))
   })
 
@@ -664,7 +693,7 @@ describe('Google accounts in the transcript', () => {
     assert.deepEqual(calls[0].identified, [
       { speaker: 'Pixel Phone', email: 'vansh.k@adypu.edu.in' },
     ])
-    const [kpi] = await KPI.find({ scope: 'FOUNDER' }).lean()
+    const [kpi] = await KpiRecommendation.find().lean()
     assert.equal(String(kpi.founder), String(vansh._id))
   })
 
@@ -857,7 +886,7 @@ describe('second review', () => {
     const run = (await CheckIn.findById(checkIn._id)).kpiExtraction
     assert.equal(run.created, 2)
     assert.deepEqual(
-      (await KPI.find({ scope: 'FOUNDER' }).distinct('title')).sort(),
+      (await KpiRecommendation.find().distinct('title')).sort(),
       ['Reach 200 users', 'Ship the app']
     )
   })
@@ -877,7 +906,7 @@ describe('second review', () => {
     await extractCheckInKpis()
     const run = (await CheckIn.findById(checkIn._id)).kpiExtraction
     assert.equal(run.created, 1)
-    assert.deepEqual(await KPI.find({ scope: 'FOUNDER' }).distinct('title'), [
+    assert.deepEqual(await KpiRecommendation.find().distinct('title'), [
       'Pricing page',
     ])
     assert.deepEqual(

@@ -22,6 +22,7 @@
     "migrate:email": "node scripts/migrate-email-notifications.js",
     "migrate:mentors": "node scripts/migrate-mentors.js",
     "migrate:kpi-due-dates": "node scripts/migrate-kpi-due-dates.js",
+    "migrate:kpi-bot-modes": "node scripts/migrate-kpi-bot-modes.js",
     "migrate:proposal-index": "node scripts/migrate-proposal-index.js",
     "make-admin": "node scripts/make-admin.js",
     "demo:kpi-bot": "node scripts/demo-kpi-bot.js"

@@ -8,7 +8,7 @@ import {
   isStudent,
 } from '@nst/shared/permissions.js'
 
-import CheckIn from '../models/checkIn.js'
+import CheckIn, { KPI_BOT_RUNS } from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import Venture from '../models/venture.js'
 import { scopedVentureIds, ventureAccess } from '../utils/access.js'
@@ -25,6 +25,7 @@ import {
 } from '../utils/checkInHelper.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import { processCheckIn } from '../utils/transcriptPoller.js'
+import { sameMeeting } from '../utils/kpiBot.js'
 
 const DEFAULT_DURATION = 30
 const MIN_DURATION = 15
@@ -318,6 +319,8 @@ export const createCheckIns = async (req, res) => {
           timeZone,
         }),
         attendees,
+        // The KPI bot reads a mentor's check-in only when they add it.
+        kpiBotMode: body.kpiBot === true ? 'ON' : 'OFF',
       })
       return res.status(201).json({
         checkIns: await loadCheckIns({ _id: checkIn._id }),
@@ -531,5 +534,50 @@ export const refreshTranscript = async (req, res) => {
     return res.json({ checkIn: updated, settled })
   } catch (error) {
     return sendError(res, error, 'Could not check for a transcript')
+  }
+}
+
+// Why the KPI bot can't be added to this meeting, or null.
+const kpiBotProblem = checkIn => {
+  if (KPI_BOT_RUNS.includes(checkIn.kpiBotMode)) {
+    return 'The KPI bot is already on for this meeting'
+  }
+  if (checkIn.status === 'CANCELLED') {
+    return 'This check-in was cancelled'
+  }
+  if (checkIn.transcript.status === 'UNAVAILABLE') {
+    return 'This meeting has no transcript for the KPI bot to read'
+  }
+  if (['DONE', 'SKIPPED'].includes(checkIn.kpiExtraction.status)) {
+    return 'The KPI bot has already read this meeting'
+  }
+  return null
+}
+
+// Adds the KPI bot to a meeting that isn't a bi-weekly session, before or
+// after it is held: once its transcript is ready, the bot recommends KPIs
+// from it. In a group session it is added for every startup in the meeting.
+export const addKpiBot = async (req, res) => {
+  try {
+    const found = await findManagedCheckIn(req, res, { programme: true })
+    if (!found) {
+      return null
+    }
+    const { checkIn } = found
+    const problem = kpiBotProblem(checkIn)
+    if (problem) {
+      return res.status(409).json({ error: problem })
+    }
+    await CheckIn.updateMany(
+      // Before the migration a check-in may have no mode, which reads as OFF.
+      { ...sameMeeting(checkIn), kpiBotMode: { $nin: KPI_BOT_RUNS } },
+      { $set: { kpiBotMode: 'ON' } }
+    )
+    const updated = await CheckIn.findById(checkIn._id)
+      .select('-transcript.entries -transcript.text')
+      .populate(POPULATE)
+    return res.json({ checkIn: updated })
+  } catch (error) {
+    return sendError(res, error, 'Could not add the KPI bot')
   }
 }

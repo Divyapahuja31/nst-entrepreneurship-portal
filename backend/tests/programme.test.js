@@ -282,6 +282,7 @@ describe('scheduling a session in slots', () => {
         m => String(m.mentor) === String(data.users.otherMentor._id)
       )
     )
+    assert.ok(meetings.every(m => m.kpiBotMode === 'AUTO'))
   })
 
   it("waits until the admin's calendar is connected", async () => {
@@ -414,6 +415,8 @@ describe('a group session', () => {
     assert.equal(meetings.length, 2)
     assert.equal(new Set(meetings.map(m => m.googleEventId)).size, 1)
     assert.ok(meetings.every(m => m.group))
+    // A bi-weekly session always has the KPI bot.
+    assert.ok(meetings.every(m => m.kpiBotMode === 'AUTO'))
 
     const [{ args }] = callsTo('createEvent')
     assert.deepEqual(

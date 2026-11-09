@@ -17,6 +17,7 @@ import {
 
 import {
   GOOGLE_CODES,
+  addKpiBot,
   calendarConnectUrl,
   cancelCheckIn,
   endCheckInSeries,
@@ -65,6 +66,21 @@ const formatWhen = date =>
     minute: '2-digit',
   })
 
+// The KPI bot runs on every bi-weekly session (AUTO); any other meeting
+// gets it only when someone adds it (ON).
+const KPI_BOT_LABELS = {
+  AUTO: 'KPI bot (bi-weekly)',
+  ON: 'KPI bot on',
+}
+
+// Whether the KPI bot can still be added: it is off, the meeting isn't
+// cancelled, and there is or may yet be a transcript for it to read.
+const canAddBot = checkIn =>
+  (checkIn.kpiBot?.mode ?? 'OFF') === 'OFF' &&
+  checkIn.status !== 'CANCELLED' &&
+  checkIn.transcript?.status !== 'UNAVAILABLE' &&
+  (checkIn.kpiBot?.status ?? 'PENDING') === 'PENDING'
+
 const TRANSCRIPT_LABELS = {
   PENDING: 'Transcript pending',
   READY: 'Transcript ready',
@@ -75,9 +91,12 @@ function CheckInRow({
   checkIn,
   showVenture,
   canManage,
+  canRun,
+  adding,
   onMove,
   onCancel,
   onOpen,
+  onAddBot,
 }) {
   const upcoming = isUpcoming(checkIn)
   const happened = !upcoming && checkIn.status !== 'CANCELLED'
@@ -91,6 +110,7 @@ function CheckInRow({
     checkIn.series && 'Repeats',
     happened && TRANSCRIPT_LABELS[checkIn.transcript?.status],
     happened && checkIn.notes && 'Notes',
+    checkIn.status !== 'CANCELLED' && KPI_BOT_LABELS[checkIn.kpiBot?.mode],
   ].filter(Boolean)
 
   return (
@@ -114,6 +134,15 @@ function CheckInRow({
         </Typography>
       </Box>
       <StatusPill {...statusOf(checkIn)} />
+      {canRun && canAddBot(checkIn) && (
+        <Button
+          variant="text"
+          loading={adding}
+          onClick={() => onAddBot(checkIn)}
+        >
+          Add KPI Bot
+        </Button>
+      )}
       {happened && (
         <Button variant="outlined" onClick={() => onOpen(checkIn)}>
           Transcript
@@ -234,6 +263,7 @@ export default function CheckInsSection({
   const [open, setOpen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [addingBot, setAddingBot] = useState(null)
   const [error, setError] = useState('')
 
   // Shown once; a reload shouldn't repeat it.
@@ -323,6 +353,18 @@ export default function CheckInsSection({
     revalidator.revalidate()
   }
 
+  const addBot = async checkIn => {
+    setAddingBot(checkIn._id)
+    const result = await addKpiBot(checkIn._id)
+    setAddingBot(null)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setError('')
+    revalidator.revalidate()
+  }
+
   const runConfirm = async () => {
     setBusy(true)
     const result =
@@ -359,6 +401,9 @@ export default function CheckInsSection({
       checkIn={checkIn}
       showVenture={showVenture}
       canManage={managesRow(checkIn)}
+      canRun={runsRow(checkIn)}
+      adding={addingBot === checkIn._id}
+      onAddBot={addBot}
       onMove={c => setDialog({ checkIn: c })}
       onCancel={c => setConfirm({ kind: 'one', id: c._id })}
       onOpen={c => setOpen({ id: c._id, canManage: runsRow(c) })}

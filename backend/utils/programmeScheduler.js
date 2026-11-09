@@ -171,6 +171,16 @@ const rowFields = ({ session, programme, meeting, startup, attendees }) => ({
   attendees,
 })
 
+// A new meeting's KPI bot: always on for a bi-weekly session; for an extra
+// session, on when it was added with the bot. Set only when the meeting is
+// made, so redrawing a session never takes back a bot someone added.
+export const kpiBotModeFor = session => {
+  if (!session.extra) {
+    return 'AUTO'
+  }
+  return session.extra.kpiBot ? 'ON' : 'OFF'
+}
+
 const createEvent = async (google, body) => {
   const event = await withMeetLink(
     google,
@@ -280,6 +290,7 @@ const applySlots = async (ctx, rows) => {
       await CheckIn.create({
         ...fields,
         ...event,
+        kpiBotMode: kpiBotModeFor(session),
         transcript: {
           nextPollAt: transcriptDueAt(
             fields.scheduledAt,
@@ -381,6 +392,7 @@ const applyGroup = async (ctx, rows) => {
       await CheckIn.create({
         ...fields,
         ...event,
+        kpiBotMode: kpiBotModeFor(session),
         transcript: {
           nextPollAt: transcriptDueAt(
             fields.scheduledAt,

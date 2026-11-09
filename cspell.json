@@ -113,7 +113,8 @@
     "wordprocessingml",
     "spreadsheetml",
     "presentationml",
-    "quicktime"
+    "quicktime",
+    "Cofounder"
   ],
   "ignorePaths": [
     "node_modules/**",

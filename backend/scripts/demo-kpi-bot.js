@@ -1,7 +1,8 @@
 // A live demo of the KPI bot. Step by step it clears the last demo, sets up
 // a startup whose mentor check-in has just been held, replays the meeting's
 // Meet transcript, shows who each speaker is, has Gemini find the goals and
-// shows the draft KPIs the bot saves.
+// shows the KPIs the bot recommends, for the founders or their mentor to
+// accept or dismiss.
 //
 // Usage (needs GEMINI_API_KEY in backend/.env):
 //   npm run demo:kpi-bot -w backend -- --db=<database name>
@@ -19,6 +20,7 @@ import CheckIn from '../models/checkIn.js'
 import Founder from '../models/founder.js'
 import Industry from '../models/industry.js'
 import KPI from '../models/kpi.js'
+import KpiRecommendation from '../models/kpiRecommendation.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
@@ -171,6 +173,7 @@ const clearEarlierRun = async () => {
     venture: { $in: ventureIds },
   })
   await Promise.all([
+    KpiRecommendation.deleteMany({ venture: { $in: ventureIds } }),
     CheckIn.deleteMany({ googleEventId: EVENT_ID }),
     Founder.deleteMany({ venture: { $in: ventureIds } }),
   ])
@@ -270,6 +273,8 @@ const createHeldCheckIn = async ({ people, venture }) => {
     googleEventId: EVENT_ID,
     meetUrl: 'https://meet.google.com/demo-kpi-bot',
     status: 'HELD',
+    // A mentor's own check-in has the KPI bot only when they add it.
+    kpiBotMode: 'ON',
     // Held for the demo's own Gemini step, so the server's background job
     // doesn't take it first.
     kpiExtraction: { leaseUntil: new Date(Date.now() + 60 * 60 * 1000) },
@@ -395,7 +400,9 @@ const showResult = async ({ people, venture, checkIn }) => {
   const names = Object.fromEntries(
     Object.values(people).map(user => [String(user._id), user.username])
   )
-  const kpis = await KPI.find({ venture: venture._id }).sort({ founder: 1 })
+  const kpis = await KpiRecommendation.find({ venture: venture._id }).sort({
+    founder: 1,
+  })
   const run = (await CheckIn.findById(checkIn._id)).toObject().kpiExtraction
   if (run.status === 'FAILED') {
     say(`  Gemini failed: ${run.error}. Run the demo again.`)
@@ -404,15 +411,16 @@ const showResult = async ({ people, venture, checkIn }) => {
   say(
     '  Every goal must quote a real line of the transcript, or it is dropped.'
   )
-  say(`\n  ${kpis.length} draft KPIs saved for the mentor to review:`)
+  say(
+    `\n  ${kpis.length} KPIs recommended, for the founders or the mentor to accept:`
+  )
   for (const kpi of kpis) {
     await pause(900)
-    const quote = kpi.description.match(/From the transcript: "(.*)"$/su)?.[1]
     say(`\n  ✔ ${names[String(kpi.founder)]}: ${kpi.title}`)
     say(
       `      target: ${kpi.targetValue || 'none'}  |  due: ${dateOf(kpi.dueDate)}`
     )
-    say(`      from: "${quote}"`)
+    say(`      from: "${kpi.quote}"`)
   }
   if (run.skipped?.length) {
     say(`\n  Not given to anyone (${run.skipped.length}):`)
@@ -470,10 +478,12 @@ runWithDatabase(async () => {
     return
   }
 
-  await step('The bot checks each goal and saves it')
+  await step('The bot checks each goal and recommends it')
   await showResult({ people, venture, checkIn })
 
   await step('See it in the portal')
-  say(`  ${PORTAL}/admin/kpis  (as ${option('admin') || PRESENTER})`)
+  say(
+    `  ${PORTAL}/admin/venture/${venture._id}  (as ${option('admin') || PRESENTER})`
+  )
   say(`  Founder view: ${PEOPLE.aarav.email} / ${PASSWORD}`)
 })

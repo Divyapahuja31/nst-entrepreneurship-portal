@@ -4,6 +4,10 @@ import { CYCLES } from '@nst/shared/biweeklyCycles.js'
 // One bi-weekly check-in for a startup: an event with a Google Meet link,
 // to which its founders are invited. Either a mentor's own check-in, on
 // their calendar, or a meeting of a programme session, on the admin's.
+export const KPI_BOT_MODES = ['OFF', 'ON', 'AUTO']
+// The modes in which the bot runs.
+export const KPI_BOT_RUNS = ['ON', 'AUTO']
+
 const attendeeSchema = new mongoose.Schema(
   {
     user: {
@@ -65,7 +69,7 @@ const transcriptSchema = new mongoose.Schema(
 )
 
 // The KPI bot's pass over a READY transcript (utils/kpiBot.js): DONE with
-// the KPIs it added and the goals it could not give a founder, SKIPPED when
+// the KPIs it recommended and the goals it could not give a founder, SKIPPED when
 // the meeting's KPIs already existed, FAILED to be retried.
 const kpiExtractionSchema = new mongoose.Schema(
   {
@@ -201,6 +205,14 @@ const checkInSchema = new mongoose.Schema(
       type: transcriptSchema,
       default: () => ({}),
     },
+    // Whether the KPI bot reads this meeting's transcript: AUTO for a
+    // bi-weekly programme session, ON once someone adds it to any other
+    // meeting, OFF until then. Gemini is only asked about AUTO and ON.
+    kpiBotMode: {
+      type: String,
+      enum: KPI_BOT_MODES,
+      default: 'OFF',
+    },
     kpiExtraction: {
       type: kpiExtractionSchema,
       default: () => ({}),
@@ -221,6 +233,7 @@ const checkInSchema = new mongoose.Schema(
         const run = ret.kpiExtraction
         if (run) {
           ret.kpiBot = {
+            mode: ret.kpiBotMode || 'OFF',
             status: run.status,
             created: run.created ?? 0,
             skipped: (run.skipped || []).map(({ speaker, title, reason }) => ({
@@ -234,6 +247,7 @@ const checkInSchema = new mongoose.Schema(
           }
         }
         delete ret.kpiExtraction
+        delete ret.kpiBotMode
         for (const entry of ret.transcript?.entries || []) {
           delete entry.googleId
         }
@@ -253,6 +267,7 @@ checkInSchema.index({ 'transcript.status': 1, 'transcript.nextPollAt': 1 })
 // The ready transcripts the KPI bot has still to go through.
 checkInSchema.index({
   'transcript.status': 1,
+  kpiBotMode: 1,
   'kpiExtraction.status': 1,
   scheduledAt: 1,
 })

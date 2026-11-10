@@ -3,6 +3,7 @@ import { BOARD_ROLES, ROLES } from '@nst/shared/permissions.js'
 
 import requireRole from '../middleware/requireRole.js'
 import accounts from './accounts.js'
+import emails from './emails.js'
 import extraSessions from './extraSessions.js'
 import programme from './programme.js'
 import setup from './setup.js'
@@ -49,5 +50,6 @@ router.use('/accounts', requireRole(ROLES.ADMIN), accounts)
 router.use('/programme', requireRole(ROLES.ADMIN), programme)
 router.use('/extra-sessions', requireRole(...BOARD_ROLES), extraSessions)
 router.use('/setup', requireRole(ROLES.ADMIN), setup)
+router.use('/emails', requireRole(ROLES.ADMIN), emails)
 
 export default router

@@ -302,6 +302,7 @@ describe('accounts', () => {
       const admin = who === 'admin'
       assert.equal(can.canManageAccounts(actor), admin, who)
       assert.equal(can.canReadAuditLog(actor), admin, who)
+      assert.equal(can.canManageEmails(actor), admin, who)
       assert.equal(can.canChangeRoleOf(actor, 'someone-else'), admin, who)
       assert.equal(can.canDeleteAccountOf(actor, 'someone-else'), admin, who)
       assert.equal(can.canChangeRoleOf(actor, actor.id), false, who)

@@ -14,6 +14,7 @@ import {
   BookIcon,
   BriefcaseIcon,
   BuildingIcon,
+  EnvelopeIcon,
   CalendarIcon,
   ChatIcon,
   ChevronLeftIcon,
@@ -109,6 +110,11 @@ const adminMenuItems = [
     menu: 'School Setup',
     icon: BuildingIcon,
     path: '/admin/setup',
+  },
+  {
+    menu: 'Emails',
+    icon: EnvelopeIcon,
+    path: '/admin/emails',
   },
 ]
 

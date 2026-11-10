@@ -227,6 +227,10 @@ export const canManageAccounts = actor => isAdmin(actor)
 
 export const canReadAuditLog = actor => isAdmin(actor)
 
+// The Emails page: sender name, header and footer, KPI alert rules and
+// each email's wording.
+export const canManageEmails = actor => isAdmin(actor)
+
 // No one changes or deactivates their own account, so an admin can't lock
 // themselves out.
 export const canChangeRoleOf = (actor, targetId) =>

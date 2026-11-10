@@ -12,7 +12,9 @@ import {
   staffSessionEmail,
 } from './sessionEmails.js'
 
-// Every template with made-up data, for the dev preview page.
+// Every template with made-up data, for the dev preview page and the
+// admin's Emails page. render(score, settings) builds it with those email
+// settings (a draft, on the Emails page).
 
 const result = score => ({
   score,
@@ -50,79 +52,94 @@ export const EMAIL_PREVIEWS = {
   'student-result': {
     label: 'Student result',
     usesScore: true,
-    render: score =>
-      studentResultEmail({
-        ...result(score),
-        studentName: 'Priya Sharma',
-        dashboardUrl: `${appUrl()}/kpis`,
-      }),
+    render: (score, settings) =>
+      studentResultEmail(
+        {
+          ...result(score),
+          studentName: 'Priya Sharma',
+          dashboardUrl: `${appUrl()}/kpis`,
+        },
+        settings
+      ),
   },
   'mentor-follow-up': {
-    label: 'Mentor follow-up (40 to 70%)',
+    label: 'Mentor follow-up',
     usesScore: true,
-    render: score => mentorFollowUpEmail({ ...result(score), ...staff }),
+    render: (score, settings) =>
+      mentorFollowUpEmail({ ...result(score), ...staff }, settings),
   },
   'mentor-low-score': {
-    label: 'Mentor low score (40% or below)',
+    label: 'Mentor low score',
     usesScore: true,
-    render: score => mentorLowScoreEmail({ ...result(score), ...staff }),
+    render: (score, settings) =>
+      mentorLowScoreEmail({ ...result(score), ...staff }, settings),
   },
   'board-low-score': {
     label: 'Academic board low score',
     usesScore: true,
-    render: score => boardLowScoreEmail({ ...result(score), ...staff }),
+    render: (score, settings) =>
+      boardLowScoreEmail({ ...result(score), ...staff }, settings),
   },
   'password-reset': {
     label: 'Password reset code',
     usesScore: false,
-    render: () => passwordResetEmail(code),
+    render: (_score, settings) => passwordResetEmail(code, settings),
   },
   'signup-verification': {
     label: 'Sign-up verification code',
     usesScore: false,
-    render: () => signupVerificationEmail(code),
+    render: (_score, settings) => signupVerificationEmail(code, settings),
   },
   'session-founder': {
     label: 'Programme session slot (founder)',
     usesScore: false,
-    render: () => founderSessionEmail(session),
+    render: (_score, settings) => founderSessionEmail(session, settings),
   },
   'session-group': {
     label: 'Programme group session (founder)',
     usesScore: false,
-    render: () =>
-      founderSessionEmail({
-        ...session,
-        group: true,
-        time: '6:00 PM – 8:00 PM',
-        staffNames: 'Rahul Mehta, Divya Pahuja',
-      }),
+    render: (_score, settings) =>
+      founderSessionEmail(
+        {
+          ...session,
+          group: true,
+          time: '6:00 PM – 8:00 PM',
+          staffNames: 'Rahul Mehta, Divya Pahuja',
+        },
+        settings
+      ),
   },
   'session-staff': {
     label: 'Programme session schedule (staff)',
     usesScore: false,
-    render: () =>
-      staffSessionEmail({
-        recipientName: 'Rahul Mehta',
-        group: false,
-        day: session.day,
-        time: '6:00 PM – 8:00 PM',
-        meetUrl: null,
-        meetings: [
-          { time: '6:00 PM – 6:15 PM', ventureName: 'GreenCart' },
-          { time: '6:15 PM – 6:30 PM', ventureName: 'Vyapaar Express' },
-        ],
-      }),
+    render: (_score, settings) =>
+      staffSessionEmail(
+        {
+          recipientName: 'Rahul Mehta',
+          group: false,
+          day: session.day,
+          time: '6:00 PM – 8:00 PM',
+          meetUrl: null,
+          meetings: [
+            { time: '6:00 PM – 6:15 PM', ventureName: 'GreenCart' },
+            { time: '6:15 PM – 6:30 PM', ventureName: 'Vyapaar Express' },
+          ],
+        },
+        settings
+      ),
   },
   'session-cancelled': {
     label: 'Programme session cancelled',
     usesScore: false,
-    render: () =>
-      sessionCancelledEmail({
-        recipientName: 'Priya Sharma',
-        ventureName: 'GreenCart',
-        day: session.day,
-        time: session.time,
-      }),
+    render: (_score, settings) =>
+      sessionCancelledEmail(
+        {
+          recipientName: 'Priya Sharma',
+          ventureName: 'GreenCart',
+          day: session.day,
+          time: session.time,
+        },
+        settings
+      ),
   },
 }

@@ -15,6 +15,7 @@ import Role from '../models/role.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import { validateAccountInput } from '../utils/accountValidator.js'
+import { readBatch } from '../utils/access.js'
 import { cancelFutureCheckIns } from '../utils/checkInHelper.js'
 import { normalizeEmail } from '../utils/authHelper.js'
 import { deactivateFounder } from '../utils/founderHelper.js'
@@ -73,10 +74,29 @@ const leaveStartup = async userId => {
   }
 }
 
+// With ?batch=, that batch's students and every staff account (staff serve
+// all batches). Accounts with no role stay too, so they can be fixed.
+const accountsFilter = async query => {
+  const { batch, error } = await readBatch(query)
+  if (error || !batch) {
+    return { error, filter: {} }
+  }
+  const studentRole = await Role.findOne({ name: ROLES.STUDENT }).select('_id')
+  return {
+    filter: {
+      $or: [{ batch }, { role: { $ne: studentRole?._id ?? null } }],
+    },
+  }
+}
+
 export const listAccounts = async (req, res) => {
   try {
-    const [users, founders] = await Promise.all([
-      User.find()
+    const { filter, error } = await accountsFilter(req.query)
+    if (error) {
+      return res.status(400).json({ error })
+    }
+    const [users, founders, adminCount] = await Promise.all([
+      User.find(filter)
         .select(
           'username email role batch isEmailVerified googleId deletedAt createdAt'
         )
@@ -85,18 +105,16 @@ export const listAccounts = async (req, res) => {
       Founder.find({ status: 'ACTIVE' })
         .select('user venture')
         .populate('venture', 'name'),
+      // Counted over everyone, so the last-admin rule never depends on
+      // the batch shown.
+      activeAdminCount(),
     ])
     const ventureOf = new Map(founders.map(f => [String(f.user), f.venture]))
     const accounts = users.map(user =>
       accountSummary(user, ventureOf.get(String(user._id)))
     )
 
-    return res.status(200).json({
-      accounts,
-      adminCount: accounts.filter(
-        a => a.role === ROLES.ADMIN && !a.deactivatedAt
-      ).length,
-    })
+    return res.status(200).json({ accounts, adminCount })
   } catch (error) {
     console.error('List accounts error:', error)
     return res.status(500).json({ error: 'Could not load accounts' })

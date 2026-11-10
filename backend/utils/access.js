@@ -8,6 +8,7 @@ import {
   resolveMentorForAccept,
 } from '@nst/shared/permissions.js'
 
+import Batch from '../models/batch.js'
 import Founder from '../models/founder.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
@@ -30,6 +31,72 @@ export const ventureScope = actor => {
 // The ids of the startups in scope, or null when every startup is.
 export const scopedVentureIds = async actor =>
   isBoard(actor) ? null : Venture.find(ventureScope(actor)).distinct('_id')
+
+// ---------------------------------------------------------- batch filter
+// Staff lists can be narrowed to one batch with ?batch=<id>. A startup is in
+// every batch that has an active founder on it. The batch only ever narrows
+// what the caller may already see.
+
+export const BATCH_GONE = 'That batch no longer exists'
+
+// The batch in the query and its students' ids, { batch: null } when there
+// is none, or { error } when it doesn't name a batch.
+export const readBatch = async query => {
+  const id = query?.batch
+  if (id === undefined || id === '') {
+    return { batch: null, userIds: null }
+  }
+  const batch =
+    typeof id === 'string' && mongoose.isValidObjectId(id)
+      ? await Batch.findById(id).select('_id')
+      : null
+  if (!batch) {
+    return { error: BATCH_GONE }
+  }
+  const userIds = await User.find({ batch: batch._id }).distinct('_id')
+  return { batch: batch._id, userIds }
+}
+
+// What a staff list may show: `scope` (a Venture filter), `ventureIds` (null
+// for every startup), and the batch and its students' ids (null for every
+// batch). Or { error } for a batch that doesn't exist.
+export const listScope = async (actor, query) => {
+  const { batch, userIds, error } = await readBatch(query)
+  if (error) {
+    return { error }
+  }
+  if (!batch) {
+    return {
+      batchId: null,
+      batchUserIds: null,
+      scope: ventureScope(actor),
+      ventureIds: await scopedVentureIds(actor),
+    }
+  }
+  const inBatch = await Founder.find({
+    user: { $in: userIds },
+    status: 'ACTIVE',
+  }).distinct('venture')
+  const scope = { $and: [ventureScope(actor), { _id: { $in: inBatch } }] }
+  return {
+    batchId: batch,
+    batchUserIds: userIds,
+    scope,
+    ventureIds: await Venture.find(scope).distinct('_id'),
+  }
+}
+
+// A filter on records made by a student (a proposal's submittedBy, a join
+// request's requestedBy) for the batch's students; {} for every batch.
+export const byBatchStudent = (field, batchUserIds) =>
+  batchUserIds ? { [field]: { $in: batchUserIds } } : {}
+
+// KPIs in a batch: a startup's own KPIs, and members' KPIs only when the
+// member is in the batch. {} for every batch.
+export const kpisInBatch = batchUserIds =>
+  batchUserIds
+    ? { $or: [{ founder: null }, { founder: { $in: batchUserIds } }] }
+    : {}
 
 export const isVentureMember = async (userId, ventureId) =>
   Boolean(

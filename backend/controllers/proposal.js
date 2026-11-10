@@ -62,9 +62,11 @@ export const getMyProposal = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
+    // A student who left a startup may have proposed again: the latest.
     const proposal = await VentureProposal.findOne({
       submittedBy: req.user.id,
     })
+      .sort({ updatedAt: -1 })
       .populate('reviews.reviewer', 'username')
       .populate('industry', 'name')
       .populate('campus', 'name')
@@ -105,9 +107,11 @@ export const createProposal = async (req, res) => {
       })
     }
 
+    // An approved proposal made a startup; once the student has left it
+    // (checked above) they may propose another.
     const existingProposal = await VentureProposal.findOne({
       submittedBy: req.user.id,
-      status: { $in: ['PENDING', 'APPROVED'] },
+      status: 'PENDING',
     })
 
     const existingError = checkExistingProposal(existingProposal)

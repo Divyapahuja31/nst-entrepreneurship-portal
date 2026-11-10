@@ -1,11 +1,12 @@
 import { api } from './client'
 import toError from './toError'
+import { withBatch } from '../stores/batch'
 
 // The Accounts & Roles page: accounts, the activity log and the batch and
 // campus choices a new student account needs.
 export const accountsLoader = async () => {
   const [accounts, auditLog, options] = await Promise.all([
-    api.get('/admin/accounts'),
+    withBatch(params => api.get('/admin/accounts', { params })),
     api.get('/admin/accounts/audit-log'),
     api.get('/auth/google/signup-options'),
   ])

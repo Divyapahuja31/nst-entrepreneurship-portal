@@ -22,6 +22,7 @@ import ReviewTable from '../../components/ReviewTable'
 import ProposalDrawer from '../../components/ProposalDrawer'
 import { reviewJoinRequest, reviewProposal } from '../../api/venture'
 import useAccess from '../../hooks/useAccess'
+import { useBatchChosen } from '../../stores/batch'
 import { mustPickMentorToAccept } from '@nst/shared/permissions.js'
 import {
   BriefcaseIcon,
@@ -140,6 +141,7 @@ export default function PageVentures() {
   const { ventures, proposals, joinRequests, mentors } = useLoaderData()
   const revalidator = useRevalidator()
   const { actor, isMentor } = useAccess()
+  const batchChosen = useBatchChosen()
   // The board picks the new startup's mentor; a mentor becomes it.
   const pickMentor = mustPickMentorToAccept(actor)
   const [mentorId, setMentorId] = React.useState('')
@@ -355,7 +357,9 @@ export default function PageVentures() {
         ) : (
           <Empty
             icon={BriefcaseIcon}
-            title="No startups yet"
+            title={
+              batchChosen ? 'No startups in this batch yet' : 'No startups yet'
+            }
             description={
               isMentor
                 ? 'Startups appear here once one is assigned to you, or you approve a proposal.'

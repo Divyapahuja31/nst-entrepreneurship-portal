@@ -191,6 +191,9 @@ export const ensureJoinRequestCanBeReviewed = joinRequest => {
   return null
 }
 
+// Adds the student to the startup. Returns { status, error }, or
+// { previous }: their membership record from before (a founder who left and
+// is rejoining), or null for a new one, for rollbackJoinRequestApproval.
 export const handleJoinRequestApproval = async joinRequest => {
   const existingVenture = await findVentureForUser(joinRequest.requestedBy)
   if (existingVenture) {
@@ -205,9 +208,13 @@ export const handleJoinRequestApproval = async joinRequest => {
     return { status: 404, error: 'Venture not found' }
   }
 
+  const previous = await Founder.findOne({
+    user: joinRequest.requestedBy,
+    venture: venture._id,
+  }).lean()
   await addFounderToVenture(joinRequest.requestedBy, venture._id)
   await refreshMeetingInvites(venture._id)
-  return null
+  return { previous }
 }
 
 export const buildJoinRequestUpdate = ({ status, reviewerId }) => ({
@@ -260,19 +267,19 @@ export const closeOtherApplications = async ({
   ])
 }
 
-export const rollbackJoinRequestApproval = async (
-  joinRequest,
-  wasApproved = true
-) => {
-  if (
-    wasApproved &&
-    joinRequest &&
-    joinRequest.requestedBy &&
-    joinRequest.venture
-  ) {
-    await Founder.deleteOne({
-      user: joinRequest.requestedBy,
-      venture: joinRequest.venture,
-    })
+// Undoes handleJoinRequestApproval. `approval` is what it returned, or null
+// when nothing was added. A rejoining founder's old record is put back as
+// it was, so the startup keeps them among its past founders.
+export const rollbackJoinRequestApproval = async (joinRequest, approval) => {
+  if (!approval || !joinRequest?.requestedBy || !joinRequest?.venture) {
+    return
   }
+  if (approval.previous) {
+    await Founder.replaceOne({ _id: approval.previous._id }, approval.previous)
+    return
+  }
+  await Founder.deleteOne({
+    user: joinRequest.requestedBy,
+    venture: joinRequest.venture,
+  })
 }

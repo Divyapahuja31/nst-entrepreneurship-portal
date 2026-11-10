@@ -86,18 +86,10 @@ export const buildProposalData = (body, userId, campusId) => {
   }
 }
 
-export const checkExistingProposal = existingProposal => {
-  if (!existingProposal) {
-    return null
-  }
-  return {
-    status: 409,
-    error:
-      existingProposal.status === 'PENDING'
-        ? 'You already have a proposal under review.'
-        : 'You already have an approved venture proposal.',
-  }
-}
+export const checkExistingProposal = existingProposal =>
+  existingProposal
+    ? { status: 409, error: 'You already have a proposal under review.' }
+    : null
 
 export const saveOrResubmitProposal = async (proposalData, userId) => {
   const existingRejected = await VentureProposal.findOne({

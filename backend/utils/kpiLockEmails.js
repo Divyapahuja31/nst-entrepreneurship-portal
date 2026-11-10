@@ -91,7 +91,9 @@ const describe = ({ kpi, students, mentors }) => {
   const venture = kpi.venture
   const founder = kpi.founder ? students[0] : null
   return {
-    dedupeKey: `kpi:${kpi._id}`,
+    // One email per grade: locking again sends nothing new, but a grade the
+    // board corrects (unlock, re-grade, lock) is sent again.
+    dedupeKey: `kpi:${kpi._id}:score:${kpi.score}`,
     result: {
       score: kpi.score,
       totalMarks: TOTAL_MARKS,

@@ -5,12 +5,14 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   MenuItem,
   Paper,
   Snackbar,
@@ -89,6 +91,7 @@ const newForm = defaults => ({
   staff: defaults.staff,
   excludedVentures: new Set(defaults.excludedVentures),
   excludedFounders: new Set(defaults.excludedFounders),
+  kpiBot: false,
 })
 
 const formOf = (session, timeZone) => ({
@@ -103,6 +106,7 @@ const formOf = (session, timeZone) => ({
   staff: session.extra.staff,
   excludedVentures: new Set(session.extra.excludedVentures),
   excludedFounders: new Set(session.extra.excludedFounders),
+  kpiBot: Boolean(session.extra.kpiBot),
 })
 
 const payloadOf = form => ({
@@ -238,6 +242,16 @@ function DetailsCard({ form, setField, fieldError, editing }) {
         {slotMode && number('gapMinutes', 'Gap between slots (minutes)')}
         {slotMode &&
           number('firstGapMinutes', 'Gap before the first slot (minutes)')}
+        <FormControlLabel
+          sx={{ gridColumn: '1 / -1' }}
+          control={
+            <Checkbox
+              checked={form.kpiBot}
+              onChange={e => setField('kpiBot', e.target.checked)}
+            />
+          }
+          label="Add KPI bot: recommend KPIs to the founders from each meeting’s transcript"
+        />
       </Box>
     </SectionCard>
   )

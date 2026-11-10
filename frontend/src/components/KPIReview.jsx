@@ -23,6 +23,7 @@ import {
 } from '../api/kpi'
 import useAccess from '../hooks/useAccess'
 import KpiLockAction from './KpiLockAction'
+import KpiRecommendations from './KpiRecommendations'
 import { mentorIdsOf, staffKpiContext } from './kpiAccess'
 import AddKpi from './AddKpi'
 import EmptyState from './EmptyState'
@@ -358,6 +359,15 @@ export default function KPIReview({
           detail={averageScore != null ? `Average ${averageScore} pts` : null}
         />
       </Box>
+
+      {venture && mayAddKpi && (
+        <KpiRecommendations
+          ventureId={venture.id || venture._id}
+          founderId={founder ? currentFounderId : null}
+          onAccepted={() => revalidator.revalidate()}
+          sx={{ height: 'auto', mb: { xs: 2, sm: 3 } }}
+        />
+      )}
 
       <SectionCard
         title="KPIs"

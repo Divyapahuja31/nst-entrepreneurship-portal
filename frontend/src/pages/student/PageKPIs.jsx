@@ -21,6 +21,7 @@ import {
 } from '@mui/material'
 
 import AddKpi from '../../components/AddKpi'
+import KpiRecommendations from '../../components/KpiRecommendations'
 import EmptyState from '../../components/EmptyState'
 import SectionCard from '../../components/SectionCard'
 import StatTile from '../../components/StatTile'
@@ -418,6 +419,11 @@ export default function Kpis() {
               }
             />
           </Box>
+
+          <KpiRecommendations
+            onAccepted={() => revalidator.revalidate()}
+            sx={{ height: 'auto', mb: { xs: 2, sm: 3 } }}
+          />
 
           <SectionCard
             title="Your KPIs"

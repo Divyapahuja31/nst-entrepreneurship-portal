@@ -15,6 +15,7 @@ import {
 } from '@mui/material'
 
 import {
+  addKpiBot,
   getCheckIn,
   refreshTranscript,
   saveCheckInNotes,
@@ -80,6 +81,91 @@ function Transcript({ transcript }) {
   )
 }
 
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
+
+// What the KPI bot made of the transcript: the KPIs it recommended, and
+// the goals it couldn't give a founder, so the mentor can add those by hand.
+// A meeting that isn't a bi-weekly session has the bot only once someone
+// adds it (`onAdd`).
+function KpiBotSummary({ kpiBot, ready, adding, onAdd }) {
+  if (!kpiBot || kpiBot.mode === 'OFF') {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        The KPI bot isn't on for this meeting. Add it to get recommended KPIs
+        from the transcript.{' '}
+        <Button
+          variant="text"
+          size="small"
+          loading={adding}
+          onClick={onAdd}
+          sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }}
+        >
+          Add KPI Bot
+        </Button>
+      </Typography>
+    )
+  }
+  if (kpiBot.status === 'PENDING') {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {ready
+          ? "The KPI bot hasn't read this transcript yet."
+          : 'The KPI bot reads the transcript once it is ready.'}
+      </Typography>
+    )
+  }
+  if (kpiBot.status === 'FAILED') {
+    return (
+      <Alert severity="warning">
+        The KPI bot couldn't read this transcript. It tries again on its own for
+        about a day and a half; add the KPIs by hand if none appear.
+      </Alert>
+    )
+  }
+  if (kpiBot.status === 'SKIPPED') {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        The KPI bot recommended nothing: {kpiBot.reason}.
+      </Typography>
+    )
+  }
+  return (
+    <Box sx={{ display: 'grid', gap: 1 }}>
+      <Typography variant="body2">
+        {kpiBot.created
+          ? `Recommended ${plural(kpiBot.created, 'KPI')} to the founders. They or you can accept or dismiss each one on the KPIs page.`
+          : 'Recommended no KPIs.'}
+      </Typography>
+      {kpiBot.skipped.length > 0 && (
+        <>
+          <Typography variant="body2" color="text.secondary">
+            Not given to anyone ({kpiBot.skipped.length}). Add any that are real
+            goals by hand:
+          </Typography>
+          <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'grid', gap: 0.5 }}>
+            {kpiBot.skipped.map((goal, i) => (
+              <Typography
+                component="li"
+                variant="body2"
+                key={`${goal.speaker}-${goal.title}-${i}`}
+              >
+                {goal.speaker}: {goal.title}{' '}
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  ({goal.reason})
+                </Typography>
+              </Typography>
+            ))}
+          </Box>
+        </>
+      )}
+    </Box>
+  )
+}
+
 // A past check-in's Meet transcript and notes. Whoever ran it (the mentor,
 // or a programme meeting's staff) edits the notes and can ask Meet for a
 // transcript that hasn't arrived. Mount it only while open.
@@ -95,6 +181,7 @@ export default function TranscriptDialog({
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     getCheckIn(checkInId).then(result => {
@@ -122,6 +209,22 @@ export default function TranscriptDialog({
     } else {
       setMessage('Nothing from Google Meet yet. The portal keeps checking.')
     }
+  }
+
+  const addBot = async () => {
+    setAdding(true)
+    setMessage('')
+    const result = await addKpiBot(checkInId)
+    setAdding(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setCheckIn(current => ({ ...current, kpiBot: result.checkIn.kpiBot }))
+    setMessage(
+      'KPI bot added. Its recommendations appear once the transcript is read.'
+    )
+    onChanged()
   }
 
   const save = async () => {
@@ -189,6 +292,22 @@ export default function TranscriptDialog({
                 </Typography>
               )}
             </Box>
+
+            {canManage &&
+              transcript?.status !== 'UNAVAILABLE' &&
+              checkIn.status !== 'CANCELLED' && (
+                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                  <Typography variant="subtitle1" component="h3">
+                    KPI Bot
+                  </Typography>
+                  <KpiBotSummary
+                    kpiBot={checkIn.kpiBot}
+                    ready={ready}
+                    adding={adding}
+                    onAdd={addBot}
+                  />
+                </Box>
+              )}
 
             <Divider />
 

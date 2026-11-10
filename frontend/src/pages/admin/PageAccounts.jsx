@@ -50,6 +50,7 @@ import {
   deactivateAccount,
 } from '../../api/accounts'
 import useAccess from '../../hooks/useAccess'
+import { useBatchStore } from '../../stores/batch'
 
 // What each role may do, in a sentence, for the role menu and dialogs.
 const ROLE_SUMMARY = {
@@ -141,17 +142,32 @@ function RoleSelect({ account, disabledReason, onChange }) {
 const EMPTY_FORM = { username: '', email: '', role: ROLES.MENTOR, batch: '' }
 
 function AddAccountDialog({ open, batches, onClose, onCreated }) {
-  const [form, setForm] = React.useState(EMPTY_FORM)
+  // A new student starts in the batch chosen in the header.
+  const chosenBatch = useBatchStore(state => state.batchId)
+  const blankForm = () => ({
+    ...EMPTY_FORM,
+    batch: batches.some(b => b._id === chosenBatch) ? chosenBatch : '',
+  })
+  const [form, setForm] = React.useState(blankForm)
   const [errors, setErrors] = React.useState({})
   const [formError, setFormError] = React.useState('')
   const [saving, setSaving] = React.useState(false)
+
+  // Each time the dialog opens it starts from the batch chosen now.
+  const [wasOpen, setWasOpen] = React.useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setForm(blankForm())
+    }
+  }
 
   const set = field => event =>
     setForm({ ...form, [field]: event.target.value })
   const isStudent = form.role === ROLES.STUDENT
 
   const close = () => {
-    setForm(EMPTY_FORM)
+    setForm(blankForm())
     setErrors({})
     setFormError('')
     onClose()

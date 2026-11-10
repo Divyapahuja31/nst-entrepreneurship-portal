@@ -30,6 +30,7 @@ import { Navigate, Outlet, useLocation } from 'react-router'
 
 import { AppBar, Drawer, DrawerHeader } from '../components/Sidebar.style'
 
+import BatchPicker from '../components/BatchPicker'
 import DrawerItem from '../components/DrawerItem'
 import useSignOut from '../components/useSignOut'
 
@@ -192,16 +193,25 @@ export default function MiniDrawer() {
               fontSize: '0.9375rem',
               fontWeight: 600,
               letterSpacing: '-0.01em',
+              // On a phone the admin's batch picker takes the room.
+              display: access.isAdmin ? { xs: 'none', sm: 'block' } : 'block',
             }}
           >
             NST Entrepreneurship Portal
           </Typography>
+          {access.isAdmin && <BatchPicker />}
           {access.role && (
             <Typography
               component="span"
               variant="caption"
               color="text.secondary"
-              sx={{ ml: 'auto', fontWeight: 500 }}
+              sx={{
+                ml: access.isAdmin ? 2 : 'auto',
+                fontWeight: 500,
+                display: access.isAdmin
+                  ? { xs: 'none', sm: 'inline' }
+                  : undefined,
+              }}
             >
               {ROLE_LABELS[access.role]}
             </Typography>

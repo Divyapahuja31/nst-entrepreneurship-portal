@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import { cycleForDate } from '@nst/shared/biweeklyCycles.js'
 
+import CheckIn from '../models/checkIn.js'
 import ProgrammeSession from '../models/programmeSession.js'
 import { claimHostIfFree, hostStatus } from '../utils/calendarHost.js'
 import {
@@ -15,6 +16,7 @@ import {
 } from '../utils/programme.js'
 import {
   cancelSession,
+  kpiBotModeFor,
   runSession,
   withSession,
 } from '../utils/programmeScheduler.js'
@@ -154,6 +156,17 @@ const checkedSession = async (body, timeZone) => {
   }
 }
 
+// Turns the KPI bot on or off for the session's meetings it hasn't read yet.
+const setSessionKpiBot = session =>
+  CheckIn.updateMany(
+    {
+      session: session._id,
+      kpiBotMode: { $ne: 'AUTO' },
+      'kpiExtraction.status': { $nin: ['DONE', 'SKIPPED'] },
+    },
+    { $set: { kpiBotMode: kpiBotModeFor(session) } }
+  )
+
 const refuse = (res, { status, field, error }) =>
   res.status(status).json({ error, field })
 
@@ -231,14 +244,19 @@ export const updateExtraSession = async (req, res) => {
     if (checked.error) {
       return refuse(res, checked)
     }
-    const result = await withSession(found._id, session => {
+    const result = await withSession(found._id, async session => {
       const fresh = session.status !== 'SCHEDULED'
+      const botWas = Boolean(session.extra.kpiBot)
       session.set({
         ...checked.fields,
         extra: { ...checked.fields.extra, createdBy: session.extra.createdBy },
         status: session.status === 'CANCELLED' ? 'PLANNED' : session.status,
       })
-      return session.save().then(saved => runSession(saved, { fresh }))
+      const saved = await session.save()
+      if (botWas !== saved.extra.kpiBot) {
+        await setSessionKpiBot(saved)
+      }
+      return runSession(saved, { fresh })
     })
     if (result === null) {
       return res.status(409).json({ error: BUSY })

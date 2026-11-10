@@ -13,7 +13,7 @@ import startupStage from '../models/enums/startupStage.js'
 import User from '../models/user.js'
 import Role from '../models/role.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
-import { isActiveMentor, ventureAccess, ventureScope } from '../utils/access.js'
+import { isActiveMentor, listScope, ventureAccess } from '../utils/access.js'
 import { cancelFutureCheckIns } from '../utils/checkInHelper.js'
 
 // Readable label ("Fund Raising"), not the stored key.
@@ -29,12 +29,18 @@ const mentorSummaries = mentors =>
   (mentors ?? []).filter(mentor => mentor?._id).map(mentorSummary)
 
 // Students get every startup, to choose one to join. Staff get the startups
-// they may review, with their mentors.
+// they may review, with their mentors, narrowed to one batch with ?batch=.
 export const getVentures = async (req, res) => {
   try {
-    const data = await Venture.find(
-      isStudent(req.user) ? {} : ventureScope(req.user)
-    )
+    let scope = {}
+    if (!isStudent(req.user)) {
+      const staffScope = await listScope(req.user, req.query)
+      if (staffScope.error) {
+        return res.status(400).json({ error: staffScope.error })
+      }
+      scope = staffScope.scope
+    }
+    const data = await Venture.find(scope)
       .select('_id name campus stage industry mentors')
       .populate([
         { path: 'campus', select: 'name' },

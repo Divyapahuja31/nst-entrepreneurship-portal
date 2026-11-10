@@ -15,7 +15,12 @@ import {
 } from '../utils/applicationHelper.js'
 import Venture from '../models/venture.js'
 import startupStage from '../models/enums/startupStage.js'
-import { resolveNewVentureMentor, scopedVentureIds } from '../utils/access.js'
+import {
+  byBatchStudent,
+  listScope,
+  resolveNewVentureMentor,
+  scopedVentureIds,
+} from '../utils/access.js'
 
 // Best effort: the approval already succeeded, so a failure here is logged
 // rather than reported as a failed review.
@@ -35,15 +40,28 @@ export const getPendingApplications = async (req, res) => {
 
     // Any staff member may accept a proposal (a mentor then mentors the new
     // startup), but join requests go to the startup's own mentor.
+    // With ?batch=, only that batch's students' applications.
+    const { batchUserIds, error } = await listScope(req.user, req.query)
+    if (error) {
+      return res.status(400).json({ error })
+    }
+    // A join request goes to the startup's mentor whatever the batch, so
+    // the startups in scope are the caller's own, not the batch's.
     const ventureIds = await scopedVentureIds(req.user)
-    const joinFilter = { status: 'PENDING' }
+    const joinFilter = {
+      status: 'PENDING',
+      ...byBatchStudent('requestedBy', batchUserIds),
+    }
     if (ventureIds) {
       joinFilter.venture = { $in: ventureIds }
     }
 
     // Oldest first, so whoever has waited longest is reviewed first.
     const [proposals, joinRequests] = await Promise.all([
-      VentureProposal.find({ status: 'PENDING' })
+      VentureProposal.find({
+        status: 'PENDING',
+        ...byBatchStudent('submittedBy', batchUserIds),
+      })
         .sort({ createdAt: 1 })
         .populate('submittedBy', 'username email')
         .populate('industry', 'name')
@@ -180,7 +198,8 @@ const joinRequestReviewError = async (user, joinRequest) => {
 }
 
 export const reviewJoinRequest = async (req, res) => {
-  let approvedFounderAdded = false
+  // What approving changed, to undo if the review can't be saved.
+  let approval = null
   let joinRequest = null
 
   try {
@@ -206,13 +225,11 @@ export const reviewJoinRequest = async (req, res) => {
     }
 
     if (status === 'APPROVED') {
-      const approvalError = await handleJoinRequestApproval(joinRequest)
-      if (approvalError) {
-        return res
-          .status(approvalError.status)
-          .json({ error: approvalError.error })
+      const approved = await handleJoinRequestApproval(joinRequest)
+      if (approved.error) {
+        return res.status(approved.status).json({ error: approved.error })
       }
-      approvedFounderAdded = true
+      approval = approved
     }
 
     const updatedJoinRequest = await VentureJoinRequest.findOneAndUpdate(
@@ -222,7 +239,7 @@ export const reviewJoinRequest = async (req, res) => {
     )
 
     if (!updatedJoinRequest) {
-      await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
+      await rollbackJoinRequestApproval(joinRequest, approval)
       return res.status(409).json({
         error: 'This join request has already been reviewed',
       })
@@ -240,7 +257,7 @@ export const reviewJoinRequest = async (req, res) => {
 
     return res.status(200).json({ joinRequest: updatedJoinRequest })
   } catch (error) {
-    await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
+    await rollbackJoinRequestApproval(joinRequest, approval)
     console.error('Error reviewing join request:', error)
 
     return res.status(500).json({

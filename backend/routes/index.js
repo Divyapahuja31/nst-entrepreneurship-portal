@@ -5,6 +5,7 @@ import auth from './auth.js'
 import requireAuth from '../middleware/requireAuth.js'
 import requireRole from '../middleware/requireRole.js'
 import kpiRoutes from './kpi.js'
+import kpiRecommendationRoutes from './kpiRecommendation.js'
 import subKpiRoutes from './subkpi.js'
 import proposalRoutes from './proposal.js'
 import industryRoutes from './industry.js'
@@ -25,6 +26,7 @@ router.use('/admin', requireRole(...STAFF_ROLES), admin)
 
 // protected routes with sign in only
 router.use('/kpis', requireAuth, kpiRoutes)
+router.use('/kpi-recommendations', requireAuth, kpiRecommendationRoutes)
 router.use('/subkpis', requireAuth, subKpiRoutes)
 router.use('/proposals', requireAuth, proposalRoutes)
 router.use('/industries', requireAuth, industryRoutes)

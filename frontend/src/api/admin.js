@@ -1,9 +1,12 @@
 import { api } from './client'
 import { loadCheckIns } from './checkins'
 import toError from './toError'
+import { withBatch } from '../stores/batch'
 
 export const foundersLoader = async () => {
-  const { data } = await api.get('/admin/founders')
+  const { data } = await withBatch(params =>
+    api.get('/admin/founders', { params })
+  )
   return data
 }
 
@@ -11,7 +14,7 @@ export const foundersLoader = async () => {
 // programme meetings they run and their own check-ins.
 export const foundersCount = async () => {
   const [{ data }, myMeetings] = await Promise.all([
-    api.get('/admin/overview'),
+    withBatch(params => api.get('/admin/overview', { params })),
     loadCheckIns({ mine: 1 }),
   ])
   return { ...data, myMeetings }

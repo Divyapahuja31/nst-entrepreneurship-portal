@@ -4,12 +4,14 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   MenuItem,
   TextField,
   Typography,
@@ -113,6 +115,8 @@ export default function ScheduleCheckInDialog({
   )
   const [duration, setDuration] = useState(checkIn?.durationMinutes ?? 30)
   const [touched, setTouched] = useState(false)
+  // The KPI bot is only on for a mentor's own check-in when they ask.
+  const [kpiBot, setKpiBot] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -141,7 +145,7 @@ export default function ScheduleCheckInDialog({
     }
     const result = moving
       ? await moveCheckIn(checkIn._id, payload)
-      : await scheduleCheckIn({ ...payload, ventureId: venture.id })
+      : await scheduleCheckIn({ ...payload, ventureId: venture.id, kpiBot })
     setSaving(false)
     if (GOOGLE_CODES.includes(result.code)) {
       setStatus({
@@ -216,6 +220,17 @@ export default function ScheduleCheckInDialog({
                 </MenuItem>
               ))}
             </TextField>
+            {!moving && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={kpiBot}
+                    onChange={event => setKpiBot(event.target.checked)}
+                  />
+                }
+                label="Add KPI bot: recommend KPIs to the founders from the transcript"
+              />
+            )}
             <Typography variant="body2" color="text.secondary">
               {moving
                 ? 'The founders get the new time on their calendars.'

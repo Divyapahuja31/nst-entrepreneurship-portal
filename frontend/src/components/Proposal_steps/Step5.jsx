@@ -1,10 +1,31 @@
+import { useEffect, useState } from 'react'
 import {
   Box,
   Divider,
+  Link,
   Typography,
 } from '@mui/material'
 
+import { getStages } from '../../api/stage'
+import { normalizeWebsite } from '../proposalFormConfig.js'
+
 export default function Step5({ formData }) {
+  // The stage is stored as its key ("VALIDATION"); show its name.
+  const [stageNames, setStageNames] = useState({})
+  useEffect(() => {
+    let current = true
+    getStages()
+      .then(stages => {
+        if (current) {
+          setStageNames(Object.fromEntries(stages.map(s => [s.key, s.label])))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      current = false
+    }
+  }, [])
+
   return (
     <Box>
       <Typography variant="h5" fontWeight={600} gutterBottom>
@@ -38,14 +59,14 @@ export default function Step5({ formData }) {
 
         <Typography>
           <strong>Industry:</strong>{' '}
-          {formData.industryName || formData.industry || '-'}
+          {formData.industryName || '-'}
         </Typography>
 
         <Divider />
 
         <Typography>
           <strong>Stage:</strong>{' '}
-          {formData.stage || '-'}
+          {stageNames[formData.stage] ?? (formData.stage || '-')}
         </Typography>
 
         <Typography>
@@ -100,12 +121,25 @@ export default function Step5({ formData }) {
 
         <Typography>
           <strong>Weekly hours:</strong>{' '}
-          {formData.weeklyHours || '-'}
+          {formData.weeklyHours !== '' && formData.weeklyHours !== undefined
+            ? formData.weeklyHours
+            : '-'}
         </Typography>
 
-        <Typography>
+        <Typography component="div">
           <strong>Website:</strong>{' '}
-          {formData.website || '-'}
+          {formData.website?.trim() ? (
+            <Link
+              href={normalizeWebsite(formData.website)}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="hover"
+            >
+              {normalizeWebsite(formData.website)}
+            </Link>
+          ) : (
+            '-'
+          )}
         </Typography>
       </Box>
     </Box>

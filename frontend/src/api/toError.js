@@ -8,5 +8,9 @@ export default function toError(err, fallback = 'Something went wrong') {
 
   const { data } = err.response
 
-  return { error: data?.error || data?.message || fallback }
+  return {
+    error: data?.error || data?.message || fallback,
+    requireOtp: data?.requireOtp,
+    email: data?.email,
+  }
 }

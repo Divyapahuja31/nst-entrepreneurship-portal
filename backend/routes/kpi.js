@@ -1,6 +1,7 @@
 import express from 'express'
 import multer from 'multer'
 
+import { STAFF_ROLES } from '@nst/shared/permissions.js'
 import requireRole from '../middleware/requireRole.js'
 
 import {
@@ -11,6 +12,8 @@ import {
   getAllKPIs,
   submitKPIForApproval,
   evaluateKPI,
+  lockKPI,
+  unlockKPI,
   submitKPIEvidence,
   updateKPI,
   deleteKPI,
@@ -28,14 +31,17 @@ const router = express.Router()
 
 router.get('/', getMyKPIs)
 router.post('/', createKPI)
-router.get('/all', requireRole('admin'), getAllKPIs)
+// Every KPI the caller may review (all for the board, assigned for mentors).
+router.get('/all', requireRole(...STAFF_ROLES), getAllKPIs)
 router.get('/venture/:ventureId', getVentureKPIs)
 router.get('/founder/:founderId', getFounderKPIs)
 router.get('/:kpiId/evidence/download', downloadKPIEvidence)
 router.get('/:kpiId/download', downloadKPIEvidence)
 router.post('/:kpiId/submit', submitKPIForApproval)
-// Only an admin may accept, reject or grade a KPI.
-router.put('/:kpiId/evaluate', requireRole('admin'), evaluateKPI)
+// Who may review, lock or unlock is decided per KPI (see @nst/shared).
+router.put('/:kpiId/evaluate', evaluateKPI)
+router.post('/:kpiId/lock', lockKPI)
+router.post('/:kpiId/unlock', unlockKPI)
 router.put('/:kpiId/evidence', submitKPIEvidence)
 router.put('/:kpiId', updateKPI)
 router.delete('/:kpiId', deleteKPI)

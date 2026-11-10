@@ -1,12 +1,16 @@
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
-import Drawer from '@mui/material/Drawer'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemText from '@mui/material/ListItemText'
-import Stack from '@mui/material/Stack'
+import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
+import { normalizeWebsite } from './proposalFormConfig.js'
 
 const formatDate = value => {
   if (!value) return '-'
@@ -18,24 +22,34 @@ const formatDate = value => {
   })
 }
 
-function Field({ label, value }) {
+function Field({ label, value, isLink }) {
+  const href = isLink && value?.trim() ? normalizeWebsite(value) : null
+
   return (
     <Box sx={{ mb: 2 }}>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body1">{value || '-'}</Typography>
+      <Typography variant="body1" sx={{ mt: 0.25 }}>
+        {href ? (
+          <Link href={href} target="_blank" rel="noopener noreferrer">
+            {value}
+          </Link>
+        ) : (
+          value || '-'
+        )}
+      </Typography>
     </Box>
   )
 }
 
 function Section({ title, children }) {
   return (
-    <Box sx={{ mt: 3 }}>
-      <Typography variant="subtitle2" gutterBottom>
+    <Box sx={{ mt: 3, '&:first-of-type': { mt: 1 } }}>
+      <Typography variant="h6" component="h3">
         {title}
       </Typography>
-      <Divider sx={{ mb: 2 }} />
+      <Divider sx={{ my: 1.5 }} />
       {children}
     </Box>
   )
@@ -48,7 +62,7 @@ function ItemList({ items }) {
     <List dense disablePadding>
       {items.map((item, index) => (
         <ListItem key={index} disableGutters>
-          <ListItemText primary={item} />
+          <ListItemText primary={`• ${item}`} />
         </ListItem>
       ))}
     </List>
@@ -63,74 +77,99 @@ export default function ProposalDrawer({
   busy,
 }) {
   return (
-    <Drawer anchor="right" open={Boolean(proposal)} onClose={onClose}>
-      <Box sx={{ width: { xs: '100vw', sm: 480 }, p: 3 }}>
-        {proposal && (
-          <>
-            <Typography variant="h5" gutterBottom>
+    <Dialog
+      open={Boolean(proposal)}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      scroll="paper"
+      slotProps={{ paper: { sx: { maxHeight: '90vh' } } }}
+    >
+      {proposal && (
+        <>
+          <DialogTitle>
+            <Typography variant="h5" component="div">
               {proposal.startupName}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Submitted by {proposal.submittedBy?.username || '-'} on{' '}
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Submitted by{' '}
+              <strong>{proposal.submittedBy?.username || '-'}</strong> on{' '}
               {formatDate(proposal.createdAt)}
             </Typography>
+          </DialogTitle>
 
-            <Section title="The idea">
-              <Field label="PROBLEM" value={proposal.description} />
-              <Field label="TARGET CUSTOMER" value={proposal.targetCustomer} />
+          <DialogContent dividers>
+            <Section title="The Idea">
+              <Field label="Problem" value={proposal.description} />
+              <Field label="Target customer" value={proposal.targetCustomer} />
               <Field
-                label="INDUSTRY"
+                label="Industry"
                 value={proposal.industry?.name || proposal.industryName}
               />
-              <Field label="CAMPUS" value={proposal.campus?.name} />
+              <Field label="Campus" value={proposal.campus?.name} />
             </Section>
 
-            <Section title="Where it stands">
-              <Field label="STAGE" value={proposal.stage} />
+            <Section title="Where It Stands">
               <Field
-                label="CURRENT TRACTION"
+                label="Stage"
+                value={proposal.stageLabel ?? proposal.stage}
+              />
+              <Field
+                label="Current traction"
                 value={proposal.currentTraction}
               />
-              <Field label="BUSINESS MODEL" value={proposal.businessModel} />
+              <Field label="Business model" value={proposal.businessModel} />
               <Field
-                label="ACHIEVEMENTS TILL NOW"
+                label="Achievements so far"
                 value={proposal.achievementsTillNow}
               />
             </Section>
 
-            <Section title="Assumptions & risks">
-              <Typography variant="caption" color="text.secondary">
-                ASSUMPTIONS
+            <Section title="Assumptions & Risks">
+              <Typography variant="body2" color="text.secondary">
+                Assumptions
               </Typography>
-              <ItemList items={proposal.assumptions} />
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mt: 2, display: 'block' }}
-              >
-                RISKS
-              </Typography>
-              <ItemList items={proposal.risks} />
-
-              <Box sx={{ mt: 2 }}>
-                <Field label="SIX-MONTH GOALS" value={proposal.sixMonthGoals} />
+              <Box sx={{ mb: 2, mt: 0.5 }}>
+                <ItemList items={proposal.assumptions} />
               </Box>
+
+              <Typography variant="body2" color="text.secondary">
+                Risks
+              </Typography>
+              <Box sx={{ mb: 2, mt: 0.5 }}>
+                <ItemList items={proposal.risks} />
+              </Box>
+
+              <Field label="Six-month goals" value={proposal.sixMonthGoals} />
             </Section>
 
             <Section title="Execution">
-              <Field label="TECH STACK" value={proposal.techStack} />
-              <Field label="CAPITAL STATUS" value={proposal.capitalStatus} />
+              <Field label="Tech stack" value={proposal.techStack} />
+              <Field label="Capital status" value={proposal.capitalStatus} />
               <Field
-                label="WEEKLY COMMITMENT"
+                label="Weekly commitment"
                 value={
                   proposal.weeklyHours ? `${proposal.weeklyHours} hours` : null
                 }
               />
-              <Field label="WEBSITE" value={proposal.website} />
+              <Field label="Website" value={proposal.website} isLink />
             </Section>
+          </DialogContent>
 
-            <Stack direction="row" spacing={1} sx={{ mt: 3 }}>
+          <DialogActions sx={{ justifyContent: 'space-between' }}>
+            <Button onClick={onClose} disabled={busy} variant="text">
+              Close
+            </Button>
+
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Button
+                variant="outlined"
+                color="error"
+                disabled={busy}
+                onClick={() => onReject(proposal)}
+              >
+                Reject
+              </Button>
               <Button
                 variant="contained"
                 disabled={busy}
@@ -138,20 +177,10 @@ export default function ProposalDrawer({
               >
                 Approve
               </Button>
-              <Button
-                variant="outlined"
-                disabled={busy}
-                onClick={() => onReject(proposal)}
-              >
-                Reject
-              </Button>
-              <Button onClick={onClose} disabled={busy}>
-                Close
-              </Button>
-            </Stack>
-          </>
-        )}
-      </Box>
-    </Drawer>
+            </Box>
+          </DialogActions>
+        </>
+      )}
+    </Dialog>
   )
 }

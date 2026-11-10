@@ -1,65 +1,98 @@
 import { useState, Fragment } from 'react'
 import { useLoaderData, useNavigation, useRevalidator } from 'react-router'
 
-import { evaluateKPI, createKPIWithSubKpis } from '../api/kpi'
 import {
-  Box,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Button,
-  Chip,
-  IconButton,
-  Collapse,
-  CircularProgress,
-  Card,
-  CardContent,
-  Grid,
   Alert,
-  Tooltip,
+  Box,
+  Button,
+  CircularProgress,
+  Divider,
+  MenuItem,
+  Tab,
+  Tabs,
+  TextField,
 } from '@mui/material'
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
-import RateReviewIcon from '@mui/icons-material/RateReview'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import CancelIcon from '@mui/icons-material/Cancel'
-import PendingActionsIcon from '@mui/icons-material/PendingActions'
-import ScoreIcon from '@mui/icons-material/Score'
-import EventNoteIcon from '@mui/icons-material/EventNote'
-import ThumbUpAltIcon from '@mui/icons-material/ThumbUpAlt'
-import AddIcon from '@mui/icons-material/Add'
 
-import KPIExpandedDetails from './KPIExpandedDetails'
-import KPIEvaluateDialog from './KPIEvaluateDialog'
+import { canAddKpi, canEvaluateKpi } from '@nst/shared/permissions.js'
+
+import {
+  createKPIWithSubKpis,
+  evaluateKPI,
+  lockKPI,
+  unlockKPI,
+} from '../api/kpi'
+import useAccess from '../hooks/useAccess'
+import KpiLockAction from './KpiLockAction'
+import KpiRecommendations from './KpiRecommendations'
+import { mentorIdsOf, staffKpiContext } from './kpiAccess'
 import AddKpi from './AddKpi'
+import EmptyState from './EmptyState'
+import KPIEvaluateDialog from './KPIEvaluateDialog'
+import { KpiDetails, KpiRow } from './KpiList'
+import SectionCard from './SectionCard'
+import StatTile from './StatTile'
+import {
+  CheckCircleIcon,
+  HourglassIcon,
+  KpiIcon,
+  PlusIcon,
+  TargetIcon,
+} from './icons'
 
-const STATUS_COLORS = {
-  DRAFT: 'default',
-  WAITING_FOR_APPROVAL: 'warning',
-  ACCEPTED: 'info',
-  GRADED: 'success',
-  REJECTED: 'error',
-}
-
-const formatDate = dateStr => {
-  if (!dateStr) return '-'
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return '-'
+// The review step a staff member takes next on a KPI, by its status.
+function ReviewAction({ kpi, busy, approving, onApprove, onOpen }) {
+  switch (kpi.status) {
+    case 'WAITING_FOR_APPROVAL':
+      return (
+        <>
+          <Button
+            variant="outlined"
+            color="success"
+            loading={approving}
+            disabled={busy && !approving}
+            onClick={onApprove}
+          >
+            Approve
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            disabled={busy}
+            onClick={() => onOpen('REJECTED')}
+          >
+            Reject
+          </Button>
+        </>
+      )
+    case 'ACCEPTED':
+      return (
+        <Button variant="outlined" onClick={() => onOpen('GRADED')}>
+          Grade
+        </Button>
+      )
+    case 'GRADED':
+      return (
+        <Button variant="text" onClick={() => onOpen('GRADED')}>
+          Update Grade
+        </Button>
+      )
+    case 'REJECTED':
+      return (
+        <Button variant="outlined" onClick={() => onOpen('ACCEPTED')}>
+          Review
+        </Button>
+      )
+    default:
+      return null
   }
 }
 
-export default function KPIReview({ kpis: propKpis, founder, venture }) {
+export default function KPIReview({
+  kpis: propKpis,
+  founder,
+  venture,
+  founders = [],
+}) {
   const loaderData = useLoaderData()
   const navigation = useNavigation()
   const revalidator = useRevalidator()
@@ -67,10 +100,90 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
   const kpis = propKpis || loaderData?.kpis || []
   const loading = navigation.state === 'loading'
   const [savingEval, setSavingEval] = useState(false)
+  const [lockingId, setLockingId] = useState(null)
+
+  // Who may review, lock or add KPIs depends on whether the startup is
+  // assigned to this mentor (the board may always).
+  const { actor } = useAccess()
+  const contextOf = kpi => staffKpiContext(kpi, venture?.mentors)
+  const mayAddKpi = canAddKpi(actor, {
+    ventureMentorIds: mentorIdsOf(venture?.mentors),
+    isMember: false,
+    founderId: null,
+  })
+
+  const members = (
+    founders.length > 0
+      ? founders
+      : founder
+        ? [founder]
+        : loaderData?.founders || []
+  ).map(f => ({
+    id: f.user?._id || f._id || f.id,
+    username: f.username || f.user?.username || 'Member',
+    email: f.email || f.user?.email || '',
+  }))
 
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [expandedId, setExpandedId] = useState(null)
+
+  const [tabIndex, setTabIndex] = useState(0)
+  const [selectedMemberId, setSelectedMemberId] = useState('')
+
+  const currentFounderId =
+    founder?._id || founder?.id || founder?.user?._id || founder?.user || null
+
+  const allMembersMap = new Map()
+  members.forEach(m => allMembersMap.set(String(m.id), m))
+  kpis.forEach(k => {
+    if (k.founder) {
+      const fid = String(k.founder._id || k.founder)
+      if (!allMembersMap.has(fid)) {
+        allMembersMap.set(fid, {
+          id: fid,
+          username: k.founder.username || 'Member',
+          email: k.founder.email || '',
+        })
+      }
+    }
+  })
+  const availableMembers = Array.from(allMembersMap.values())
+
+  const allCount = kpis.length
+  const startupKpisCount = kpis.filter(k => !k.founder).length
+  const founderKpisCount = founder
+    ? kpis.filter(
+        k =>
+          k.founder &&
+          String(k.founder._id || k.founder) === String(currentFounderId)
+      ).length
+    : kpis.filter(k => Boolean(k.founder)).length
+
+  const filteredKpis = kpis.filter(kpi => {
+    const kpiFounderId = kpi.founder?._id || kpi.founder
+    if (founder) {
+      if (tabIndex === 1) {
+        return kpiFounderId && String(kpiFounderId) === String(currentFounderId)
+      }
+      if (tabIndex === 2) {
+        return !kpi.founder
+      }
+      return true
+    }
+
+    if (tabIndex === 1) {
+      return !kpi.founder
+    }
+    if (tabIndex === 2) {
+      if (!kpi.founder) return false
+      if (selectedMemberId) {
+        return String(kpiFounderId) === String(selectedMemberId)
+      }
+      return true
+    }
+    return true
+  })
 
   const [evalDialogOpen, setEvalDialogOpen] = useState(false)
   const [selectedKpi, setSelectedKpi] = useState(null)
@@ -80,11 +193,15 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
   const handleCreateKpi = async payload => {
     try {
       const ventureId = venture?.id || venture?._id
+      const assignedFounder =
+        payload.founder !== undefined
+          ? payload.founder
+          : founder?._id || founder?.id || null
+
       const res = await createKPIWithSubKpis({
         ...payload,
         venture: ventureId,
-        scope: founder ? 'FOUNDER' : 'VENTURE',
-        founder: founder?._id || founder?.id || null,
+        founder: assignedFounder,
       })
       if (res?.error) {
         throw new Error(res.error)
@@ -108,7 +225,13 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
     setEvalDialogOpen(false)
 
     try {
-      await evaluateKPI({ kpiId, score, status, feedback })
+      await evaluateKPI({
+        kpiId,
+        score,
+        status,
+        feedback,
+        expectedStatus: selectedKpi?.status,
+      })
     } catch (err) {
       setSavingEval(false)
       setErrorMsg(err.message || 'Failed to evaluate KPI')
@@ -118,474 +241,244 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
     setSavingEval(false)
 
     setSuccessMsg(
-      status === 'GRADED'
-        ? `KPI graded successfully.`
-        : `KPI status updated to ${status}.`
+      {
+        ACCEPTED: 'KPI approved.',
+        REJECTED: 'KPI rejected.',
+        GRADED: 'KPI graded.',
+      }[status] || 'KPI updated.'
     )
     revalidator.revalidate()
     setTimeout(() => setSuccessMsg(''), 4000)
   }
 
-  const totalCount = kpis.length
-  const pendingCount = kpis.filter(
-    k => k.status === 'WAITING_FOR_APPROVAL'
-  ).length
-  const acceptedCount = kpis.filter(k => k.status === 'ACCEPTED').length
-  const gradedCount = kpis.filter(k => k.status === 'GRADED').length
-
-  const gradedKpisWithScores = kpis.filter(
-    k =>
-      k.status === 'GRADED' &&
-      typeof k.score === 'number' &&
-      !Number.isNaN(k.score)
-  )
-  const averageScore = gradedKpisWithScores.length
-    ? Math.round(
-        gradedKpisWithScores.reduce((acc, curr) => acc + (curr.score || 0), 0) /
-          gradedKpisWithScores.length
+  const setLock = async (kpi, locked) => {
+    setLockingId(kpi._id)
+    setErrorMsg('')
+    try {
+      await (locked ? lockKPI(kpi._id) : unlockKPI(kpi._id))
+      setSuccessMsg(
+        locked
+          ? 'KPI locked. Its grade is final.'
+          : 'KPI unlocked. Its mentors can change the grade again.'
       )
-    : '-'
+      revalidator.revalidate()
+    } catch (err) {
+      setErrorMsg(err.message)
+    } finally {
+      setLockingId(null)
+    }
+  }
 
-  const statCards = [
-    {
-      label: 'Total KPIs',
-      val: totalCount,
-      Icon: EventNoteIcon,
-      color: 'primary',
-    },
-    {
-      label: 'Awaiting Acceptance',
-      val: pendingCount,
-      Icon: PendingActionsIcon,
-      color: 'warning',
-    },
-    {
-      label: 'Accepted',
-      val: acceptedCount,
-      Icon: ThumbUpAltIcon,
-      color: 'info',
-    },
-    {
-      label: `Graded (${gradedCount})`,
-      val: `Avg ${averageScore}`,
-      Icon: ScoreIcon,
-      color: 'success',
-    },
-  ]
+  const totalCount = filteredKpis.length
+  const [approvingId, setApprovingId] = useState(null)
+  const approve = async kpi => {
+    setApprovingId(kpi._id)
+    await handleSaveEvaluation({
+      kpiId: kpi._id,
+      status: 'ACCEPTED',
+      feedback: kpi.feedback || '',
+    })
+    setApprovingId(null)
+  }
 
-  const displayError = errorMsg
+  const countOf = status => filteredKpis.filter(k => k.status === status).length
+  const graded = filteredKpis.filter(
+    k => k.status === 'GRADED' && typeof k.score === 'number'
+  )
+  const averageScore = graded.length
+    ? Math.round(graded.reduce((sum, k) => sum + k.score, 0) / graded.length)
+    : null
+
+  const tabs = founder
+    ? [
+        `All (${allCount})`,
+        `${founder.username?.split(' ')[0] || 'Founder'}'s (${founderKpisCount})`,
+        `Startup (${startupKpisCount})`,
+      ]
+    : [
+        `All (${allCount})`,
+        `Startup (${startupKpisCount})`,
+        `Members (${founderKpisCount})`,
+      ]
+
+  const emptyDescription =
+    kpis.length === 0
+      ? founder
+        ? `${founder.username || 'This founder'} hasn't set any KPIs yet.`
+        : "This startup hasn't set any KPIs yet."
+      : 'No KPIs match this filter.'
+
+  const ownerOf = kpi =>
+    kpi.founder?.username || (kpi.founder ? 'Member' : 'Entire startup')
 
   return (
-    <Box sx={{ width: '100%', py: 1 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 3,
-        }}
-      >
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            KPI Review & Grading Dashboard
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {founder ? (
-              <>
-                Founder: <strong>{founder?.username || founder?.email || 'N/A'}</strong>
-                {venture?.name ? ` | Startup: ${venture.name}` : ''}
-              </>
-            ) : venture?.name ? (
-              <>
-                Startup: <strong>{venture.name}</strong>
-              </>
-            ) : null}
-          </Typography>
-        </Box>
-        {venture && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => setAddKpiOpen(true)}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            Add KPI
-          </Button>
-        )}
-      </Box>
-
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {statCards.map(stat => (
-          <Grid item xs={12} sm={6} md={3} key={stat.label}>
-            <Card variant="outlined" sx={{ borderRadius: 2 }}>
-              <CardContent
-                sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}
-              >
-                <stat.Icon color={stat.color} sx={{ fontSize: 36 }} />
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {stat.label}
-                  </Typography>
-                  <Typography
-                    variant="h6"
-                    sx={{ fontWeight: 700, color: `${stat.color}.main` }}
-                  >
-                    {stat.val}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
+    <Box>
       {successMsg && (
         <Alert
           severity="success"
-          sx={{ mb: 2 }}
+          sx={{ mb: 3 }}
           onClose={() => setSuccessMsg('')}
         >
           {successMsg}
         </Alert>
       )}
-
-      {displayError && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMsg('')}>
-          {displayError}
+      {errorMsg && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorMsg('')}>
+          {errorMsg}
         </Alert>
       )}
 
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 6 }}>
-          <CircularProgress />
-        </Box>
-      ) : kpis.length === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}
-        >
-          <Typography variant="body1" color="text.secondary" sx={{ mb: venture ? 2 : 0 }}>
-            {founder
-              ? 'No KPIs submitted or registered yet for this student.'
-              : 'No KPIs submitted or registered yet for this venture.'}
-          </Typography>
-          {venture && (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => setAddKpiOpen(true)}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
-            >
-              Add KPI
-            </Button>
-          )}
-        </Paper>
-      ) : (
-        <TableContainer
-          component={Paper}
-          variant="outlined"
-          sx={{ borderRadius: 2 }}
-        >
-          <Table aria-label="KPI Review Table">
-            <TableHead sx={{ backgroundColor: '#f8fafc' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>KPI Title</TableCell>
-                {!founder && (
-                  <TableCell sx={{ fontWeight: 700 }} align="center">
-                    Scope / Owner
-                  </TableCell>
-                )}
-                <TableCell sx={{ fontWeight: 700 }} align="center">
-                  Due Date
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">
-                  Submission Date
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">
-                  Status
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">
-                  Score / Grade
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">
-                  Graded Date
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">
-                  Teacher Actions
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {kpis.map((kpi, idx) => {
-                const isExpanded = expandedId === kpi._id
-                return (
-                  <Fragment key={kpi._id}>
-                    <TableRow
-                      hover
-                      sx={{
-                        '& > *': {
-                          borderBottom: isExpanded ? 'unset' : undefined,
-                        },
-                      }}
-                    >
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell>
-                        <Box
-                          onClick={() =>
-                            setExpandedId(prev =>
-                              prev === kpi._id ? null : kpi._id
-                            )
-                          }
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            '&:hover': { color: 'primary.main' },
-                          }}
-                        >
-                          <IconButton
-                            size="small"
-                            onClick={e => {
-                              e.stopPropagation()
-                              setExpandedId(prev =>
-                                prev === kpi._id ? null : kpi._id
-                              )
-                            }}
-                          >
-                            {isExpanded ? (
-                              <KeyboardArrowUpIcon fontSize="small" />
-                            ) : (
-                              <KeyboardArrowDownIcon fontSize="small" />
-                            )}
-                          </IconButton>
-                          {kpi.title}
-                        </Box>
-                      </TableCell>
-                      {!founder && (
-                        <TableCell align="center">
-                          <Chip
-                            label={
-                              kpi.scope === 'FOUNDER'
-                                ? kpi.founder?.username || 'Founder'
-                                : 'Whole Team'
-                            }
-                            size="small"
-                            variant="outlined"
-                            color={kpi.scope === 'FOUNDER' ? 'primary' : 'default'}
-                          />
-                        </TableCell>
-                      )}
-                      <TableCell align="center">
-                        <Typography variant="body2">
-                          {formatDate(kpi.dueDate)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        {kpi.submissionDate ? (
-                          <Chip
-                            label={formatDate(kpi.submissionDate)}
-                            size="small"
-                            variant="outlined"
-                            color="info"
-                          />
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">
-                            Not submitted
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          label={kpi.status}
-                          size="small"
-                          color={STATUS_COLORS[kpi.status] || 'default'}
-                          sx={{ fontWeight: 600 }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 700,
-                            color:
-                              kpi.status === 'GRADED'
-                                ? 'success.main'
-                                : 'text.primary',
-                          }}
-                        >
-                          {kpi.status === 'GRADED' &&
-                          kpi.score !== undefined &&
-                          kpi.score !== null
-                            ? `${kpi.score} pts`
-                            : '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        {kpi.evaluationDate ? (
-                          <Chip
-                            label={formatDate(kpi.evaluationDate)}
-                            size="small"
-                            variant="filled"
-                            color="success"
-                          />
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">
-                            Pending
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            gap: 1,
-                          }}
-                        >
-                          {kpi.status === 'WAITING_FOR_APPROVAL' && (
-                            <>
-                              <Tooltip title="Accept KPI definition">
-                                <Button
-                                  variant="contained"
-                                  color="success"
-                                  size="small"
-                                  startIcon={<CheckCircleIcon />}
-                                  disabled={savingEval}
-                                  onClick={() =>
-                                    handleSaveEvaluation({
-                                      kpiId: kpi._id,
-                                      status: 'ACCEPTED',
-                                      feedback: kpi.feedback || '',
-                                    })
-                                  }
-                                  sx={{
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    py: 0.5,
-                                  }}
-                                >
-                                  Accept
-                                </Button>
-                              </Tooltip>
-                              <Tooltip title="Reject KPI definition">
-                                <Button
-                                  variant="outlined"
-                                  color="error"
-                                  size="small"
-                                  startIcon={<CancelIcon />}
-                                  onClick={() =>
-                                    handleOpenEvaluate(kpi, 'REJECTED')
-                                  }
-                                  disabled={savingEval}
-                                  sx={{
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    py: 0.5,
-                                  }}
-                                >
-                                  Reject
-                                </Button>
-                              </Tooltip>
-                            </>
-                          )}
+      <Box
+        sx={{
+          display: 'grid',
+          gap: { xs: 2, sm: 3 },
+          gridTemplateColumns: {
+            xs: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(4, minmax(0, 1fr))',
+          },
+          mb: { xs: 2, sm: 3 },
+        }}
+      >
+        <StatTile icon={KpiIcon} label="Total" value={totalCount} />
+        <StatTile
+          icon={HourglassIcon}
+          tint="orange"
+          label="Awaiting approval"
+          value={countOf('WAITING_FOR_APPROVAL')}
+        />
+        <StatTile
+          icon={TargetIcon}
+          label="To grade"
+          value={countOf('ACCEPTED')}
+        />
+        <StatTile
+          icon={CheckCircleIcon}
+          tint="green"
+          label="Graded"
+          value={countOf('GRADED')}
+          detail={averageScore != null ? `Average ${averageScore} pts` : null}
+        />
+      </Box>
 
-                          {kpi.status === 'ACCEPTED' && (
-                            <Button
-                              variant="contained"
-                              color="primary"
-                              size="small"
-                              startIcon={<RateReviewIcon fontSize="small" />}
-                              onClick={() => handleOpenEvaluate(kpi, 'GRADED')}
-                              sx={{
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                py: 0.5,
-                              }}
-                            >
-                              Grade KPI
-                            </Button>
-                          )}
-
-                          {kpi.status === 'GRADED' && (
-                            <Button
-                              variant="outlined"
-                              color="primary"
-                              size="small"
-                              startIcon={<RateReviewIcon fontSize="small" />}
-                              onClick={() => handleOpenEvaluate(kpi, 'GRADED')}
-                              sx={{
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                py: 0.5,
-                              }}
-                            >
-                              Update Grade
-                            </Button>
-                          )}
-
-                          {kpi.status === 'REJECTED' && (
-                            <Button
-                              variant="outlined"
-                              color="warning"
-                              size="small"
-                              startIcon={<RateReviewIcon fontSize="small" />}
-                              onClick={() =>
-                                handleOpenEvaluate(kpi, 'ACCEPTED')
-                              }
-                              sx={{
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                py: 0.5,
-                              }}
-                            >
-                              Review / Accept
-                            </Button>
-                          )}
-
-                          {kpi.status === 'DRAFT' && (
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<RateReviewIcon fontSize="small" />}
-                              onClick={() => handleOpenEvaluate(kpi)}
-                              sx={{
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                py: 0.5,
-                              }}
-                            >
-                              Review
-                            </Button>
-                          )}
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-
-                    <TableRow>
-                      <TableCell
-                        style={{ paddingBottom: 0, paddingTop: 0 }}
-                        colSpan={founder ? 8 : 9}
-                      >
-                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                          <KPIExpandedDetails kpi={kpi} />
-                        </Collapse>
-                      </TableCell>
-                    </TableRow>
-                  </Fragment>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      {venture && mayAddKpi && (
+        <KpiRecommendations
+          ventureId={venture.id || venture._id}
+          founderId={founder ? currentFounderId : null}
+          onAccepted={() => revalidator.revalidate()}
+          sx={{ height: 'auto', mb: { xs: 2, sm: 3 } }}
+        />
       )}
+
+      <SectionCard
+        title="KPIs"
+        action={
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexWrap: 'wrap',
+              justifyContent: { xs: 'space-between', sm: 'flex-end' },
+              width: { xs: '100%', sm: 'auto' },
+            }}
+          >
+            <Tabs
+              value={tabIndex}
+              onChange={(_, value) => {
+                setTabIndex(value)
+                setSelectedMemberId('')
+              }}
+              aria-label="Filter KPIs"
+              variant="scrollable"
+              scrollButtons={false}
+              sx={{
+                maxWidth: '100%',
+                '& .MuiTab-root': { minWidth: 0, px: { xs: 1.25, sm: 2 } },
+              }}
+            >
+              {tabs.map(label => (
+                <Tab key={label} label={label} />
+              ))}
+            </Tabs>
+            {venture && mayAddKpi && (
+              <Button
+                variant="contained"
+                startIcon={<PlusIcon />}
+                onClick={() => setAddKpiOpen(true)}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Add KPI
+              </Button>
+            )}
+          </Box>
+        }
+      >
+        {!founder && tabIndex === 2 && availableMembers.length > 1 && (
+          <TextField
+            select
+            label="Member"
+            size="small"
+            value={selectedMemberId}
+            onChange={event => setSelectedMemberId(event.target.value)}
+            sx={{ mb: 2, minWidth: 220 }}
+          >
+            <MenuItem value="">All members</MenuItem>
+            {availableMembers.map(member => (
+              <MenuItem key={member.id} value={String(member.id)}>
+                {member.username}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+
+        {loading ? (
+          <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : filteredKpis.length === 0 ? (
+          <EmptyState
+            icon={KpiIcon}
+            title="No KPIs"
+            description={emptyDescription}
+          />
+        ) : (
+          filteredKpis.map((kpi, index) => (
+            <Fragment key={kpi._id}>
+              {index > 0 && <Divider />}
+              <KpiRow
+                kpi={kpi}
+                owner={ownerOf(kpi)}
+                expanded={expandedId === kpi._id}
+                onToggle={() =>
+                  setExpandedId(prev => (prev === kpi._id ? null : kpi._id))
+                }
+                action={
+                  <>
+                    {canEvaluateKpi(actor, contextOf(kpi)) && (
+                      <ReviewAction
+                        kpi={kpi}
+                        busy={savingEval}
+                        approving={approvingId === kpi._id}
+                        onApprove={() => approve(kpi)}
+                        onOpen={status => handleOpenEvaluate(kpi, status)}
+                      />
+                    )}
+                    <KpiLockAction
+                      actor={actor}
+                      ctx={contextOf(kpi)}
+                      busy={lockingId === kpi._id}
+                      onLock={() => setLock(kpi, true)}
+                      onUnlock={() => setLock(kpi, false)}
+                    />
+                  </>
+                }
+              >
+                <KpiDetails kpi={kpi} showEvaluator />
+              </KpiRow>
+            </Fragment>
+          ))
+        )}
+      </SectionCard>
 
       <KPIEvaluateDialog
         open={evalDialogOpen}
@@ -600,6 +493,7 @@ export default function KPIReview({ kpis: propKpis, founder, venture }) {
 
       <AddKpi
         open={addKpiOpen}
+        members={members}
         onClose={() => setAddKpiOpen(false)}
         onSave={handleCreateKpi}
       />

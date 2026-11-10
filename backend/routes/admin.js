@@ -1,8 +1,15 @@
 import { Router } from 'express'
+import { BOARD_ROLES, ROLES } from '@nst/shared/permissions.js'
+
+import requireRole from '../middleware/requireRole.js'
+import accounts from './accounts.js'
+import extraSessions from './extraSessions.js'
+import programme from './programme.js'
+import setup from './setup.js'
 
 import {
   createFounder,
-  getFounderOptions,
+  getFounderFormOptions,
   getFounders,
   deleteFounders,
 } from '../controllers/founder.js'
@@ -15,16 +22,32 @@ import {
   reviewJoinRequest,
 } from '../controllers/application.js'
 
+import { getMentors, setVentureMentors } from '../controllers/venture.js'
+
+// Mounted behind requireRole(...STAFF_ROLES). Each handler limits mentors to
+// the startups assigned to them; routes for the board or admins only say so.
 const router = Router()
 
 router.get('/founders', getFounders)
 router.post('/founders', createFounder)
-router.get('/founder-options', getFounderOptions)
+router.get('/founder-options', getFounderFormOptions)
 router.get('/overview', getOverview)
-router.delete('/founders/delete', deleteFounders)
+router.delete('/founders/delete', requireRole(...BOARD_ROLES), deleteFounders)
 
 router.get('/applications', getPendingApplications)
 router.patch('/proposals/:proposalId/review', reviewProposal)
 router.patch('/join-requests/:requestId/review', reviewJoinRequest)
+
+router.get('/mentors', getMentors)
+router.put(
+  '/ventures/:ventureId/mentors',
+  requireRole(...BOARD_ROLES),
+  setVentureMentors
+)
+
+router.use('/accounts', requireRole(ROLES.ADMIN), accounts)
+router.use('/programme', requireRole(ROLES.ADMIN), programme)
+router.use('/extra-sessions', requireRole(...BOARD_ROLES), extraSessions)
+router.use('/setup', requireRole(ROLES.ADMIN), setup)
 
 export default router

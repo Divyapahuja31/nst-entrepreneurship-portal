@@ -1,4 +1,5 @@
 import { api } from './client'
+import { loadCheckIns } from './checkins'
 import toError from './toError'
 
 export const foundersLoader = async () => {
@@ -6,9 +7,14 @@ export const foundersLoader = async () => {
   return data
 }
 
+// The overview, and the meetings the signed-in staff member holds:
+// programme meetings they run and their own check-ins.
 export const foundersCount = async () => {
-  const { data } = await api.get('/admin/overview')
-  return data
+  const [{ data }, myMeetings] = await Promise.all([
+    api.get('/admin/overview'),
+    loadCheckIns({ mine: 1 }),
+  ])
+  return { ...data, myMeetings }
 }
 
 export const addFounderLoader = async () => {
@@ -16,21 +22,20 @@ export const addFounderLoader = async () => {
   return data
 }
 
-export const biWeeklyLoader = async ({ params }) => {
-  const [{ data: biweekly }, kpisRes] = await Promise.all([
-    api.get('/biweekly', {
-      params: {
-        ventureId: params?.ventureId,
-        founderId: params?.userid,
-      },
-    }),
+// The founder, their KPIs, the bi-weekly reports of the startup they are
+// in now and the check-ins they were invited to.
+export const founderProfileLoader = async ({ params }) => {
+  const [{ data: biweekly }, kpisRes, checkIns] = await Promise.all([
+    api.get('/biweekly', { params: { founderId: params?.userid } }),
     api
       .get(`/kpis/founder/${params?.userid}`)
       .catch(() => ({ data: { data: [] } })),
+    loadCheckIns({ founderId: params?.userid }),
   ])
   return {
     ...biweekly,
     kpis: kpisRes.data?.data || [],
+    checkIns,
   }
 }
 

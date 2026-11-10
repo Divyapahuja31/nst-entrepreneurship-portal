@@ -1,38 +1,70 @@
 import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
+import Box from '@mui/material/Box'
 import MenuItem from '@mui/material/MenuItem'
-import FormControl from '@mui/material/FormControl'
-import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 
 import React from 'react'
 import { Link, useLoaderData, useRevalidator } from 'react-router'
 
+import EmptyState from '../../components/EmptyState'
+import PageHeader from '../../components/PageHeader'
+import SectionCard from '../../components/SectionCard'
 import CustomizedTable from '../../components/Table'
+import StatusPill from '../../components/StatusPill'
+import { PeopleIcon, PlusIcon } from '../../components/icons'
 import { deleteFounders } from '../../api/admin'
 
 const FILTER_LABELS = {
-  campus: 'All campuses',
-  stage: 'All stages',
-  status: 'All statuses',
+  campus: 'Campus',
+  stage: 'Stage',
+  status: 'Status',
 }
 
 const columnNames = [
-  'founder',
-  'startup',
-  'campus',
-  'stage',
-  'team',
-  'score',
-  'status',
+  { key: 'founder', label: 'Founder' },
+  { key: 'startup', label: 'Startup' },
+  { key: 'campus', label: 'Campus' },
+  { key: 'stage', label: 'Stage' },
+  { key: 'team', label: 'Team', align: 'right' },
+  { key: 'score', label: 'Score', align: 'right' },
+  { key: 'status', label: 'Status' },
 ]
 
+const REMOVED = 'Founder removed successfully'
+
+const HEALTH_TINTS = {
+  'on track': 'green',
+  watch: 'orange',
+  'at risk': 'red',
+}
+
+// The status column as a pill; filtering still uses the plain string.
+const withStatusPill = student => ({
+  ...student,
+  status: student.status ? (
+    <StatusPill
+      label={student.status}
+      tint={HEALTH_TINTS[String(student.status).toLowerCase()] || 'gray'}
+      plain={!HEALTH_TINTS[String(student.status).toLowerCase()]}
+    />
+  ) : (
+    '-'
+  ),
+})
+
 function Portfolio() {
-  const noLabelId = React.useId()
   const { students, ...filterData } = useLoaderData()
   const revalidator = useRevalidator()
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [confirming, setConfirming] = React.useState(false)
   const [error, setError] = React.useState('')
+  const [notice, setNotice] = React.useState('')
   const [filters, setFilters] = React.useState({})
   const [selectedRows, setSelectedRows] = React.useState([])
   const founderQuery = (filters.founder ?? '').trim().toLowerCase()
@@ -53,114 +85,200 @@ function Portfolio() {
       )
     })
   })
-  const handleDeleteFounders = async () => {
-    if (selectedRows.length === 0) {
-      alert('Please select at least one founder to delete.')
-      return
-    }
+  // Only rows that are still visible count as selected: a founder hidden by
+  // a filter must never be removed by a click the admin can't see.
+  const visibleById = new Map(
+    visibleStudents.map(student => [String(student.id), student])
+  )
+  const selectedVisible = selectedRows.filter(id => visibleById.has(String(id)))
+  const selectedStudents = selectedVisible.map(id =>
+    visibleById.get(String(id))
+  )
 
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete ${selectedRows.length} founder(s)?`
-    )
-    if (!confirmDelete) {
-      return
-    }
+  const nameOf = id =>
+    students.find(student => String(student.id) === String(id))?.founder ?? id
 
-    const founders = selectedRows
+  const handleRemoveFounders = async () => {
+    const founders = selectedVisible
 
-    setSelectedRows([])
+    setConfirming(false)
     setIsDeleting(true)
     setError('')
+    setNotice('')
 
-    const result = await deleteFounders(founders)
+    const response = await deleteFounders(founders)
 
     setIsDeleting(false)
 
-    if (result.error) {
-      setError(result.error)
+    if (response.error) {
+      // Keep the selection so the admin can retry.
+      setError(response.error)
       return
     }
 
+    const results = response.data?.result ?? []
+    const failed = results.filter(item => item.message !== REMOVED)
+    const removedCount = results.length - failed.length
+
+    setSelectedRows([])
+    if (removedCount) {
+      setNotice(
+        `Removed ${removedCount} founder${removedCount === 1 ? '' : 's'} from their startup.`
+      )
+    }
+    if (failed.length) {
+      setError(
+        `Could not remove ${failed
+          .map(item => `${nameOf(item.founderId)} (${item.message})`)
+          .join(', ')}.`
+      )
+    }
     revalidator.revalidate()
   }
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Button component={Link} to="/admin/founders/new" variant="contained">
-          Add founder
-        </Button>
-      </div>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <PageHeader
+        title="Founders"
+        subtitle="Everyone in a startup, with their latest score and status."
+        action={
+          <Button
+            component={Link}
+            to="/admin/founders/new"
+            variant="contained"
+            startIcon={<PlusIcon />}
+          >
+            Add Founder
+          </Button>
+        }
+      />
 
       {error && (
-        <Alert severity="error" sx={{ my: 1 }}>
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
+      {notice && (
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setNotice('')}>
+          {notice}
+        </Alert>
+      )}
 
-      <div
-        className="container"
-        style={{
+      <Box
+        sx={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'stretch',
-          width: '100%',
-          height: '100px',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+          mb: 3,
         }}
       >
-        <div className="input">
+        <TextField
+          label="Search founders"
+          type="search"
+          value={filters.founder ?? ''}
+          onChange={event =>
+            setFilters(prev => ({ ...prev, founder: event.target.value }))
+          }
+          sx={{ flex: '1 1 220px', maxWidth: { sm: 320 } }}
+        />
+        {Object.keys(filterData).map(key => (
           <TextField
-            id="outlined-basic"
-            label="Founder"
-            variant="outlined"
-            value={filters.founder ?? ''}
+            key={key}
+            select
+            label={FILTER_LABELS[key] ?? key}
+            value={filters[key] ?? ''}
             onChange={event =>
-              setFilters(prev => ({ ...prev, founder: event.target.value }))
+              setFilters(prev => ({ ...prev, [key]: event.target.value }))
+            }
+            slotProps={{
+              select: { displayEmpty: true },
+              inputLabel: { shrink: true },
+            }}
+            sx={{ flex: '0 1 160px', minWidth: 140 }}
+          >
+            <MenuItem value="">All</MenuItem>
+            {filterData[key].map(data => (
+              <MenuItem key={data} value={data}>
+                {data}
+              </MenuItem>
+            ))}
+          </TextField>
+        ))}
+        {selectedVisible.length > 0 && (
+          <Button
+            variant="outlined"
+            color="error"
+            loading={isDeleting}
+            onClick={() => setConfirming(true)}
+            sx={{ ml: { sm: 'auto' } }}
+          >
+            Remove from Startup ({selectedVisible.length})
+          </Button>
+        )}
+      </Box>
+
+      {visibleStudents.length ? (
+        <CustomizedTable
+          data={visibleStudents.map(withStatusPill)}
+          selectedRows={selectedVisible}
+          setSelectedRows={setSelectedRows}
+          columnNames={columnNames}
+          targetRoute="/admin/profile"
+        />
+      ) : (
+        <SectionCard>
+          <EmptyState
+            icon={PeopleIcon}
+            title={students.length ? 'No matches' : 'No founders yet'}
+            description={
+              students.length
+                ? 'No founders match these filters.'
+                : 'Founders appear here once they join or create a startup.'
             }
           />
+        </SectionCard>
+      )}
+
+      <Dialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          Remove {selectedStudents.length} founder
+          {selectedStudents.length === 1 ? '' : 's'} from their startup?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+              {selectedStudents.map(student => (
+                <li key={student.id}>
+                  {student.founder} ({student.startup})
+                </li>
+              ))}
+            </ul>
+            <p style={{ marginBottom: 0 }}>
+              Their accounts and past KPIs stay. They can join or propose a
+              startup again later.
+            </p>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
           <Button
-            onClick={handleDeleteFounders}
-            disabled={selectedRows.length === 0 || isDeleting}
             variant="contained"
             color="error"
-            style={{ marginTop: '2%', marginLeft: '10px' }}
+            onClick={handleRemoveFounders}
           >
-            {isDeleting ? 'Deleting...' : 'Delete Founders'}
+            Remove
           </Button>
-        </div>
-        <div>
-          {Object.keys(filterData).map(key => (
-            <FormControl key={key} sx={{ m: 1, minWidth: 120 }}>
-              <Select
-                aria-describedby={`${noLabelId}-helper-text`}
-                displayEmpty
-                inputProps={{ 'aria-label': key }}
-                value={filters[key] ?? ''}
-                onChange={event =>
-                  setFilters(prev => ({ ...prev, [key]: event.target.value }))
-                }
-              >
-                <MenuItem value="">
-                  <em>{FILTER_LABELS[key] ?? `All ${key}`}</em>
-                </MenuItem>
-                {filterData[key].map(data => (
-                  <MenuItem key={data} value={data}>
-                    {data}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          ))}
-        </div>
-      </div>
-
-      <CustomizedTable
-        data={visibleStudents}
-        selectedRows={selectedRows}
-        setSelectedRows={setSelectedRows}
-        columnNames={columnNames}
-        targetRoute="/admin/profile"
-      />
-    </div>
+        </DialogActions>
+      </Dialog>
+    </Box>
   )
 }
 

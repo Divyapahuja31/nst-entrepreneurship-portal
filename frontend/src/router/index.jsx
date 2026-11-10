@@ -1,4 +1,10 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, redirect } from 'react-router'
+import {
+  BOARD_ROLES,
+  ROLE_NAMES,
+  ROLES,
+  STAFF_ROLES,
+} from '@nst/shared/permissions.js'
 
 import EmptyLayout from '../layouts/EmptyLayout.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
@@ -6,8 +12,11 @@ import MainLayout from '../layouts/MainLayout.jsx'
 // Student pages
 
 import PageStudentOverview from '../pages/student/PageOverview.jsx'
-import PageOnboarding from '../pages/student/PageOnboarding.jsx'
+import PageOnboarding, {
+  OnboardingSignOut,
+} from '../pages/student/PageOnboarding.jsx'
 import PageKPIs from '../pages/student/PageKPIs.jsx'
+import PageCheckIns from '../pages/student/PageCheckIns.jsx'
 
 // Admin pages
 import PageAdminOverview from '../pages/admin/PageOverview.jsx'
@@ -17,6 +26,10 @@ import PageAdminKPIs from '../pages/admin/PageKPIs.jsx'
 import PageReportBiWeekly from '../pages/admin/PageReportBiWeekly.jsx'
 import PageVentures from '../pages/admin/PageVentures.jsx'
 import PageVentureDetail from '../pages/admin/PageVentureDetail.jsx'
+import PageAccounts from '../pages/admin/PageAccounts.jsx'
+import PageProgramme from '../pages/admin/PageProgramme.jsx'
+import PageExtraSessions from '../pages/admin/PageExtraSessions.jsx'
+import PageSetup from '../pages/admin/PageSetup.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -27,6 +40,7 @@ import PageMethodology from '../pages/common/PageMethodology.jsx'
 
 import PageError, { PageNotFound } from '../pages/common/PageError.jsx'
 import RequireAuth from '../components/RequireAuth.jsx'
+import RequireOnboarded from '../components/RequireOnboarded.jsx'
 import RequireRole from '../components/RequireRole.jsx'
 
 // TODO: make this a pop up modal instead of a page
@@ -37,11 +51,28 @@ import AddFounder from '../components/AddFounder.jsx'
 import { allKPIsLoader, kpisLoader } from '../api/kpi.js'
 import {
   addFounderLoader,
-  biWeeklyLoader,
+  founderProfileLoader,
   foundersCount,
   foundersLoader,
 } from '../api/admin.js'
+import { biWeeklyLoader } from '../api/biweekly.js'
+import { myCheckInsLoader } from '../api/checkins.js'
 import { ventureDetailLoader, venturesPageLoader } from '../api/venture.js'
+import { accountsLoader } from '../api/accounts.js'
+import { programmeLoader } from '../api/programme.js'
+import { extraSessionsLoader } from '../api/extraSessions.js'
+import { setupLoader } from '../api/setup.js'
+import { whenAuthReady } from '../stores/auth.js'
+
+// Runs a route's loader only for the roles RequireRole lets through, once
+// the session is confirmed. Anyone else gets no data, so RequireRole can
+// explain why instead of the API's 403 replacing the page.
+const forRoles = (allow, loader) => async args => {
+  const { user } = await whenAuthReady()
+  return allow.includes(user?.role?.name) ? loader(args) : null
+}
+const studentLoader = loader => forRoles([ROLES.STUDENT], loader)
+const staffLoader = loader => forRoles(STAFF_ROLES, loader)
 
 export const router = createBrowserRouter([
   // Public: the only routes a signed-out visitor may reach.
@@ -77,41 +108,85 @@ export const router = createBrowserRouter([
     ErrorBoundary: PageError,
     Component: RequireAuth,
     children: [
+      // Full page, no sidebar: a student has to finish this first.
       {
-        Component: MainLayout,
+        element: <EmptyLayout action={<OnboardingSignOut />} />,
         children: [
-          {
-            path: '/',
-            index: true,
-            Component: PageStudentOverview,
-          },
           {
             path: '/onboarding',
             Component: PageOnboarding,
           },
+        ],
+      },
+      {
+        Component: RequireOnboarded,
+        children: [
           {
-            path: '/kpis',
-            Component: PageKPIs,
-            loader: kpisLoader,
-          },
-          {
-            path: '/methodology',
-            Component: PageMethodology,
-          },
-          {
-            path: '/profile/:userid',
-            Component: PageReportBiWeekly,
-            loader: biWeeklyLoader,
+            Component: MainLayout,
+            children: [
+              // Students only; MainLayout sends staff from / to /admin.
+              {
+                element: <RequireRole allow={[ROLES.STUDENT]} />,
+                children: [
+                  {
+                    path: '/',
+                    index: true,
+                    Component: PageStudentOverview,
+                    // For the next check-in and recent activity; the page
+                    // works without them.
+                    loader: studentLoader(async args => {
+                      const [checkIns, kpis] = await Promise.all([
+                        myCheckInsLoader(args).catch(() => null),
+                        kpisLoader(args),
+                      ])
+                      return { ...checkIns, kpis: kpis?.data ?? null }
+                    }),
+                  },
+                  {
+                    path: '/kpis',
+                    Component: PageKPIs,
+                    loader: studentLoader(kpisLoader),
+                  },
+                  {
+                    path: '/biweekly',
+                    Component: PageReportBiWeekly,
+                    loader: studentLoader(biWeeklyLoader),
+                  },
+                  {
+                    path: '/checkins',
+                    Component: PageCheckIns,
+                    loader: studentLoader(() =>
+                      myCheckInsLoader().catch(() => null)
+                    ),
+                  },
+                  // Bi-weekly reports used to live under the student's id.
+                  {
+                    path: '/profile/:userid',
+                    loader: () => redirect('/biweekly'),
+                  },
+                ],
+              },
+              {
+                element: <RequireRole allow={ROLE_NAMES} />,
+                children: [
+                  {
+                    path: '/methodology',
+                    Component: PageMethodology,
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
     ],
   },
 
-  // Signed in as an admin.
+  // Signed in as staff. Mentors see only the startups assigned to them; the
+  // API applies the same limits.
   {
     ErrorBoundary: PageError,
-    element: <RequireRole role="admin" />,
+    element: <RequireRole allow={STAFF_ROLES} />,
     children: [
       {
         Component: MainLayout,
@@ -120,42 +195,72 @@ export const router = createBrowserRouter([
             path: '/admin',
             index: true,
             Component: PageAdminOverview,
-            loader: foundersCount,
+            loader: staffLoader(foundersCount),
           },
           {
             path: '/admin/founders',
             Component: PagePortfolios,
-            loader: foundersLoader,
+            loader: staffLoader(foundersLoader),
           },
           {
             path: '/admin/kpis',
             Component: PageAdminKPIs,
-            loader: allKPIsLoader,
+            loader: staffLoader(allKPIsLoader),
           },
           {
             path: '/admin/venture',
             Component: PageVentures,
-            loader: venturesPageLoader,
+            loader: staffLoader(venturesPageLoader),
           },
           {
             path: '/admin/venture/:ventureId',
             Component: PageVentureDetail,
-            loader: ventureDetailLoader,
+            loader: staffLoader(ventureDetailLoader),
           },
           {
             path: '/admin/portfolio',
             Component: PagePortfolios,
-            loader: foundersLoader,
+            loader: staffLoader(foundersLoader),
           },
           {
             path: '/admin/founders/new',
             Component: AddFounder,
-            loader: addFounderLoader,
+            loader: staffLoader(addFounderLoader),
           },
           {
             path: '/admin/profile/:userid',
             Component: PageFounderProfile,
-            loader: biWeeklyLoader,
+            loader: staffLoader(founderProfileLoader),
+          },
+          {
+            element: <RequireRole allow={BOARD_ROLES} />,
+            children: [
+              {
+                path: '/admin/sessions',
+                Component: PageExtraSessions,
+                loader: forRoles(BOARD_ROLES, extraSessionsLoader),
+              },
+            ],
+          },
+          {
+            element: <RequireRole allow={[ROLES.ADMIN]} />,
+            children: [
+              {
+                path: '/admin/accounts',
+                Component: PageAccounts,
+                loader: forRoles([ROLES.ADMIN], accountsLoader),
+              },
+              {
+                path: '/admin/programme',
+                Component: PageProgramme,
+                loader: forRoles([ROLES.ADMIN], programmeLoader),
+              },
+              {
+                path: '/admin/setup',
+                Component: PageSetup,
+                loader: forRoles([ROLES.ADMIN], setupLoader),
+              },
+            ],
           },
         ],
       },

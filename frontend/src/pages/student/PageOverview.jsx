@@ -1,250 +1,315 @@
-import { useState } from 'react'
+import { Link as RouterLink, useLoaderData } from 'react-router'
 
 import {
-  Typography,
+  Avatar,
   Box,
+  CircularProgress,
   Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  ButtonBase,
-  Stack,
-  Alert,
   List,
   ListItem,
+  ListItemAvatar,
   ListItemText,
-  CircularProgress,
+  Typography,
 } from '@mui/material'
 
-import CreateVentureStep from '../../components/CreateVentureStep.jsx'
-import JoinVentureStep from '../../components/JoinVentureStep.jsx'
+import ActionCard from '../../components/ActionCard.jsx'
+import EmptyState from '../../components/EmptyState.jsx'
+import SectionCard from '../../components/SectionCard.jsx'
+import {
+  CalendarIcon,
+  ChartIcon,
+  ChatIcon,
+  KpiIcon,
+  PeopleIcon,
+} from '../../components/icons.jsx'
 
 import { useAuthStore } from '../../stores/auth'
+import { tints } from '../../theme'
 
-const ventureOptions = [
-  {
-    label: 'Create a startup',
-    description: 'Got an idea? Start a new startup and submit your proposal.',
-    image: '/undraw_got-an-idea_1z3i.svg',
-    step: 'create',
-  },
-  {
-    label: 'Join a startup',
-    description: 'Already have a team? Join an existing startup as a founder.',
-    image: '/undraw_handshake-deal_nwk6.svg',
-    step: 'join',
-  },
-]
+const firstName = user => user.username?.split(' ')[0] || 'there'
 
-function VentureOptionButton({ option, onClick }) {
+// The next check-in, in a line for its card.
+const nextCheckInText = checkIns => {
+  if (!checkIns) {
+    return 'Your meetings with your mentor, with their Meet links.'
+  }
+  const next = checkIns.find(
+    c =>
+      c.status === 'SCHEDULED' &&
+      new Date(c.scheduledAt).getTime() + c.durationMinutes * 60000 >
+        Date.now()
+  )
+  if (!next) {
+    return 'Your mentor hasn’t scheduled the next one yet.'
+  }
+  return `Next: ${formatWhen(next.scheduledAt)}`
+}
+
+function PageHeader({ title, subtitle }) {
   return (
-    <ButtonBase
-      focusRipple
-      onClick={onClick}
-      sx={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        p: 2,
-        borderRadius: 2,
-        border: 1,
-        borderColor: 'divider',
-        textAlign: 'center',
-        transition: 'all 0.2s ease',
-        '&:hover': {
-          borderColor: 'primary.main',
-          boxShadow: 4,
-        },
-      }}
-    >
-      <Box
-        component="img"
-        src={option.image}
-        alt=""
-        sx={{
-          width: '100%',
-          maxWidth: 200,
-          height: 180,
-          objectFit: 'contain',
-          mb: 2,
-        }}
+    <Box sx={{ mb: { xs: 4, sm: 5 } }}>
+      <Typography
+        variant="h2"
+        component="h1"
+        sx={{ fontSize: { xs: '2rem', sm: '2.5rem' }, mb: 1 }}
+      >
+        {title}
+      </Typography>
+      {subtitle && (
+        <Typography variant="body1" color="text.secondary">
+          {subtitle}
+        </Typography>
+      )}
+    </Box>
+  )
+}
+
+// Recent activity -----------------------------------------------------------
+
+const KPI_EVENTS = {
+  WAITING_FOR_APPROVAL: 'sent for approval',
+  ACCEPTED: 'approved',
+  REJECTED: 'sent back for changes',
+  GRADED: 'graded',
+}
+
+const kpiActivity = kpi => {
+  if (kpi.isLocked) {
+    return {
+      at: kpi.lockedAt ?? kpi.updatedAt,
+      text: `KPI “${kpi.title}” locked at ${kpi.score} pts`,
+    }
+  }
+  const event = KPI_EVENTS[kpi.status]
+  if (!event) {
+    return null
+  }
+  const score = kpi.status === 'GRADED' ? ` (${kpi.score} pts)` : ''
+  return { at: kpi.updatedAt, text: `KPI “${kpi.title}” ${event}${score}` }
+}
+
+const CHECK_IN_EVENTS = {
+  SCHEDULED: (c, what) => [
+    c.createdAt,
+    `${what} scheduled for ${formatWhen(c.scheduledAt)}`,
+  ],
+  HELD: (c, what) =>
+    c.transcript?.status === 'READY'
+      ? [c.transcript.fetchedAt ?? c.scheduledAt, `${what} transcript ready`]
+      : [c.scheduledAt, `${what} held`],
+  NOT_HELD: (c, what) => [c.scheduledAt, `${what} not held`],
+  CANCELLED: (c, what) => [
+    c.cancelledAt ?? c.updatedAt,
+    `${what} on ${formatWhen(c.scheduledAt)} cancelled`,
+  ],
+}
+
+const checkInActivity = checkIn => {
+  const describe = CHECK_IN_EVENTS[checkIn.status]
+  if (!describe) {
+    return null
+  }
+  const [at, text] = describe(
+    checkIn,
+    checkIn.session ? 'Programme session' : 'Check-in'
+  )
+  return { at, text }
+}
+
+const formatWhen = date =>
+  new Date(date).toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+
+const formatAgo = date => {
+  const days = Math.floor((Date.now() - new Date(date)) / 86400000)
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days} days ago`
+  return new Date(date).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+// The latest KPI and check-in changes, newest first, nothing in the future.
+const recentActivity = ({ kpis, checkIns }, limit = 6) =>
+  [
+    ...(kpis ?? []).map(kpiActivity),
+    ...(checkIns ?? []).map(checkInActivity),
+  ]
+    .filter(item => item?.at && new Date(item.at) <= Date.now())
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, limit)
+
+function RecentActivity({ items }) {
+  if (!items.length) {
+    return (
+      <EmptyState
+        icon={ChartIcon}
+        title="No activity yet"
+        description="Updates to your KPIs and check-ins will show up here."
       />
-      <Typography variant="h6" fontWeight={600} gutterBottom>
-        {option.label}
-      </Typography>
-      <Typography variant="body2" color="text.secondary">
-        {option.description}
-      </Typography>
-    </ButtonBase>
+    )
+  }
+  return (
+    <List disablePadding>
+      {items.map(item => (
+        <ListItem key={`${item.at}-${item.text}`} disableGutters>
+          <ListItemText
+            primary={item.text}
+            secondary={formatAgo(item.at)}
+            slotProps={{ primary: { variant: 'body1' } }}
+          />
+        </ListItem>
+      ))}
+    </List>
   )
 }
 
-function NoVentureDialog({ open, rejectedApplication, onApplied }) {
-  const [step, setStep] = useState('choose')
+// Founder dashboard ---------------------------------------------------------
 
-  const goBack = () => setStep('choose')
-
-  if (step === 'create') {
-    return (
-      <Dialog open={open} maxWidth="md" fullWidth>
-        <CreateVentureStep onBack={goBack} onSubmitted={onApplied} />
-      </Dialog>
-    )
-  }
-
-  if (step === 'join') {
-    return (
-      <Dialog open={open} maxWidth="sm" fullWidth>
-        <JoinVentureStep onBack={goBack} onSubmitted={onApplied} />
-      </Dialog>
-    )
-  }
-
-  return (
-    <Dialog open={open} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ textAlign: 'center', pt: 4 }}>
-        <Typography variant="h5" component="span" fontWeight={600}>
-          You're not part of a startup yet
-        </Typography>
-      </DialogTitle>
-      <DialogContent sx={{ textAlign: 'center', pb: 4 }}>
-        {rejectedApplication && (
-          <Alert severity="warning" sx={{ mb: 3, textAlign: 'left' }}>
-            {rejectedApplication.type === 'PROPOSAL'
-              ? `Your proposal for ${rejectedApplication.ventureName} was not approved. You can submit a new one.`
-              : `Your request to join ${rejectedApplication.ventureName} was not approved. You can apply again.`}
-          </Alert>
-        )}
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          To get started, create a new startup or join an existing one.
-        </Typography>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
-          {ventureOptions.map(option => (
-            <VentureOptionButton
-              key={option.step}
-              option={option}
-              onClick={() => setStep(option.step)}
-            />
-          ))}
-        </Stack>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function PendingApplication({ application }) {
-  return (
-    <>
-      <Typography variant="h4" gutterBottom>
-        Dashboard
-      </Typography>
-
-      <Alert severity="info" sx={{ mt: 2 }}>
-        {application.type === 'PROPOSAL'
-          ? `Your proposal for ${application.ventureName} is waiting for admin approval.`
-          : `Your request to join ${application.ventureName} is waiting for admin approval.`}
-      </Alert>
-
-      <Typography variant="body1" sx={{ mt: 2 }}>
-        You'll get access to your startup dashboard once an admin approves it.
-      </Typography>
-    </>
-  )
+function initials(name = '') {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0].toUpperCase())
+    .join('')
 }
 
 function VentureDashboard({ user, venture }) {
   const founders = venture.founders || []
+  const loaded = useLoaderData()
+  const checkIns = loaded?.checkIns
+  const activity = recentActivity({ kpis: loaded?.kpis, checkIns })
 
   return (
-    <>
-      <Typography variant="h4" gutterBottom>
-        Welcome, {user.username}
-      </Typography>
-      <Typography variant="body1">
-        You are a founder at <strong>{venture.name}</strong>.
-      </Typography>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <PageHeader
+        title={`Welcome back, ${firstName(user)}`}
+        subtitle={
+          <>
+            You're a founder at{' '}
+            <Box
+              component="strong"
+              sx={{ color: 'text.primary', fontWeight: 600 }}
+            >
+              {venture.name}
+            </Box>
+            .
+          </>
+        }
+      />
 
-      <Grid container spacing={2} style={{ marginTop: '20px' }}>
-        <Grid size={12}>
-          <Box
-            sx={{
-              backgroundColor: '#f5f5f5',
-              padding: '20px',
-              borderRadius: '8px',
-            }}
-          >
-            <Typography variant="h6" gutterBottom>
-              Team members
-            </Typography>
-            <List dense>
-              {founders.map(founder => (
-                <ListItem key={founder._id || founder} disableGutters>
-                  <ListItemText
-                    primary={founder.username || founder}
-                    secondary={founder.email}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </Box>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <ActionCard
+            component={RouterLink}
+            to="/kpis"
+            icon={KpiIcon}
+            tint="blue"
+            title="KPIs"
+            description="Your startup's goals and the evidence behind them."
+            cta="Open KPIs"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <ActionCard
+            component={RouterLink}
+            to="/biweekly"
+            icon={CalendarIcon}
+            tint="green"
+            title="Bi-weekly report"
+            description="Report what changed in the last two weeks."
+            cta="Open report"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <ActionCard
+            component={RouterLink}
+            to="/checkins"
+            icon={ChatIcon}
+            tint="blue"
+            title="Mentor check-ins"
+            description={nextCheckInText(checkIns)}
+            cta="Open check-ins"
+          />
         </Grid>
 
-        <Grid size={12}>
-          <Box
-            sx={{
-              backgroundColor: '#f5f5f5',
-              padding: '20px',
-              borderRadius: '8px',
-              height: '100px',
-            }}
-          >
-            <Typography variant="h6" gutterBottom>
-              Recent Activities
-            </Typography>
-            <Typography variant="body2">
-              You have no recent activities.
-            </Typography>
-          </Box>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <SectionCard icon={PeopleIcon} title="Team">
+            <List disablePadding>
+              {founders.map(founder => {
+                const name = founder.username || String(founder)
+                const isYou = founder._id === user._id
+                return (
+                  <ListItem key={founder._id || name} disableGutters>
+                    <ListItemAvatar>
+                      <Avatar
+                        sx={{
+                          bgcolor: tints.blue.bg,
+                          color: tints.blue.fg,
+                          fontSize: '0.9375rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {initials(name)}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={isYou ? `${name} (you)` : name}
+                      secondary={founder.email}
+                      slotProps={{ primary: { variant: 'body1' } }}
+                    />
+                  </ListItem>
+                )
+              })}
+            </List>
+          </SectionCard>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 7 }}>
+          <SectionCard icon={ChartIcon} title="Recent activity">
+            <RecentActivity items={activity} />
+          </SectionCard>
         </Grid>
       </Grid>
-    </>
+    </Box>
   )
 }
 
 export default function Dashboard() {
   const loggedInUserData = useAuthStore(state => state.user)
   const isLoading = useAuthStore(state => state.isLoading)
-  const fetchUser = useAuthStore(state => state.fetchUser)
 
   if (isLoading || !loggedInUserData) {
-    return <CircularProgress />
+    return (
+      <Box sx={{ display: 'grid', placeItems: 'center', py: 10 }}>
+        <CircularProgress size={28} />
+      </Box>
+    )
   }
 
-  const venture = loggedInUserData.venture
-  const application = loggedInUserData.application
-
-  if (venture) {
-    return <VentureDashboard user={loggedInUserData} venture={venture} />
-  }
-
-  if (application?.status === 'PENDING') {
-    return <PendingApplication application={application} />
+  // Students without a startup never get here: RequireOnboarded sends them
+  // to /onboarding. Anyone else without one just gets a greeting.
+  if (!loggedInUserData.venture) {
+    return (
+      <PageHeader
+        title={`Welcome, ${firstName(loggedInUserData)}`}
+        subtitle="Use the menu to find your way around."
+      />
+    )
   }
 
   return (
-    <>
-      <NoVentureDialog
-        open
-        rejectedApplication={
-          application?.status === 'REJECTED' ? application : null
-        }
-        onApplied={fetchUser}
-      />
-
-      <Typography variant="h4" gutterBottom>
-        Dashboard
-      </Typography>
-    </>
+    <VentureDashboard
+      user={loggedInUserData}
+      venture={loggedInUserData.venture}
+    />
   )
 }

@@ -1,6 +1,21 @@
 import mongoose from 'mongoose'
 
-export const validateCreateKPI = ({ title, description, venture, userId }) => {
+// Empty means no due date; anything else must be a date.
+export const dueDateError = dueDate =>
+  dueDate === undefined ||
+  dueDate === null ||
+  dueDate === '' ||
+  !Number.isNaN(new Date(dueDate).getTime())
+    ? null
+    : 'Choose a valid due date'
+
+export const validateCreateKPI = ({
+  title,
+  description,
+  venture,
+  userId,
+  dueDate,
+}) => {
   if (!title?.trim()) {
     return {
       statusCode: 400,
@@ -13,6 +28,10 @@ export const validateCreateKPI = ({ title, description, venture, userId }) => {
       statusCode: 400,
       message: 'KPI description is required',
     }
+  }
+
+  if (dueDateError(dueDate)) {
+    return { statusCode: 400, message: dueDateError(dueDate) }
   }
 
   if (!venture) {
@@ -41,7 +60,7 @@ export const validateCreateKPI = ({ title, description, venture, userId }) => {
 
 export const validateSubKPIRequest = req => {
   const { kpiId } = req.params
-  const { name } = req.body
+  const { name, description } = req.body
   const userId = req.user?.id
   if (!userId) {
     return {
@@ -57,10 +76,17 @@ export const validateSubKPIRequest = req => {
     }
   }
 
-  if (!name?.trim()) {
+  if (typeof name !== 'string' || !name.trim()) {
     return {
       statusCode: 400,
       message: 'SubKPI name is required',
+    }
+  }
+
+  if (description !== undefined && typeof description !== 'string') {
+    return {
+      statusCode: 400,
+      message: 'SubKPI description must be text',
     }
   }
 

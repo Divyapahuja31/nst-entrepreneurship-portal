@@ -1,14 +1,30 @@
 import { useState } from 'react'
-import { Dialog, DialogContent, Typography, TextField, Button, Box, IconButton } from '@mui/material'
+import {
+  Dialog,
+  DialogContent,
+  Typography,
+  TextField,
+  Button,
+  Box,
+  IconButton,
+  MenuItem,
+} from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 
-export default function AddKpi({ open, onClose, onSave, initialData }) {
+export default function AddKpi({
+  open,
+  onClose,
+  onSave,
+  initialData,
+  members = [],
+}) {
   const [prevData, setPrevData] = useState(null)
   const [prevOpen, setPrevOpen] = useState(false)
 
   const [kpiName, setKpiName] = useState('')
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [founderId, setFounderId] = useState('')
   const [subKpis, setSubKpis] = useState([])
 
   if (open !== prevOpen || initialData !== prevData) {
@@ -18,6 +34,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
       setKpiName(initialData.title || '')
       setDescription(initialData.description || '')
       setDueDate(initialData.dueDate ? initialData.dueDate.split('T')[0] : '')
+      setFounderId(initialData.founder?._id || initialData.founder || '')
       setSubKpis(
         initialData.subKPIs
           ? initialData.subKPIs.map((sub, idx) => ({
@@ -30,6 +47,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
       setKpiName('')
       setDescription('')
       setDueDate('')
+      setFounderId('')
       setSubKpis([])
     }
   }
@@ -40,10 +58,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
       name: '',
     }
 
-    setSubKpis(prev => [
-      ...prev,
-      newSubKpi,
-    ])
+    setSubKpis(prev => [...prev, newSubKpi])
   }
 
   const handleSubKpiChange = (id, value) => {
@@ -60,11 +75,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
   }
 
   const handleDeleteSubKpi = id => {
-    setSubKpis(prev =>
-      prev.filter(
-        subKpi => subKpi.id !== id
-      )
-    )
+    setSubKpis(prev => prev.filter(subKpi => subKpi.id !== id))
   }
 
   const handleSave = async status => {
@@ -73,9 +84,7 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
       return
     }
 
-    const validSubKpis = subKpis.filter(
-      subKpi => subKpi.name.trim()
-    )
+    const validSubKpis = subKpis.filter(subKpi => subKpi.name.trim())
 
     try {
       await onSave({
@@ -83,12 +92,14 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
         description: description.trim() || kpiName.trim(),
         dueDate,
         status,
+        founder: founderId || null,
         subKpis: validSubKpis,
       })
 
       setKpiName('')
       setDescription('')
       setDueDate('')
+      setFounderId('')
       setSubKpis([])
 
       onClose()
@@ -101,24 +112,13 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
     setKpiName('')
     setDescription('')
     setDueDate('')
+    setFounderId('')
     setSubKpis([])
     onClose()
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          backgroundColor: '#fff',
-          color: '#222',
-          borderRadius: '8px',
-        },
-      }}
-    >
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <IconButton
         onClick={onClose}
         aria-label="close"
@@ -126,7 +126,6 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
           position: 'absolute',
           top: 12,
           right: 12,
-          color: '#000',
           zIndex: 1,
         }}
       >
@@ -149,20 +148,14 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
         </Typography>
 
         <TextField
+          hiddenLabel
           fullWidth
           size="small"
           placeholder="Enter KPI / Metric Name"
           value={kpiName}
-          onChange={e =>
-            setKpiName(e.target.value)
-          }
+          onChange={e => setKpiName(e.target.value)}
           sx={{
             mb: 3,
-
-            '& .MuiInputBase-root': {
-              backgroundColor: '#ffffff',
-              color: '#000000',
-            },
           }}
         />
 
@@ -176,24 +169,54 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
         </Typography>
 
         <TextField
+          hiddenLabel
           fullWidth
           multiline
           rows={2}
           size="small"
           placeholder="Enter KPI description"
           value={description}
-          onChange={e =>
-            setDescription(e.target.value)
-          }
+          onChange={e => setDescription(e.target.value)}
           sx={{
             mb: 3,
-
-            '& .MuiInputBase-root': {
-              backgroundColor: '#ffffff',
-              color: '#000000',
-            },
           }}
         />
+
+        <Typography
+          sx={{
+            fontSize: '14px',
+            marginBottom: 1,
+          }}
+        >
+          Owner
+        </Typography>
+
+        <TextField
+          hiddenLabel
+          select
+          fullWidth
+          size="small"
+          value={founderId}
+          onChange={e => setFounderId(e.target.value)}
+          // "Entire Startup" is the empty value; without this the field
+          // looks blank when it's chosen.
+          slotProps={{ select: { displayEmpty: true } }}
+          sx={{
+            mb: 3,
+          }}
+        >
+          <MenuItem value="">
+            <em>Entire Startup (Startup-wide KPI)</em>
+          </MenuItem>
+          {members.map(member => (
+            <MenuItem
+              key={member.id || member._id}
+              value={member.id || member._id}
+            >
+              {member.username || member.email || 'Member'}
+            </MenuItem>
+          ))}
+        </TextField>
 
         <Typography
           sx={{
@@ -213,35 +236,17 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
           }}
         >
           <TextField
+            hiddenLabel
             type="date"
             size="small"
             value={dueDate}
-            onChange={e =>
-              setDueDate(e.target.value)
-            }
+            onChange={e => setDueDate(e.target.value)}
             sx={{
               width: 145,
-              backgroundColor: '#ffffff',
-
-              '& input': {
-                color: '#000000',
-              },
             }}
           />
 
-          <Button
-            variant="contained"
-            onClick={handleAddSubKpi}
-            sx={{
-              backgroundColor: '#f4f4f4',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="outlined" onClick={handleAddSubKpi}>
             Add SubKpi
           </Button>
         </Box>
@@ -260,12 +265,11 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
             sx={{
               fontSize: '13px',
               fontStyle: 'italic',
-              color: '#000000',
+              color: 'text.secondary',
               marginBottom: 2,
             }}
           >
-            No subgrades added. Click above
-            to break this KPI into granular
+            No subgrades added. Click above to break this KPI into granular
             metrics.
           </Typography>
         )}
@@ -281,32 +285,16 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
             }}
           >
             <TextField
+              hiddenLabel
               fullWidth
               size="small"
               placeholder={`SubKPI ${index + 1}`}
               value={subKpi.name}
-              onChange={e =>
-                handleSubKpiChange(
-                  subKpi.id,
-                  e.target.value
-                )
-              }
-              sx={{
-                '& .MuiInputBase-root': {
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                },
-              }}
+              onChange={e => handleSubKpiChange(subKpi.id, e.target.value)}
+              sx={{}}
             />
 
-            <IconButton
-              onClick={() =>
-                handleDeleteSubKpi(subKpi.id)
-              }
-              sx={{
-                color: '#000000',
-              }}
-            >
+            <IconButton onClick={() => handleDeleteSubKpi(subKpi.id)}>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -320,55 +308,15 @@ export default function AddKpi({ open, onClose, onSave, initialData }) {
             marginTop: 4,
           }}
         >
-          <Button
-            variant="contained"
-            onClick={handleCancel}
-            sx={{
-              backgroundColor: '#f1f1f1',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="outlined" onClick={handleCancel}>
             Cancel
           </Button>
 
-          <Button
-            variant="contained"
-            onClick={() =>
-              handleSave('DRAFT')
-            }
-            sx={{
-              backgroundColor: '#f1f1f1',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="outlined" onClick={() => handleSave('DRAFT')}>
             Save As Draft
           </Button>
 
-          <Button
-            variant="contained"
-            onClick={() =>
-              handleSave('SUBMIT')
-            }
-            sx={{
-              backgroundColor: '#f1f1f1',
-              color: '#374151',
-              textTransform: 'none',
-
-              '&:hover': {
-                backgroundColor: '#ddd',
-              },
-            }}
-          >
+          <Button variant="contained" onClick={() => handleSave('SUBMIT')}>
             Save KPI
           </Button>
         </Box>

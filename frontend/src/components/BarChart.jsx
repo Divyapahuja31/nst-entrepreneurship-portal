@@ -1,37 +1,62 @@
 import { BarChart } from '@mui/x-charts/BarChart'
 
-const chartSetting = {
-  series: [
-    {
-      dataKey: 'score',
-      label: 'Monthly Average Score',
-      valueFormatter: value => (value != null ? `${value} pts` : '-'),
-    },
-  ],
-  height: 300,
-  margin: { left: 40 },
-}
+import { quietChart } from './chartStyles'
+import { tints } from '../theme'
 
+// Average graded score per month, January to this month. Months with nothing
+// graded stay empty rather than reading as 0.
 export default function BarGraph({ kpiDistribution }) {
-  const kpiData = Object.entries(kpiDistribution ?? {}).map(
-    ([month, value]) => {
-      const score = typeof value === 'number' ? value : 0
-      return {
-        month: month.charAt(0).toUpperCase() + month.slice(1, 3),
-        score,
-        count: score,
-      }
-    }
+  const months = Object.entries(kpiDistribution ?? {}).slice(
+    0,
+    new Date().getMonth() + 1
   )
+  const kpiData = months.map(([month, value]) => ({
+    month: month.charAt(0).toUpperCase() + month.slice(1, 3),
+    score: typeof value === 'number' ? Math.round(value) : null,
+  }))
 
   return (
-    <div style={{ width: '100%' }}>
-      <BarChart
-        dataset={kpiData}
-        xAxis={[{ dataKey: 'month', scaleType: 'band' }]}
-        yAxis={[{ min: 0, max: 100 }]}
-        {...chartSetting}
-      />
-    </div>
+    <BarChart
+      dataset={kpiData}
+      xAxis={[
+        {
+          dataKey: 'month',
+          scaleType: 'band',
+          disableLine: true,
+          disableTicks: true,
+          categoryGapRatio: 0.55,
+        },
+      ]}
+      yAxis={[
+        {
+          min: 0,
+          max: 100,
+          width: 32,
+          tickNumber: 3,
+          disableLine: true,
+          disableTicks: true,
+        },
+      ]}
+      series={[
+        {
+          dataKey: 'score',
+          label: 'Average score',
+          color: tints.blue.fg,
+          barLabel: item => (item.value == null ? null : String(item.value)),
+          barLabelPlacement: 'outside',
+          valueFormatter: (value, { dataIndex }) =>
+            value == null
+              ? null
+              : `${kpiData[dataIndex]?.month}: ${value} / 100`,
+        },
+      ]}
+      grid={{ horizontal: true }}
+      axisHighlight={{ x: 'none' }}
+      slotProps={{ tooltip: { trigger: 'item' } }}
+      height={340}
+      borderRadius={4}
+      hideLegend
+      sx={quietChart}
+    />
   )
 }

@@ -1,14 +1,36 @@
+import {
+  canAuthorBiweeklyReview,
+  canReadVenture,
+  canReopenBiweekly,
+  isStaff,
+  isStudent,
+} from '@nst/shared/permissions.js'
 import BiWeeklyEvaluation from '../models/biWeeklyEvaluation.js'
 import BiWeeklyObservation from '../models/biWeeklyObservation.js'
 import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
+import { cycleOrigin, reportsOrigin } from '../utils/programme.js'
+import startupStage from '../models/enums/startupStage.js'
 import {
   validateCycleNumber,
+  parseStudentSubmission,
+  hasCycleStarted,
+  isPastDeadline,
+  parseEvaluationScores,
+  parseObservation,
   resolveVentureAndContext,
   loadVentureSubmissions,
   updateOrCreateVentureSubmission,
-  resolveAdminTarget,
+  findTargetVenture,
+  ventureCycleKey,
 } from '../utils/biweeklyHelper.js'
+
+// Adds the readable stage ("Fund Raising") next to the stored key.
+const withStageLabel = venture =>
+  venture && {
+    ...venture.toJSON(),
+    stageLabel: startupStage[venture.stage] ?? venture.stage,
+  }
 
 export const getBiWeeklyData = async (req, res) => {
   try {
@@ -16,26 +38,25 @@ export const getBiWeeklyData = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    const isAdmin = req.user.role === 'admin'
-    const query = isAdmin ? req.query : {}
-
+    // Staff pick the startup; students always get their own startup's.
     const { venture, founder, coFounders } = await resolveVentureAndContext(
       req.user,
-      query
+      req.query
     )
 
-    let submissions = []
-
-    if (venture) {
-      submissions = await loadVentureSubmissions(venture._id, coFounders)
-    } else if (founder) {
-      submissions = await BiWeeklySubmission.find({ founder: founder._id })
-        .populate('biWeeklyEvaluation')
-        .populate('biWeeklyObservationSchema')
-        .populate('submitted_by', 'username email')
-        .sort({ cycle_number: 1 })
-        .exec()
+    if (
+      isStaff(req.user) &&
+      !canReadVenture(req.user, {
+        mentorIds: venture?.mentors,
+        isMember: false,
+      })
+    ) {
+      return res
+        .status(403)
+        .json({ error: 'This startup is not assigned to you' })
     }
+
+    const submissions = venture ? await loadVentureSubmissions(venture._id) : []
 
     const evaluations = submissions
       .map(sub => sub.biWeeklyEvaluation)
@@ -46,11 +67,13 @@ export const getBiWeeklyData = async (req, res) => {
 
     return res.json({
       founder,
-      venture,
+      venture: withStageLabel(venture),
       coFounders,
       submissions,
       evaluations,
       observations,
+      // Where every startup's cycles count from, once an admin has set it.
+      reportsStart: await reportsOrigin(),
     })
   } catch (err) {
     console.error('Get biweekly error:', err)
@@ -60,39 +83,87 @@ export const getBiWeeklyData = async (req, res) => {
   }
 }
 
+// The student's venture, as long as the cycle has opened for it.
+const findVentureForCycle = async (userId, cycleNum) => {
+  const venture = await findVentureForUser(userId)
+  if (!venture) {
+    return {
+      error:
+        'You must belong to an active venture to submit bi-weekly progress.',
+    }
+  }
+  const origin = await cycleOrigin(venture)
+  if (!hasCycleStarted(origin, cycleNum)) {
+    return { error: `Cycle ${cycleNum} hasn't opened yet.` }
+  }
+  return { venture, origin }
+}
+
+// After the deadline only a cycle the board reopened can be changed.
+const isClosed = (existing, origin, cycleNum) =>
+  isPastDeadline(origin, cycleNum) && !existing?.reopened_at
+
+// Why a student can't save this cycle now, as { status, error }, or null.
+const submissionRefusal = ({ existing, origin, cycleNum, data, isSubmit }) => {
+  if (existing?.submitted_at) {
+    return {
+      status: 403,
+      error: 'This cycle has already been submitted and is locked.',
+    }
+  }
+  if (isClosed(existing, origin, cycleNum)) {
+    return {
+      status: 403,
+      error: `The deadline for cycle ${cycleNum} has passed. Ask faculty to reopen it.`,
+    }
+  }
+  const summary = data.progress_summary ?? existing?.progress_summary
+  if (isSubmit && !String(summary ?? '').trim()) {
+    return { status: 400, error: 'Add a progress summary before submitting.' }
+  }
+  return null
+}
+
+// The student and their cycle, or { status, error }.
+const studentCycle = async req => {
+  if (!isStudent(req.user)) {
+    return { status: 403, error: 'Only students submit bi-weekly progress' }
+  }
+  const parsed = parseStudentSubmission(req.body)
+  if (parsed.error) {
+    return { status: 400, error: parsed.error }
+  }
+  const found = await findVentureForCycle(req.user.id, parsed.cycleNum)
+  if (found.error) {
+    return { status: 400, error: found.error }
+  }
+  return { ...parsed, ...found }
+}
+
 export const submitBiWeeklyCycle = async (req, res) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    if (req.user.role === 'admin') {
-      return res
-        .status(403)
-        .json({ error: 'Admins cannot submit student bi-weekly progress' })
+    const target = await studentCycle(req)
+    if (target.error) {
+      return res.status(target.status).json({ error: target.error })
     }
+    const { cycleNum, data, isSubmit, venture, origin } = target
 
-    const { cycle_number, isSubmit, ...data } = req.body
-    const cycleNum = validateCycleNumber(cycle_number)
-
-    if (!cycleNum) {
-      return res.status(400).json({ error: 'Invalid cycle number (1-13)' })
-    }
-
-    const venture = await findVentureForUser(req.user.id)
-    if (!venture) {
-      return res.status(400).json({
-        error:
-          'You must belong to an active venture to submit bi-weekly progress.',
-      })
-    }
-
-    const custom_id = `venture_${venture._id}_cycle_${cycleNum}`
-    const existing = await BiWeeklySubmission.findOne({ custom_id })
-    if (existing?.submitted_at) {
-      return res.status(403).json({
-        error: 'This cycle has already been submitted and is locked.',
-      })
+    const existing = await BiWeeklySubmission.findOne({
+      custom_id: ventureCycleKey(venture._id, cycleNum),
+    })
+    const refusal = submissionRefusal({
+      existing,
+      origin,
+      cycleNum,
+      data,
+      isSubmit,
+    })
+    if (refusal) {
+      return res.status(refusal.status).json({ error: refusal.error })
     }
 
     const submission = await updateOrCreateVentureSubmission({
@@ -116,13 +187,21 @@ export const submitBiWeeklyCycle = async (req, res) => {
   }
 }
 
-const getOrCreateSubmissionForAdmin = async (req, res) => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Forbidden: Admin access required' })
+// For staff acting on a startup's report. parseBody checks the rest of the
+// request before anything is created; it returns { error } or values passed
+// back as `parsed`. isAllowed(user, ventureMentorIds) says whether this
+// caller may act on that startup.
+const getOrCreateSubmissionForStaff = async (
+  req,
+  res,
+  { parseBody, isAllowed }
+) => {
+  if (!isStaff(req.user)) {
+    res.status(403).json({ error: 'Forbidden: staff access required' })
     return null
   }
 
-  const { ventureId, founderId, cycle_number } = req.body
+  const { ventureId, cycle_number } = req.body
   const cycleNum = validateCycleNumber(cycle_number)
 
   if (!cycleNum) {
@@ -130,61 +209,55 @@ const getOrCreateSubmissionForAdmin = async (req, res) => {
     return null
   }
 
-  const { venture, founder } = await resolveAdminTarget(ventureId, founderId)
-
-  if (!venture && !founder) {
-    res.status(404).json({ error: 'Neither venture nor founder was found' })
+  const parsed = parseBody ? parseBody(req.body) : {}
+  if (parsed.error) {
+    res.status(400).json({ error: parsed.error })
     return null
   }
 
-  let submission
-  if (venture) {
-    submission = await updateOrCreateVentureSubmission({
-      ventureId: venture._id,
-      cycle_number: cycleNum,
-    })
-  } else {
-    const custom_id = `${founder._id}_cycle_${cycleNum}`
-    submission = await BiWeeklySubmission.findOneAndUpdate(
-      { custom_id },
-      {
-        $set: {
-          cycle_number: cycleNum,
-          founder: founder._id,
-          scope: 'FOUNDER',
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    )
+  // Reports belong to a startup, so staff always name one.
+  const venture = await findTargetVenture(ventureId)
+  if (!venture) {
+    res.status(404).json({ error: 'Startup not found' })
+    return null
   }
 
-  return { venture, founder, submission, cycleNum }
+  if (!isAllowed(req.user, venture.mentors)) {
+    res.status(403).json({
+      error: "Only this startup's mentors or the academic board can do this",
+    })
+    return null
+  }
+
+  // Nothing to review or reopen before the cycle has begun.
+  if (!hasCycleStarted(await cycleOrigin(venture), cycleNum)) {
+    res.status(400).json({ error: `Cycle ${cycleNum} hasn't opened yet.` })
+    return null
+  }
+
+  const submission = await updateOrCreateVentureSubmission({
+    ventureId: venture._id,
+    cycle_number: cycleNum,
+  })
+
+  return { venture, submission, cycleNum, parsed }
 }
 
 export const saveBiWeeklyObservation = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(req, res)
+    const target = await getOrCreateSubmissionForStaff(req, res, {
+      parseBody: parseObservation,
+      isAllowed: canAuthorBiweeklyReview,
+    })
     if (!target) {
       return null
     }
 
-    const { submission, cycleNum } = target
-    const {
-      observation,
-      strengths,
-      concerns,
-      action_items,
-      evidence_reviewed,
-    } = req.body
-
+    const { submission, cycleNum, parsed } = target
     const observationData = {
       cycle_number: cycleNum,
       author_id: req.user.id,
-      observation,
-      strengths,
-      concerns,
-      action_items,
-      evidence_reviewed,
+      ...parsed.fields,
     }
 
     let observationDoc
@@ -192,7 +265,7 @@ export const saveBiWeeklyObservation = async (req, res) => {
       observationDoc = await BiWeeklyObservation.findByIdAndUpdate(
         submission.biWeeklyObservationSchema,
         observationData,
-        { returnDocument: 'after' }
+        { returnDocument: 'after', runValidators: true }
       )
     } else {
       observationDoc = await BiWeeklyObservation.create(observationData)
@@ -213,23 +286,20 @@ export const saveBiWeeklyObservation = async (req, res) => {
 
 export const saveBiWeeklyEvaluation = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(req, res)
+    const target = await getOrCreateSubmissionForStaff(req, res, {
+      parseBody: parseEvaluationScores,
+      isAllowed: canAuthorBiweeklyReview,
+    })
     if (!target) {
       return null
     }
 
-    const { submission, cycleNum } = target
-    const { execution_score, customer_score, business_score, behavior_score } =
-      req.body
-
+    const { submission, cycleNum, parsed } = target
     const evaluationData = {
       checklist_id: cycleNum,
       month_number: Math.ceil(cycleNum / 2),
       year: new Date().getFullYear(),
-      execution_score,
-      customer_score,
-      business_score,
-      behavior_score,
+      ...parsed.scores,
     }
 
     let evaluationDoc
@@ -237,7 +307,7 @@ export const saveBiWeeklyEvaluation = async (req, res) => {
       evaluationDoc = await BiWeeklyEvaluation.findByIdAndUpdate(
         submission.biWeeklyEvaluation,
         evaluationData,
-        { returnDocument: 'after' }
+        { returnDocument: 'after', runValidators: true }
       )
     } else {
       evaluationDoc = await BiWeeklyEvaluation.create(evaluationData)
@@ -258,13 +328,17 @@ export const saveBiWeeklyEvaluation = async (req, res) => {
 
 export const reopenBiWeeklySubmission = async (req, res) => {
   try {
-    const target = await getOrCreateSubmissionForAdmin(req, res)
+    // Reopening unlocks a submitted report, which only the board may do.
+    const target = await getOrCreateSubmissionForStaff(req, res, {
+      isAllowed: canReopenBiweekly,
+    })
     if (!target) {
       return null
     }
 
     const { submission } = target
     submission.submitted_at = null
+    submission.reopened_at = new Date()
     await submission.save()
 
     return res.status(200).json({

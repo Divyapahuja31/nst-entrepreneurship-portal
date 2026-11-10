@@ -27,12 +27,21 @@ export const getFounderKPIs = async founderId => {
   }
 }
 
-export const evaluateKPI = async ({ kpiId, score, status, feedback }) => {
+// `expectedStatus` is the status the reviewer was looking at, so a review
+// made on a page that is out of date is refused instead of misapplied.
+export const evaluateKPI = async ({
+  kpiId,
+  score,
+  status,
+  feedback,
+  expectedStatus,
+}) => {
   try {
     const { data } = await api.put(`/kpis/${kpiId}/evaluate`, {
       score,
       status,
       feedback,
+      expectedStatus,
     })
     return data
   } catch (error) {
@@ -44,6 +53,26 @@ export const evaluateKPI = async ({ kpiId, score, status, feedback }) => {
     )
   }
 }
+
+// Locking makes a graded KPI's score final; only the board can unlock it.
+const setKPILock = async (kpiId, locked) => {
+  try {
+    const { data } = await api.post(
+      `/kpis/${kpiId}/${locked ? 'lock' : 'unlock'}`
+    )
+    return data
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message ||
+        error.message ||
+        `Failed to ${locked ? 'lock' : 'unlock'} KPI`,
+      { cause: error }
+    )
+  }
+}
+
+export const lockKPI = kpiId => setKPILock(kpiId, true)
+export const unlockKPI = kpiId => setKPILock(kpiId, false)
 
 export const submitKPIEvidence = async ({
   kpiId,
@@ -242,7 +271,8 @@ export const kpisLoader = async ({ request, params }) => {
 // Creating or editing a KPI also reconciles its sub-KPIs, so both live here as
 // one operation rather than being re-assembled by every caller.
 export const createKPIWithSubKpis = async payload => {
-  const { title, description, dueDate, venture, status, subKpis } = payload
+  const { title, description, dueDate, venture, status, subKpis, founder } =
+    payload
 
   try {
     const res = await api.post('/kpis', {
@@ -251,6 +281,7 @@ export const createKPIWithSubKpis = async payload => {
       dueDate: dueDate || null,
       venture,
       status,
+      founder: founder || null,
     })
 
     const newKpi = res.data?.data
@@ -273,8 +304,16 @@ export const createKPIWithSubKpis = async payload => {
 }
 
 export const updateKPIWithSubKpis = async payload => {
-  const { kpiId, title, description, dueDate, status, subKpis, venture } =
-    payload
+  const {
+    kpiId,
+    title,
+    description,
+    dueDate,
+    status,
+    subKpis,
+    venture,
+    founder,
+  } = payload
 
   try {
     const { data: res } = await api.put(`/kpis/${kpiId}`, {
@@ -282,6 +321,7 @@ export const updateKPIWithSubKpis = async payload => {
       description,
       dueDate: dueDate || null,
       status,
+      ...(founder !== undefined ? { founder: founder || null } : {}),
     })
 
     // Sub-KPIs the user removed in the form have to be deleted explicitly.

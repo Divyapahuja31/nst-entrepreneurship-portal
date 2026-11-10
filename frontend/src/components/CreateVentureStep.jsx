@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   Alert,
@@ -9,6 +9,8 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  MenuItem,
+  TextField,
   Typography,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
@@ -20,7 +22,11 @@ import {
   steps,
 } from './proposalFormConfig.js'
 
-import { createProposal, getMyProposal } from '../api/proposal.js'
+import {
+  createProposal,
+  getCampuses,
+  getMyProposal,
+} from '../api/proposal.js'
 
 const getLatestReview = proposal =>
   proposal?.reviews?.length
@@ -34,6 +40,11 @@ export default function CreateVentureStep({ onBack, onSubmitted }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  // Asked for only when the account has no campus to file the proposal
+  // under.
+  const [campuses, setCampuses] = useState(null)
+  const [campus, setCampus] = useState('')
+  const contentRef = useRef(null)
 
   useEffect(() => {
     let active = true
@@ -61,12 +72,20 @@ export default function CreateVentureStep({ onBack, onSubmitted }) {
     setSubmitting(true)
     setError('')
 
-    const result = await createProposal(buildProposalPayload(data))
+    const result = await createProposal({
+      ...buildProposalPayload(data),
+      ...(campus && { campus }),
+    })
 
     setSubmitting(false)
 
     if (result.error) {
       setError(result.error)
+      if (result.code === 'CAMPUS_REQUIRED' && !campuses) {
+        setCampuses(await getCampuses())
+      }
+      // Submit is at the bottom of a long step; the message is at the top.
+      contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
@@ -100,10 +119,34 @@ export default function CreateVentureStep({ onBack, onSubmitted }) {
         </IconButton>
         Create a startup
       </DialogTitle>
-      <DialogContent>
-        {error && (
+      <DialogContent ref={contentRef}>
+        {error && !campuses && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
+          </Alert>
+        )}
+
+        {campuses && (
+          <Alert severity={campus ? 'info' : 'error'} sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1.5 }}>
+              {campus
+                ? 'Thanks. Press Submit again to send your proposal.'
+                : 'Your account has no campus yet. Choose yours, then press Submit again.'}
+            </Typography>
+            <TextField
+              select
+              size="small"
+              label="Campus"
+              value={campus}
+              onChange={e => setCampus(e.target.value)}
+              sx={{ minWidth: 220, bgcolor: 'background.paper' }}
+            >
+              {campuses.map(option => (
+                <MenuItem key={option._id} value={option._id}>
+                  {option.name}
+                </MenuItem>
+              ))}
+            </TextField>
           </Alert>
         )}
 

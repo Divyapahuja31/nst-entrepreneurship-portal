@@ -2,7 +2,7 @@ export default {
   IDEATION: 'Ideation',
   DISCOVERY: 'Discovery',
   VALIDATION: 'Validation',
-  MVP: 'Mvp',
+  MVP: 'MVP',
   PILOT: 'Pilot',
   REVENUE: 'Revenue',
   GROWTH: 'Growth',

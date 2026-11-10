@@ -28,6 +28,8 @@ const kpiSchema = new mongoose.Schema(
     score: {
       type: Number,
       default: 0,
+      min: 0,
+      max: 100,
     },
     submissionDate: {
       type: Date,
@@ -105,28 +107,38 @@ const kpiSchema = new mongoose.Schema(
       required: true,
     },
 
-    subKPIs: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'SubKPI',
-      },
-    ],
+    // A locked KPI's grade is final: its mentor can no longer change it,
+    // only the academic board can (or unlock it).
+    isLocked: {
+      type: Boolean,
+      default: false,
+    },
+    lockedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    lockedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 )
 
-// Keeps the two fields from contradicting each other: a founder KPI must name
-// its founder, and a venture KPI must not.
-kpiSchema.pre('validate', function () {
-  if (this.scope === 'FOUNDER' && !this.founder) {
-    this.invalidate('founder', 'A founder KPI must have a founder')
-  }
+kpiSchema.virtual('subKPIs', {
+  ref: 'SubKPI',
+  localField: '_id',
+  foreignField: 'parentKPI',
+})
 
-  if (this.scope === 'VENTURE') {
-    this.founder = null
-  }
+// Automatically derives scope from founder: presence of founder means member-level, null means startup-level.
+kpiSchema.pre('validate', function () {
+  this.scope = this.founder ? 'FOUNDER' : 'VENTURE'
 })
 
 kpiSchema.index({ venture: 1, scope: 1 })

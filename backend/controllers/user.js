@@ -1,66 +1,121 @@
 import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
+import { ROLES } from '@nst/shared/permissions.js'
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
-import Role from '../models/role.js'
-import { findVentureForUser } from '../utils/founderHelper.js'
-import VentureProposal from '../models/ventureProposal.js'
-import VentureJoinRequest from '../models/ventureJoinRequest.js'
-import { validateAll } from '../utils/validator.js'
-import { sendResetPasswordOtpEmail } from '../utils/emailService.js'
+import {
+  validateAll,
+  validateBatchAndCampus,
+  normalizeName,
+  validateName,
+  validatePassword,
+} from '../utils/validator.js'
+import { getUserPortfolio } from '../utils/userPortfolio.js'
+import {
+  otpCooldownMessage,
+  sendSignupCode,
+  redeemSignupCode,
+  clearSignupCode,
+  sendPasswordResetCode,
+  checkPasswordResetCode,
+  redeemPasswordResetCode,
+} from '../utils/otpHelper.js'
 import {
   cookieOptions,
   signToken,
   signGoogleSignupToken,
   verifyGoogleSignupToken,
 } from '../utils/token.js'
+import { listEmailDomains } from '../utils/emailDomains.js'
 import {
-  determineUserRole,
+  findRoleForEmail,
   getGoogleAuthUrl,
+  normalizeEmail,
+  startSession,
   verifyGoogleAuthCode,
+  DEACTIVATED_MESSAGE,
 } from '../utils/authHelper.js'
+
+// Responses must not reveal whether an email has an account, so endpoints
+// that take only an email answer the same way either way.
+const SIGNUP_CODE_MESSAGE =
+  'If this email is not registered yet, a 6-digit verification code has been sent to it. Already have an account? Sign in or reset your password instead.'
+const RESET_CODE_MESSAGE =
+  'If an account exists for this email, a 6-digit verification code has been sent to it. You can request a new code once a minute.'
+const INVALID_VERIFICATION = 'Invalid or expired verification request'
+
+// Compared against when no user matches, so sign-in takes as long as a real
+// password check and its timing doesn't reveal which emails exist.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('no-such-user', 10)
+
+// The sign-up form sends "" for a choice left blank. Staff have no campus or
+// batch, so whatever their form sends is dropped.
+const noneIfBlank = value => value || undefined
+const studentPlace = (position, { batch, campus }) =>
+  position === ROLES.STUDENT
+    ? { batch: noneIfBlank(batch), campus: noneIfBlank(campus) }
+    : { batch: undefined, campus: undefined }
 
 export const signUp = async (req, res) => {
   try {
-    const { username, email, password, batch, campus } = req.body
+    const { email, password, batch, campus } = req.body
+    const username = normalizeName(req.body.username)
 
-    const position = determineUserRole(email)
-    const role = await Role.findOne({ name: position })
-
+    const { position, role } = await findRoleForEmail(email)
     if (!role) {
       return res.status(500).json({
         error: `${position} role is not configured`,
       })
     }
 
-    const error = await validateAll({
-      username,
-      email,
-      password,
-      position,
-    })
+    const error = {
+      ...(await validateAll({ username, email, password, position })),
+      // Students need both, as with Google sign-up: a proposal takes the
+      // student's campus. Staff have neither, so theirs aren't checked.
+      ...(position === ROLES.STUDENT &&
+        (await validateBatchAndCampus({ batch, campus }, { required: true }))),
+    }
     if (Object.values(error).some(value => value.trim() !== '')) {
       return res.status(400).json({ error })
     }
 
-    const user = new User({
-      username,
-      email: email.toLowerCase(),
-      password,
-      role: role._id,
-      batch,
-      campus,
-    })
+    const normalizedEmail = normalizeEmail(email)
+    let user = await User.findOne({ email: normalizedEmail })
 
-    await user.save()
-    user.role = role
+    const codeResponse = {
+      requireOtp: true,
+      email: normalizedEmail,
+      message: SIGNUP_CODE_MESSAGE,
+    }
 
-    const userPortfolio = await getUserPortfolio(user._id)
+    if (user && user.isEmailVerified) {
+      return res.status(200).json(codeResponse)
+    }
 
-    return res
-      .cookie('token', signToken(user), cookieOptions)
-      .status(201)
-      .json({ user: userPortfolio || user })
+    if (user) {
+      // The account exists but nobody has proved they own this email, so it
+      // may be someone else's (e.g. created by an admin). Leave it as it is
+      // and keep these details until the emailed code is used.
+      user.pendingSignup = {
+        username,
+        passwordHash: await bcrypt.hash(password, 10),
+        ...studentPlace(position, { batch, campus }),
+      }
+    } else {
+      user = new User({
+        username,
+        email: normalizedEmail,
+        password,
+        role: role._id,
+        ...studentPlace(position, { batch, campus }),
+        isEmailVerified: false,
+      })
+    }
+
+    await sendSignupCode(user)
+
+    return res.status(200).json(codeResponse)
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
@@ -77,70 +132,35 @@ export const signUp = async (req, res) => {
   }
 }
 
-export const getUserPortfolio = async userId => {
-  const [user, venture] = await Promise.all([
-    User.findById(userId).populate(['role', 'batch', 'campus']),
-    findVentureForUser(userId),
-  ])
-
-  if (!user) {
-    return null
-  }
-
-  if (venture) {
-    await venture.populate([
-      {
-        path: 'founders',
-        populate: { path: 'user', select: 'username email' },
-      },
-      {
-        path: 'campus',
-        select: 'name',
-      },
-      {
-        path: 'industry',
-        select: 'name',
-      },
-    ])
-  }
-
-  const founders = venture
-    ? venture.founders.map(founder => founder.user).filter(Boolean)
-    : []
-
-  const application = venture ? null : await getPendingApplication(userId)
-
-  return {
-    ...user.toJSON(),
-    ventureId: venture?._id || null,
-    venture: venture ? { ...venture.toJSON(), founders } : null,
-    application,
-  }
-}
-
 export const signIn = async (req, res) => {
   try {
     const { email, password } = req.body
 
-    const user = await User.findOne({ email }).populate('role')
+    const user = await User.findOne({ email: normalizeEmail(email) }).populate(
+      'role'
+    )
     if (!user) {
+      await bcrypt.compare(String(password), DUMMY_PASSWORD_HASH)
+    }
+    if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({
         error: 'Invalid email or password',
       })
     }
 
-    const isMatch = await user.comparePassword(password)
-    if (!isMatch) {
-      return res.status(401).json({
-        error: 'Invalid email or password',
+    if (!user.isEmailVerified && !user.googleId) {
+      const { retryAfter } = await sendSignupCode(user)
+
+      return res.status(403).json({
+        error: retryAfter
+          ? `Your email address is not verified yet. ${otpCooldownMessage(retryAfter)}`
+          : 'Your email address is not verified yet. A 6-digit verification code has been sent to your email.',
+        requireOtp: true,
+        email: user.email,
       })
     }
 
-    const userPortfolio = await getUserPortfolio(user._id)
-
-    return res
-      .cookie('token', signToken(user), cookieOptions)
-      .json({ user: userPortfolio || user })
+    return await startSession(res, user)
   } catch (err) {
     console.error('SignIn error:', err)
     return res.status(500).json({
@@ -151,42 +171,6 @@ export const signIn = async (req, res) => {
 
 export const signOut = async (_, res) => {
   return res.clearCookie('token', cookieOptions).json({ success: true })
-}
-
-const getPendingApplication = async userId => {
-  const [proposal, joinRequest] = await Promise.all([
-    VentureProposal.findOne({ submittedBy: userId }).sort({ createdAt: -1 }),
-    VentureJoinRequest.findOne({ requestedBy: userId })
-      .sort({ createdAt: -1 })
-      .populate('venture', 'name'),
-  ])
-
-  const applications = []
-
-  if (proposal) {
-    applications.push({
-      type: 'PROPOSAL',
-      id: proposal._id,
-      status: proposal.status,
-      ventureName: proposal.startupName,
-      submittedAt: proposal.createdAt,
-    })
-  }
-
-  if (joinRequest) {
-    applications.push({
-      type: 'JOIN_REQUEST',
-      id: joinRequest._id,
-      status: joinRequest.status,
-      ventureName: joinRequest.venture?.name || null,
-      submittedAt: joinRequest.createdAt,
-    })
-  }
-
-  const pending = applications.filter(item => item.status === 'PENDING')
-  const candidates = pending.length ? pending : applications
-
-  return candidates.sort((a, b) => b.submittedAt - a.submittedAt)[0] || null
 }
 
 export const portfolio = async (req, res) => {
@@ -202,19 +186,125 @@ export const portfolio = async (req, res) => {
   return res.json(data)
 }
 
+// Ties Google's callback to the browser that started sign-in. Without it, an
+// attacker could send someone their own callback link and sign them in to
+// the attacker's account.
+const OAUTH_STATE_COOKIE = 'google_oauth_state'
+const oauthStateCookieOptions = { ...cookieOptions, maxAge: 10 * 60 * 1000 }
+
+// Set while a signed-in user connects their Google account, so the
+// callback links it to them instead of signing in.
+const GOOGLE_LINK_COOKIE = 'google_link'
+
 export const googleAuth = (req, res) => {
-  const url = getGoogleAuthUrl()
-  return res.redirect(url)
+  const state = crypto.randomBytes(32).toString('hex')
+  return res
+    .clearCookie(GOOGLE_LINK_COOKIE, cookieOptions)
+    .cookie(OAUTH_STATE_COOKIE, state, oauthStateCookieOptions)
+    .redirect(getGoogleAuthUrl(state))
+}
+
+// Connects the signed-in user's Google account, so the KPI bot knows them
+// in Meet transcripts by account rather than by name.
+export const googleLink = (req, res) => {
+  const state = crypto.randomBytes(32).toString('hex')
+  return res
+    .cookie(OAUTH_STATE_COOKIE, state, oauthStateCookieOptions)
+    .cookie(GOOGLE_LINK_COOKIE, '1', oauthStateCookieOptions)
+    .redirect(getGoogleAuthUrl(state))
+}
+
+const hasValidOAuthState = req => {
+  const { state } = req.query
+  const expected = req.cookies[OAUTH_STATE_COOKIE]
+  return typeof state === 'string' && Boolean(expected) && state === expected
+}
+
+// Ties a Google sign-in to the account with that email.
+const linkGoogleAccount = async (user, googleId) => {
+  if (!user.isEmailVerified) {
+    // Nobody proved ownership of this email before Google did, so the
+    // password or a pending sign-up may be someone else's. Drop them.
+    user.password = undefined
+    user.pendingSignup = undefined
+    clearSignupCode(user)
+  }
+  if (!user.googleId || !user.isEmailVerified) {
+    user.googleId = googleId
+    user.isEmailVerified = true
+    await user.save()
+  }
+}
+
+// Back to onboarding with ?google=<outcome>; once linked, onboarding moves
+// on to the next step or into the portal.
+const linkOutcome = (res, outcome) =>
+  res.redirect(`${process.env.FRONTEND_URL || ''}/onboarding?google=${outcome}`)
+
+// Why this Google account can't be linked to the signed-in user, or null.
+// Only their own school account (the same email) is taken: any other would
+// sign in as, or sign up, someone else.
+const linkProblem = async (user, { googleId, email, error }) => {
+  // A personal or unverified account isn't their school one.
+  if (error || !user || email !== user.email) {
+    return 'wrong-account'
+  }
+  if (user.googleId && user.googleId !== googleId) {
+    return 'wrong-account'
+  }
+  if (await User.exists({ googleId, _id: { $ne: user._id } })) {
+    return 'taken'
+  }
+  return null
+}
+
+// Links a Google account to the signed-in user.
+const finishGoogleLink = async (req, res, verification) => {
+  if (!req.user) {
+    return linkOutcome(res, 'signed-out')
+  }
+  const user = await User.findById(req.user.id)
+  const problem = await linkProblem(user, verification)
+  if (problem) {
+    return linkOutcome(res, problem)
+  }
+  user.googleId = verification.googleId
+  user.isEmailVerified = true
+  try {
+    await user.save()
+  } catch (saveError) {
+    // Another account took this Google ID since the check above.
+    if (saveError?.code === 11000) {
+      return linkOutcome(res, 'taken')
+    }
+    throw saveError
+  }
+  return linkOutcome(res, 'linked')
 }
 
 export const googleAuthCallback = async (req, res) => {
   try {
     const { code } = req.query
+    const validState = hasValidOAuthState(req)
+    const linking = req.cookies[GOOGLE_LINK_COOKIE] === '1'
+    res.clearCookie(OAUTH_STATE_COOKIE, oauthStateCookieOptions)
+    res.clearCookie(GOOGLE_LINK_COOKIE, cookieOptions)
+    if (!validState) {
+      return res
+        .status(400)
+        .send(
+          'Google sign-in expired or was not started here. Please try again.'
+        )
+    }
+
     if (!code) {
       return res.status(400).send('Google authorization code is missing.')
     }
 
     const verificationResult = await verifyGoogleAuthCode(code)
+    if (linking) {
+      return await finishGoogleLink(req, res, verificationResult)
+    }
     if (verificationResult.error) {
       return res
         .status(verificationResult.status)
@@ -227,11 +317,12 @@ export const googleAuthCallback = async (req, res) => {
       $or: [{ googleId }, { email }],
     }).populate('role')
 
+    if (user?.deletedAt) {
+      return res.status(403).send(DEACTIVATED_MESSAGE)
+    }
+
     if (user) {
-      if (!user.googleId) {
-        user.googleId = googleId
-        await user.save()
-      }
+      await linkGoogleAccount(user, googleId)
 
       return res
         .cookie('token', signToken(user), cookieOptions)
@@ -253,14 +344,19 @@ export const googleAuthCallback = async (req, res) => {
 
 export const getGoogleSignupOptions = async (req, res) => {
   try {
-    const [campuses, batches] = await Promise.all([
+    const [campuses, batches, domains] = await Promise.all([
       Campus.find().sort({ name: 1 }),
       Batch.find().populate('campus', 'name').sort({ name: 1 }),
+      listEmailDomains(),
     ])
 
     return res.status(200).json({
       campuses,
       batches,
+      // The sign-up forms leave out campus and batch for these.
+      staffDomains: domains
+        .filter(entry => entry.staff)
+        .map(entry => entry.domain),
     })
   } catch (error) {
     console.error('Get Google signup options error:', error)
@@ -283,22 +379,31 @@ const parseGoogleSignupToken = token => {
 
 export const completeGoogleSignup = async (req, res) => {
   try {
-    const { token, username, batch, campus } = req.body
+    const { token, batch, campus } = req.body
+    const username = normalizeName(req.body.username)
     const parsed = parseGoogleSignupToken(token)
     if (parsed.error) {
       return res.status(401).json({ error: parsed.error })
     }
 
     const { googleId, email } = parsed.data
+    const { position, role } = await findRoleForEmail(email)
+    const isStudent = position === ROLES.STUDENT
 
-    if (!username || !batch || !campus) {
-      return res.status(400).json({
-        error: 'Name, batch and campus are required',
-      })
+    // Same name rules as email sign-up, and real batch/campus records for a
+    // student. Staff have neither.
+    const fieldErrors = [
+      validateName(username),
+      ...(isStudent
+        ? Object.values(
+            await validateBatchAndCampus({ batch, campus }, { required: true })
+          )
+        : []),
+    ].filter(Boolean)
+    if (fieldErrors.length) {
+      return res.status(400).json({ error: fieldErrors[0] })
     }
 
-    const position = determineUserRole(email)
-    const role = await Role.findOne({ name: position })
     if (!role) {
       console.error(`${position} role does not exist in database`)
       return res.status(500).json({
@@ -319,20 +424,15 @@ export const completeGoogleSignup = async (req, res) => {
       username,
       email,
       googleId,
-      batch,
-      campus,
+      ...studentPlace(position, { batch, campus }),
       role: role._id,
+      isEmailVerified: true,
     })
 
     await user.save()
     user.role = role
 
-    const userPortfolio = await getUserPortfolio(user._id)
-
-    return res
-      .cookie('token', signToken(user), cookieOptions)
-      .status(201)
-      .json({ user: userPortfolio || user })
+    return await startSession(res, user, { status: 201 })
   } catch (error) {
     console.error('Complete Google signup error:', error)
     if (error.code === 11000) {
@@ -349,35 +449,19 @@ export const completeGoogleSignup = async (req, res) => {
 
 export const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body
+    const email = normalizeEmail(req.body.email)
     if (!email) {
       return res.status(400).json({ error: 'Email is required' })
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-    if (!user) {
-      return res.status(404).json({
-        error: 'No account found with this email address.',
-      })
+    // Same answer for unknown emails and during the cooldown, when the code
+    // sent moments ago is still valid.
+    const user = await User.findOne({ email })
+    if (user) {
+      await sendPasswordResetCode(user)
     }
 
-    const otp = crypto.randomInt(100000, 1000000).toString()
-
-    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex')
-    user.resetPasswordOtp = hashedOtp
-    user.resetPasswordOtpExpires = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-    user.resetPasswordOtpAttempts = 0
-    await user.save()
-
-    await sendResetPasswordOtpEmail({
-      to: user.email,
-      username: user.username,
-      otp,
-    })
-
-    return res.status(200).json({
-      message: 'A 6-digit verification code has been sent to your email.',
-    })
+    return res.status(200).json({ message: RESET_CODE_MESSAGE })
   } catch (error) {
     console.error('Forgot password error:', error)
     const isDbTimeout =
@@ -386,46 +470,15 @@ export const forgotPassword = async (req, res) => {
     return res.status(500).json({
       error: isDbTimeout
         ? 'Database connection timed out. Please try again in a moment.'
-        : error.message || 'Failed to process forgot password request',
+        : 'Failed to process forgot password request',
     })
-  }
-}
-
-const validateResetOtp = (user, otp) => {
-  if (!user?.resetPasswordOtp || !user?.resetPasswordOtpExpires) {
-    return 'Invalid or expired verification request'
-  }
-  if (user.resetPasswordOtpAttempts >= 5) {
-    return 'Too many failed verification attempts. Please request a new verification code.'
-  }
-  if (user.resetPasswordOtpExpires < new Date()) {
-    return 'Verification code has expired. Please request a new code.'
-  }
-  const hashedOtp = crypto.createHash('sha256').update(otp.trim()).digest('hex')
-  if (hashedOtp !== user.resetPasswordOtp) {
-    return 'Invalid verification code. Please check your email and try again.'
-  }
-  return null
-}
-
-const updateOtpAttempts = async (user, validationError) => {
-  if (!user) {
-    return
-  }
-  if (user.resetPasswordOtpAttempts >= 5) {
-    user.resetPasswordOtp = null
-    user.resetPasswordOtpExpires = null
-    user.resetPasswordOtpAttempts = 0
-    await user.save()
-  } else if (validationError.includes('Invalid verification code')) {
-    user.resetPasswordOtpAttempts += 1
-    await user.save()
   }
 }
 
 export const verifyOtp = async (req, res) => {
   try {
-    const { email, otp } = req.body
+    const { otp } = req.body
+    const email = normalizeEmail(req.body.email)
 
     if (!email || !otp) {
       return res
@@ -433,11 +486,9 @@ export const verifyOtp = async (req, res) => {
         .json({ error: 'Email and verification code are required' })
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-    const validationError = validateResetOtp(user, otp)
-
+    const user = await User.findOne({ email })
+    const validationError = await checkPasswordResetCode(user, otp)
     if (validationError) {
-      await updateOtpAttempts(user, validationError)
       return res.status(400).json({ error: validationError })
     }
 
@@ -452,7 +503,8 @@ export const verifyOtp = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const { email, otp, password } = req.body
+    const { otp, password } = req.body
+    const email = normalizeEmail(req.body.email)
 
     if (!email || !otp || !password) {
       return res.status(400).json({
@@ -460,24 +512,20 @@ export const resetPassword = async (req, res) => {
       })
     }
 
-    if (password.length < 8) {
-      return res
-        .status(400)
-        .json({ error: 'Password must be at least 8 characters long' })
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError })
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-    const validationError = validateResetOtp(user, otp)
-
+    const user = await User.findOne({ email })
+    const validationError = await redeemPasswordResetCode(user, otp)
     if (validationError) {
-      await updateOtpAttempts(user, validationError)
       return res.status(400).json({ error: validationError })
     }
 
     user.password = password
-    user.resetPasswordOtp = null
-    user.resetPasswordOtpExpires = null
-    user.resetPasswordOtpAttempts = 0
+    // Whoever needed a reset may have had their session stolen too.
+    user.sessionVersion += 1
     await user.save()
 
     return res
@@ -486,5 +534,93 @@ export const resetPassword = async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error)
     return res.status(500).json({ error: 'Failed to reset password' })
+  }
+}
+
+// Whether the password matches the sign-up that sent the code: the pending
+// one for an account that already existed, otherwise the account's own.
+const signupPasswordMatches = (user, password) =>
+  user.pendingSignup?.passwordHash
+    ? bcrypt.compare(password, user.pendingSignup.passwordHash)
+    : user.comparePassword(password)
+
+// Once the code proves the email, the pending sign-up becomes the account.
+const adoptPendingSignup = (user, password) => {
+  const pending = user.pendingSignup
+  if (!pending?.passwordHash) {
+    return
+  }
+  user.username = pending.username
+  user.password = password
+  // The account's role stays: it may have been set by an admin, and an email
+  // sign-up must not reset it.
+  user.batch = pending.batch
+  user.campus = pending.campus
+  user.pendingSignup = undefined
+}
+
+export const verifySignupOtp = async (req, res) => {
+  try {
+    const { otp, password } = req.body
+    const email = normalizeEmail(req.body.email)
+
+    if (!email || !otp || !password) {
+      return res.status(400).json({
+        error: 'Email, password and verification code are required',
+      })
+    }
+
+    // Never issue a session here without a valid code, or anyone could log in
+    // as a verified user just by knowing their email. Unknown and verified
+    // emails get the same error as a bad request.
+    const user = await User.findOne({ email }).populate('role')
+    if (!user || user.isEmailVerified) {
+      return res.status(400).json({ error: INVALID_VERIFICATION })
+    }
+
+    const validationError = await redeemSignupCode(user, otp)
+    if (validationError) {
+      return res.status(400).json({ error: validationError })
+    }
+
+    // Checked after the code so this can't be used to guess passwords. A
+    // newer sign-up for the same email means these details are stale.
+    if (!(await signupPasswordMatches(user, password))) {
+      return res.status(400).json({
+        error: 'Your sign-up details have changed. Please sign up again.',
+      })
+    }
+
+    adoptPendingSignup(user, password)
+    user.isEmailVerified = true
+    await user.save()
+    await user.populate('role')
+
+    return await startSession(res, user, {
+      message: 'Email verified successfully!',
+    })
+  } catch (error) {
+    console.error('Verify signup OTP error:', error)
+    return res.status(500).json({ error: 'Failed to verify code' })
+  }
+}
+
+export const resendSignupOtp = async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email)
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' })
+    }
+
+    const user = await User.findOne({ email })
+    if (user && !user.isEmailVerified) {
+      await sendSignupCode(user)
+    }
+
+    return res.status(200).json({ message: SIGNUP_CODE_MESSAGE })
+  } catch (error) {
+    console.error('Resend signup OTP error:', error)
+    return res.status(500).json({ error: 'Failed to resend verification code' })
   }
 }

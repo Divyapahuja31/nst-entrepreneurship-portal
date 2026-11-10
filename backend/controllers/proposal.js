@@ -1,3 +1,6 @@
+import mongoose from 'mongoose'
+import Batch from '../models/batch.js'
+import Campus from '../models/campus.js'
 import VentureProposal from '../models/ventureProposal.js'
 import User from '../models/user.js'
 import {
@@ -7,6 +10,51 @@ import {
   saveOrResubmitProposal,
 } from '../utils/proposalHelper.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
+import {
+  DUPLICATE_STARTUP_NAME,
+  isStartupNameTaken,
+} from '../utils/ventureName.js'
+
+export const CAMPUS_REQUIRED = 'CAMPUS_REQUIRED'
+
+const NO_CAMPUS = {
+  code: CAMPUS_REQUIRED,
+  error:
+    'Your user profile must have a campus assigned before submitting a proposal.',
+}
+
+// What is wrong with the proposal itself, as { status, error }, or null.
+const proposalProblem = async body => {
+  const validationError = validateProposalInput(body)
+  if (validationError) {
+    return { status: 400, error: validationError }
+  }
+  if (await isStartupNameTaken(body.startupName)) {
+    return { status: 409, error: DUPLICATE_STARTUP_NAME }
+  }
+  return null
+}
+
+// The campus a proposal is filed under: the student's, else their batch's,
+// else one they pick on the form. Whichever is found is kept on the
+// account, so they are only asked once.
+const campusFor = async (user, chosen) => {
+  let campus = user.campus
+  if (!campus && user.batch) {
+    campus = (await Batch.findById(user.batch).select('campus'))?.campus
+  }
+  if (
+    !campus &&
+    mongoose.isValidObjectId(chosen) &&
+    (await Campus.exists({ _id: chosen }))
+  ) {
+    campus = chosen
+  }
+  if (campus && !user.campus) {
+    await User.updateOne({ _id: user._id }, { $set: { campus } })
+  }
+  return campus ?? null
+}
 
 export const getMyProposal = async (req, res) => {
   try {
@@ -14,10 +62,12 @@ export const getMyProposal = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
+    // A student who left a startup may have proposed again: the latest.
     const proposal = await VentureProposal.findOne({
       submittedBy: req.user.id,
     })
-      .populate('reviews.reviewer', 'name email')
+      .sort({ updatedAt: -1 })
+      .populate('reviews.reviewer', 'username')
       .populate('industry', 'name')
       .populate('campus', 'name')
       .populate('venture')
@@ -45,11 +95,9 @@ export const createProposal = async (req, res) => {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    if (!user.campus) {
-      return res.status(400).json({
-        error:
-          'Your user profile must have a campus assigned before submitting a proposal.',
-      })
+    const campus = await campusFor(user, req.body?.campus)
+    if (!campus) {
+      return res.status(400).json(NO_CAMPUS)
     }
 
     const currentVenture = await findVentureForUser(req.user.id)
@@ -59,9 +107,11 @@ export const createProposal = async (req, res) => {
       })
     }
 
+    // An approved proposal made a startup; once the student has left it
+    // (checked above) they may propose another.
     const existingProposal = await VentureProposal.findOne({
       submittedBy: req.user.id,
-      status: { $in: ['PENDING', 'APPROVED'] },
+      status: 'PENDING',
     })
 
     const existingError = checkExistingProposal(existingProposal)
@@ -71,12 +121,12 @@ export const createProposal = async (req, res) => {
         .json({ error: existingError.error })
     }
 
-    const validationError = validateProposalInput(req.body)
-    if (validationError) {
-      return res.status(400).json({ error: validationError })
+    const invalid = await proposalProblem(req.body)
+    if (invalid) {
+      return res.status(invalid.status).json({ error: invalid.error })
     }
 
-    const proposalData = buildProposalData(req.body, req.user.id, user.campus)
+    const proposalData = buildProposalData(req.body, req.user.id, campus)
     const proposal = await saveOrResubmitProposal(proposalData, req.user.id)
 
     return res.status(201).json({

@@ -1,34 +1,25 @@
-import Box from '@mui/material/Box'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Chip from '@mui/material/Chip'
-import Divider from '@mui/material/Divider'
-import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Typography from '@mui/material/Typography'
+import { Fragment } from 'react'
 
-import BarChartIcon from '@mui/icons-material/BarChart'
-import CancelIcon from '@mui/icons-material/Cancel'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import HandshakeIcon from '@mui/icons-material/Handshake'
-import LightbulbIcon from '@mui/icons-material/Lightbulb'
-import MenuBookIcon from '@mui/icons-material/MenuBook'
-import ScheduleIcon from '@mui/icons-material/Schedule'
-import TrackChangesIcon from '@mui/icons-material/TrackChanges'
-import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import { Box, Divider, Typography } from '@mui/material'
 
-import { StyledTableCell, StyledTableRow } from '../../components/Table.style'
+import IconBadge from '../../components/IconBadge'
+import SectionCard from '../../components/SectionCard'
+import StatusPill from '../../components/StatusPill'
+import {
+  BookIcon,
+  CalendarIcon,
+  ChartIcon,
+  KpiIcon,
+  LightbulbIcon,
+  PeopleIcon,
+  TargetIcon,
+  WarningIcon,
+} from '../../components/icons'
 
 const CREDIT_COURSES = [
   {
     title: 'Entrepreneurship Practice I',
     credits: '6 Credits · M1–3',
-    color: 'info',
     focus: 'Discovery → MVP → Validation',
     components: [
       ['Customer Discovery & Problem Validation', '25%'],
@@ -48,7 +39,6 @@ const CREDIT_COURSES = [
   {
     title: 'Entrepreneurship Practice II',
     credits: '6 Credits · M4–6',
-    color: 'success',
     focus: 'Business Model → Traction → Scale → Final Defense',
     components: [
       ['Business Model & Revenue Validation', '25%'],
@@ -70,12 +60,12 @@ const CREDIT_COURSES = [
 ]
 
 const MILESTONE_COURSES = [
-  ['Month 1', 'Problem Validation', 'Practice I', 'info'],
-  ['Month 2', 'Customer Discovery & MVP', 'Practice I', 'info'],
-  ['Month 3', 'MVP & Pilot', 'Practice I', 'info'],
-  ['Month 4', 'Business Model & Revenue', 'Practice II', 'success'],
-  ['Month 5', 'Growth & Partnerships', 'Practice II', 'success'],
-  ['Month 6', 'Final Startup Defense', 'Practice II', 'success'],
+  ['Month 1', 'Problem Validation', 'Practice I'],
+  ['Month 2', 'Customer Discovery & MVP', 'Practice I'],
+  ['Month 3', 'MVP & Pilot', 'Practice I'],
+  ['Month 4', 'Business Model & Revenue', 'Practice II'],
+  ['Month 5', 'Growth & Partnerships', 'Practice II'],
+  ['Month 6', 'Final Startup Defense', 'Practice II'],
 ]
 
 const PILLARS = [
@@ -83,34 +73,37 @@ const PILLARS = [
     icon: LightbulbIcon,
     title: 'Execution & Product',
     weight: 40,
-    color: 'info',
     tlo: 'TLO-3, TLO-4',
     desc: 'Lean Startup experiments, rapid prototyping, technical architecture, feature delivery, product iterations.',
   },
   {
-    icon: TrackChangesIcon,
+    icon: TargetIcon,
     title: 'Customer & Market',
     weight: 25,
-    color: 'success',
     tlo: 'TLO-1, TLO-2',
     desc: 'Customer discovery, segmentation, market size (TAM/SAM/SOM), interview depth, competitive positioning.',
   },
   {
-    icon: BarChartIcon,
+    icon: ChartIcon,
     title: 'Business & Metrics',
     weight: 20,
-    color: 'warning',
     tlo: 'TLO-5, TLO-6, TLO-8',
     desc: 'Business model canvas, revenue model, unit economics, traction metrics, demo-ready pitch.',
   },
   {
-    icon: HandshakeIcon,
+    icon: PeopleIcon,
     title: 'Founder Behaviour',
     weight: 15,
-    color: 'error',
     tlo: 'TLO-9, TLO-10',
     desc: 'Self-direction, resilience, mentor engagement, accountability, time management, team dynamics.',
   },
+]
+
+const BAND_LABELS = [
+  'Exemplary (76–100%)',
+  'Proficient (51–75%)',
+  'Developing (26–50%)',
+  'Insufficient (0–25%)',
 ]
 
 const RUBRIC_BANDS = [
@@ -191,9 +184,9 @@ const TIMELINE = [
 
 const STATUS_RULES = [
   {
-    icon: CheckCircleIcon,
-    color: 'success',
-    title: 'Green (On Track)',
+    tint: 'green',
+    color: 'Green',
+    title: 'On Track',
     rules: [
       'Total score ≥ 70 / 100',
       'AND no single pillar below 50% of its weight',
@@ -201,9 +194,9 @@ const STATUS_RULES = [
     note: 'Example: Execution must be ≥ 20, Customer ≥ 13, Business ≥ 10, Behaviour ≥ 8',
   },
   {
-    icon: WarningAmberIcon,
-    color: 'warning',
-    title: 'Yellow (Warning)',
+    tint: 'orange',
+    color: 'Yellow',
+    title: 'Warning',
     rules: [
       'Total score 50 – 69 / 100',
       'OR one pillar is below 50% of its weight but total ≥ 50',
@@ -211,9 +204,9 @@ const STATUS_RULES = [
     note: 'Faculty should flag for a 1:1 review call.',
   },
   {
-    icon: CancelIcon,
-    color: 'error',
-    title: 'Red (At Risk)',
+    tint: 'red',
+    color: 'Red',
+    title: 'At Risk',
     rules: [
       'Total score < 50 / 100',
       'OR multiple pillars below 50% of their weight',
@@ -225,13 +218,13 @@ const STATUS_RULES = [
 const REVIEW_TRIGGERS = [
   {
     label: '2× Yellow',
-    color: 'warning',
+    tint: 'orange',
     title: 'Faculty Review Warning',
     desc: 'If a student receives Yellow in two consecutive months, faculty must schedule a formal review and document an improvement plan.',
   },
   {
     label: '2× Red',
-    color: 'error',
+    tint: 'red',
     title: 'Academic Review Board',
     desc: 'If a student receives Red in two consecutive months, the case is escalated to the Academic Review Board to decide on continuation or return to internship track.',
   },
@@ -287,502 +280,491 @@ const STEPS = [
   ],
 ]
 
-function SectionHeading({ icon: Icon, children }) {
+const numeric = { fontVariantNumeric: 'tabular-nums' }
+
+// Gray group inside a section card (DESIGN.md: nested boxes, not borders).
+function Group({ children, sx }) {
+  return (
+    <Box
+      sx={[
+        {
+          p: { xs: 2, sm: 2.5 },
+          borderRadius: '14px',
+          bgcolor: 'background.default',
+        },
+        ...(Array.isArray(sx) ? sx : [sx]),
+      ]}
+    >
+      {children}
+    </Box>
+  )
+}
+
+function Columns({ min = 1, md = 2, lg, children }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gap: { xs: 2, sm: 3 },
+        gridTemplateColumns: {
+          xs: `repeat(${min}, minmax(0, 1fr))`,
+          md: `repeat(${md}, minmax(0, 1fr))`,
+          ...(lg ? { lg: `repeat(${lg}, minmax(0, 1fr))` } : {}),
+        },
+      }}
+    >
+      {children}
+    </Box>
+  )
+}
+
+function Label({ children, sx }) {
   return (
     <Typography
-      variant="h6"
-      sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}
+      variant="subtitle2"
+      component="h3"
+      sx={[{ mb: 1 }, ...(Array.isArray(sx) ? sx : [sx])]}
     >
-      <Icon color="primary" />
       {children}
     </Typography>
   )
 }
 
-function SubHeading({ children }) {
+// Rows separated by hairlines: label left, optional value right.
+function Rows({ items, render }) {
+  return items.map((item, index) => (
+    <Fragment key={index}>
+      {index > 0 && <Divider />}
+      <Box sx={{ py: 1.25 }}>{render(item)}</Box>
+    </Fragment>
+  ))
+}
+
+function Weight({ label, value, strong }) {
   return (
-    <Typography
-      variant="overline"
-      sx={{ color: 'text.secondary', display: 'block' }}
-    >
-      {children}
-    </Typography>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+      <Typography variant="body2" sx={strong ? { fontWeight: 600 } : null}>
+        {label}
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={[numeric, strong ? { fontWeight: 600 } : {}]}
+      >
+        {value}
+      </Typography>
+    </Box>
   )
 }
 
-function PillarCard({ icon: Icon, title, weight, color, tlo, desc }) {
+function Tag({ children }) {
   return (
-    <Card variant="outlined" sx={{ borderColor: `${color}.light` }}>
-      <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-          <Icon sx={{ color: `${color}.main` }} />
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-block',
+        px: 1.25,
+        py: 0.25,
+        borderRadius: 1.5,
+        bgcolor: 'background.paper',
+        color: 'text.secondary',
+        fontSize: '0.8125rem',
+        fontWeight: 500,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {children}
+    </Box>
+  )
+}
+
+function CreditCourse({ course }) {
+  return (
+    <Group>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Typography variant="subtitle1" component="h3">
+          {course.title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {course.credits}
+        </Typography>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+        {course.focus}
+      </Typography>
+
+      <Label>Course components</Label>
+      <Rows
+        items={[...course.components, ['Total', '100%', true]]}
+        render={([label, weight, strong]) => (
+          <Weight label={label} value={weight} strong={strong} />
+        )}
+      />
+
+      <Label sx={{ mt: 2.5 }}>Evidence collected</Label>
+      <Typography variant="body2" color="text.secondary">
+        {course.evidence}
+      </Typography>
+
+      <Label sx={{ mt: 2.5 }}>Maps to the rubric</Label>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {course.rubric.map(item => (
+          <Tag key={item}>{item}</Tag>
+        ))}
+      </Box>
+    </Group>
+  )
+}
+
+function PillarCard({ icon, title, weight, tlo, desc }) {
+  return (
+    <Group sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+      <Box sx={{ display: { xs: 'none', sm: 'flex' } }}>
+        <IconBadge icon={icon} tint="blue" size={40} />
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            gap: 2,
+          }}
+        >
+          <Typography variant="subtitle1" component="h3">
             {title}
           </Typography>
-        </Stack>
-        <Typography variant="body2">
-          <strong>Weight:</strong> {weight}%
+          <Typography
+            variant="subtitle1"
+            component="p"
+            sx={[numeric, { whiteSpace: 'nowrap' }]}
+          >
+            {weight}
+            <Box
+              component="span"
+              sx={{ color: 'text.secondary', fontWeight: 400 }}
+            >
+              {' '}
+              pts
+            </Box>
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Syllabus {tlo}
         </Typography>
-        <Typography variant="body2">
-          <strong>Syllabus:</strong> {tlo}
-        </Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-          {desc}
-        </Typography>
-      </CardContent>
-    </Card>
+        <Typography variant="body2">{desc}</Typography>
+      </Box>
+    </Group>
+  )
+}
+
+function RubricBands({ row }) {
+  return (
+    <Group>
+      <Typography variant="subtitle1" component="h3" sx={{ mb: 2 }}>
+        {row.pillar}
+        <Box
+          component="span"
+          sx={[numeric, { color: 'text.secondary', fontWeight: 400 }]}
+        >
+          {' '}
+          / {row.max}
+        </Box>
+      </Typography>
+      <Columns md={2} lg={4}>
+        {row.bands.map((band, index) => (
+          <Box key={BAND_LABELS[index]}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              {BAND_LABELS[index]}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {band}
+            </Typography>
+          </Box>
+        ))}
+      </Columns>
+    </Group>
+  )
+}
+
+// Month on the left, what happens on the right; stacks on phones.
+function MonthRow({ month, title, children }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gap: { xs: 0.25, sm: 3 },
+        gridTemplateColumns: { xs: '1fr', sm: '96px minmax(0, 1fr)' },
+      }}
+    >
+      <Typography variant="body2" color="text.secondary">
+        {month}
+      </Typography>
+      <Box>
+        <Typography variant="subtitle2">{title}</Typography>
+        {children}
+      </Box>
+    </Box>
   )
 }
 
 function Step({ number, title, desc }) {
   return (
-    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
       <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          width: 32,
-          height: 32,
-          borderRadius: '50%',
-          bgcolor: 'primary.main',
-          color: 'primary.contrastText',
-          fontSize: 14,
-          fontWeight: 700,
-        }}
+        aria-hidden="true"
+        sx={[
+          numeric,
+          {
+            display: 'grid',
+            placeItems: 'center',
+            flexShrink: 0,
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            bgcolor: 'background.default',
+            color: 'primary.main',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+          },
+        ]}
       >
         {number}
       </Box>
       <Box>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        <Typography variant="subtitle2" component="h3">
           {title}
         </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        <Typography variant="body2" color="text.secondary">
           {desc}
         </Typography>
       </Box>
-    </Stack>
+    </Box>
   )
 }
 
 export default function Methodology() {
   return (
-    <Stack spacing={5}>
-      <Box>
-        <SubHeading>Methodology</SubHeading>
-        <Typography variant="h2">How we evaluate.</Typography>
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <Box sx={{ mb: { xs: 4, sm: 5 } }}>
         <Typography
-          variant="h6"
-          sx={{ color: 'text.secondary', maxWidth: 720 }}
+          variant="h2"
+          component="h1"
+          sx={{ fontSize: { xs: '2rem', sm: '2.5rem' }, mb: 1 }}
         >
-          A transparent reference for faculty on the rubric, KPIs, milestones,
-          and traffic-light logic behind every monthly review.
+          Methodology
         </Typography>
-        <hr />
+        <Typography variant="body1" color="text.secondary">
+          The rubric, KPIs, milestones and status logic behind every monthly
+          review.
+        </Typography>
       </Box>
 
-      {/* Academic credit wrapper */}
-      <Stack spacing={2}>
-        <SectionHeading icon={MenuBookIcon}>
-          0. Academic Credit Structure (12 Credits)
-        </SectionHeading>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          The Startup Track is wrapped into two 6-credit courses so the
-          university can issue formal grades. The underlying monthly rubric,
-          KPIs and traffic-light logic remain unchanged — these courses simply
-          re-aggregate the existing evaluations into semester-level grades.
-        </Typography>
-
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
-            gap: 2,
-          }}
+      <Box sx={{ display: 'grid', gap: { xs: 2, sm: 3 } }}>
+        <SectionCard
+          icon={BookIcon}
+          title="Academic Credit Structure"
+          subtitle="Two 6-credit courses (12 credits) so the university can issue formal grades."
         >
-          {CREDIT_COURSES.map(course => (
-            <Card
-              key={course.title}
-              variant="outlined"
-              sx={{ borderColor: `${course.color}.light` }}
-            >
-              <CardContent>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  justifyContent="space-between"
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            The courses re-aggregate the monthly evaluations below into
+            semester-level grades. The rubric, KPIs and status logic themselves
+            don&apos;t change.
+          </Typography>
+
+          <Columns md={2}>
+            {CREDIT_COURSES.map(course => (
+              <CreditCourse key={course.title} course={course} />
+            ))}
+          </Columns>
+
+          <Label sx={{ mt: 3 }}>Monthly milestones by course</Label>
+          <Rows
+            items={MILESTONE_COURSES}
+            render={([month, focus, course]) => (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: { xs: 0.5, sm: 3 },
+                  alignItems: 'center',
+                  gridTemplateColumns: {
+                    xs: '1fr auto',
+                    sm: '96px minmax(0, 1fr) auto',
+                  },
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ display: { xs: 'none', sm: 'block' } }}
                 >
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    {course.title}
-                  </Typography>
-                  <Chip
-                    label={course.credits}
-                    size="small"
-                    variant="outlined"
-                    color={course.color}
-                  />
-                </Stack>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  Focus: {course.focus}
+                  {month}
                 </Typography>
-
-                <SubHeading>Course Components</SubHeading>
-                <Table size="small">
-                  <TableBody>
-                    {course.components.map(([label, weight]) => (
-                      <StyledTableRow key={label}>
-                        <StyledTableCell>{label}</StyledTableCell>
-                        <StyledTableCell
-                          align="right"
-                          sx={{ fontFamily: 'monospace' }}
-                        >
-                          {weight}
-                        </StyledTableCell>
-                      </StyledTableRow>
-                    ))}
-                    <StyledTableRow>
-                      <StyledTableCell sx={{ fontWeight: 600 }}>
-                        Total
-                      </StyledTableCell>
-                      <StyledTableCell
-                        align="right"
-                        sx={{ fontFamily: 'monospace', fontWeight: 600 }}
-                      >
-                        100%
-                      </StyledTableCell>
-                    </StyledTableRow>
-                  </TableBody>
-                </Table>
-
-                <SubHeading>Evidence Collected</SubHeading>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {course.evidence}
+                <Typography variant="body2">
+                  <Box
+                    component="span"
+                    sx={{
+                      display: { sm: 'none' },
+                      color: 'text.secondary',
+                    }}
+                  >
+                    {month} ·{' '}
+                  </Box>
+                  {focus}
                 </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {course}
+                </Typography>
+              </Box>
+            )}
+          />
+        </SectionCard>
 
-                <SubHeading>Maps to Existing Rubric</SubHeading>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {course.rubric.map(item => (
-                    <Chip
-                      key={item}
-                      label={item}
-                      size="small"
-                      variant="outlined"
-                    />
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Box>
-
-        <Typography variant="subtitle2">
-          Monthly Milestone → Credit Course Mapping
-        </Typography>
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <StyledTableCell sx={{ width: 120 }}>Month</StyledTableCell>
-                <StyledTableCell>Focus</StyledTableCell>
-                <StyledTableCell sx={{ width: 180 }}>
-                  Credit Course
-                </StyledTableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {MILESTONE_COURSES.map(([month, focus, course, color]) => (
-                <StyledTableRow key={month}>
-                  <StyledTableCell sx={{ fontWeight: 600 }}>
-                    {month}
-                  </StyledTableCell>
-                  <StyledTableCell>{focus}</StyledTableCell>
-                  <StyledTableCell>
-                    <Chip
-                      label={course}
-                      size="small"
-                      variant="outlined"
-                      color={color}
-                    />
-                  </StyledTableCell>
-                </StyledTableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography
-          variant="caption"
-          sx={{ color: 'text.secondary', fontStyle: 'italic' }}
+        <SectionCard
+          icon={KpiIcon}
+          title="Four-Pillar Rubric"
+          subtitle="Every monthly evaluation is scored out of 100 across four pillars from the syllabus TLOs and CLOs."
         >
-          Note: the underlying monthly rubric, KPIs and traffic-light logic
-          described in sections 1–6 below are unchanged. These two courses are
-          an academic wrapper for university grading only.
-        </Typography>
-      </Stack>
+          <Columns md={2}>
+            {PILLARS.map(pillar => (
+              <PillarCard key={pillar.title} {...pillar} />
+            ))}
+          </Columns>
 
-      <Divider />
+          <Label sx={{ mt: 4, mb: 0.5 }}>Score bands</Label>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Pick the band that fits the evidence, then place the score within
+            it. For example, a Proficient founder on Execution scores 21–30 out
+            of 40.
+          </Typography>
+          <Box sx={{ display: 'grid', gap: 2 }}>
+            {RUBRIC_BANDS.map(row => (
+              <RubricBands key={row.pillar} row={row} />
+            ))}
+          </Box>
+        </SectionCard>
 
-      {/* Four-pillar rubric */}
-      <Stack spacing={2}>
-        <SectionHeading icon={MenuBookIcon}>
-          1. Four-Pillar Rubric (100 points)
-        </SectionHeading>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Every monthly evaluation is scored across four pillars derived from
-          the syllabus TLOs and CLOs.
-        </Typography>
-
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-            gap: 2,
-          }}
+        <SectionCard
+          icon={CalendarIcon}
+          title="Six-Month Milestones"
+          subtitle="Each month has a focus that maps to the rubric pillars."
         >
-          {PILLARS.map(pillar => (
-            <PillarCard key={pillar.title} {...pillar} />
-          ))}
-        </Box>
+          <Rows
+            items={TIMELINE}
+            render={([month, phase, deliverables]) => (
+              <MonthRow month={month} title={phase}>
+                <Typography variant="body2" color="text.secondary">
+                  {deliverables}
+                </Typography>
+              </MonthRow>
+            )}
+          />
+        </SectionCard>
 
-        <Typography variant="subtitle2">
-          Detailed Scoring Rubric — Score Bands per Pillar
-        </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Faculty use these descriptors to translate evidence into a numeric
-          score for each pillar every month.
-        </Typography>
-        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-          <Table size="small" sx={{ minWidth: 900 }}>
-            <TableHead>
-              <TableRow>
-                <StyledTableCell sx={{ width: 160 }}>
-                  Pillar (Max)
-                </StyledTableCell>
-                <StyledTableCell>Exemplary (76–100%)</StyledTableCell>
-                <StyledTableCell>Proficient (51–75%)</StyledTableCell>
-                <StyledTableCell>Developing (26–50%)</StyledTableCell>
-                <StyledTableCell>Insufficient (0–25%)</StyledTableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {RUBRIC_BANDS.map(row => (
-                <StyledTableRow key={row.pillar} sx={{ verticalAlign: 'top' }}>
-                  <StyledTableCell sx={{ fontWeight: 600 }}>
-                    {row.pillar}
-                    <br />
-                    <Box
-                      component="span"
-                      sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
-                    >
-                      / {row.max}
-                    </Box>
-                  </StyledTableCell>
-                  {row.bands.map((band, index) => (
-                    <StyledTableCell key={index} sx={{ fontSize: 12 }}>
-                      {band}
-                    </StyledTableCell>
-                  ))}
-                </StyledTableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography
-          variant="caption"
-          sx={{ color: 'text.secondary', fontStyle: 'italic' }}
+        <SectionCard
+          icon={WarningIcon}
+          tint="orange"
+          title="Status Logic"
+          subtitle="Each month the status is computed from the total score and per-pillar minimums. Faculty can override it."
         >
-          Scoring rule: select the band that fits the evidence, then place the
-          score within that band. Example: a “Proficient” Execution founder
-          scores 21–30 out of 40.
-        </Typography>
-      </Stack>
-
-      <Divider />
-
-      {/* Milestone timeline */}
-      <Stack spacing={2}>
-        <SectionHeading icon={ScheduleIcon}>
-          2. Six-Month Milestone Timeline
-        </SectionHeading>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Each month has a defined focus that maps directly to the rubric
-          pillars above.
-        </Typography>
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <StyledTableCell sx={{ width: 120 }}>Month</StyledTableCell>
-                <StyledTableCell>Phase Focus</StyledTableCell>
-                <StyledTableCell>Key Deliverables / Evidence</StyledTableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {TIMELINE.map(([month, phase, deliverables]) => (
-                <StyledTableRow key={month}>
-                  <StyledTableCell sx={{ fontWeight: 600 }}>
-                    {month}
-                  </StyledTableCell>
-                  <StyledTableCell>{phase}</StyledTableCell>
-                  <StyledTableCell>{deliverables}</StyledTableCell>
-                </StyledTableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Stack>
-
-      <Divider />
-
-      {/* Status logic */}
-      <Stack spacing={2}>
-        <SectionHeading icon={WarningAmberIcon}>
-          3. Status Logic & Traffic-Light System
-        </SectionHeading>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Each month the system auto-computes a status from the total score and
-          per-pillar minimums. Faculty can override manually.
-        </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-            gap: 2,
-          }}
-        >
-          {STATUS_RULES.map(({ icon: Icon, color, title, rules, note }) => (
-            <Card
-              key={title}
-              variant="outlined"
-              sx={{ borderColor: `${color}.light` }}
-            >
-              <CardContent>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  sx={{ mb: 1, color: `${color}.main` }}
-                >
-                  <Icon fontSize="small" />
-                  <Typography variant="subtitle2">{title}</Typography>
-                </Stack>
+          <Columns md={3}>
+            {STATUS_RULES.map(({ tint, color, title, rules, note }) => (
+              <Group key={title}>
+                <Box sx={{ mb: 1.5 }}>
+                  <StatusPill label={`${color} · ${title}`} tint={tint} />
+                </Box>
                 {rules.map(rule => (
                   <Typography key={rule} variant="body2" sx={{ mb: 0.5 }}>
                     {rule}
                   </Typography>
                 ))}
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1.5 }}
+                >
                   {note}
                 </Typography>
-              </CardContent>
-            </Card>
-          ))}
-        </Box>
-      </Stack>
+              </Group>
+            ))}
+          </Columns>
 
-      <Divider />
+          <Label sx={{ mt: 4 }}>Review board triggers</Label>
+          <Rows
+            items={REVIEW_TRIGGERS}
+            render={({ label, tint, title, desc }) => (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: { xs: 1, sm: 3 },
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: '120px minmax(0, 1fr)',
+                  },
+                  alignItems: 'start',
+                }}
+              >
+                <Box>
+                  <StatusPill label={label} tint={tint} />
+                </Box>
+                <Box>
+                  <Typography variant="subtitle2">{title}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {desc}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+          />
+        </SectionCard>
 
-      {/* Review board triggers */}
-      <Stack spacing={2}>
-        <SectionHeading icon={TrackChangesIcon}>
-          4. Review Board Triggers
-        </SectionHeading>
-        <Card variant="outlined">
-          <CardContent>
-            <Stack spacing={2}>
-              {REVIEW_TRIGGERS.map(({ label, color, title, desc }) => (
-                <Stack
-                  key={label}
-                  direction="row"
-                  spacing={1.5}
-                  alignItems="flex-start"
-                >
-                  <Chip
-                    label={label}
-                    size="small"
-                    variant="outlined"
-                    color={color}
-                    sx={{ flexShrink: 0 }}
-                  />
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {title}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ color: 'text.secondary' }}
-                    >
-                      {desc}
-                    </Typography>
-                  </Box>
-                </Stack>
-              ))}
-            </Stack>
-          </CardContent>
-        </Card>
-      </Stack>
-
-      <Divider />
-
-      {/* KPIs */}
-      <Stack spacing={2}>
-        <SectionHeading icon={BarChartIcon}>
-          5. Key Performance Indicators (KPIs) Tracked
-        </SectionHeading>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Founders self-report these monthly. They provide objective evidence to
-          support the subjective rubric scores.
-        </Typography>
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <StyledTableCell>KPI Category</StyledTableCell>
-                <StyledTableCell>Metrics</StyledTableCell>
-                <StyledTableCell sx={{ width: 200 }}>
-                  Linked Pillar
-                </StyledTableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {KPIS.map(([category, metrics, pillar]) => (
-                <StyledTableRow key={category}>
-                  <StyledTableCell sx={{ fontWeight: 600 }}>
-                    {category}
-                  </StyledTableCell>
-                  <StyledTableCell>{metrics}</StyledTableCell>
-                  <StyledTableCell>
-                    <Chip label={pillar} size="small" variant="outlined" />
-                  </StyledTableCell>
-                </StyledTableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Stack>
-
-      <Divider />
-
-      {/* How faculty use this */}
-      <Stack spacing={2}>
-        <SectionHeading icon={HandshakeIcon}>
-          6. How Faculty Use This System
-        </SectionHeading>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-            gap: 2,
-          }}
+        <SectionCard
+          icon={ChartIcon}
+          title="KPIs Tracked"
+          subtitle="Founders report these monthly as objective evidence for the rubric scores."
         >
-          {STEPS.map(([title, desc], index) => (
-            <Step key={title} number={index + 1} title={title} desc={desc} />
-          ))}
-        </Box>
-      </Stack>
-    </Stack>
+          <Rows
+            items={KPIS}
+            render={([category, metrics, pillar]) => (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: { xs: 0.5, sm: 3 },
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: '96px minmax(0, 1fr) 160px',
+                  },
+                }}
+              >
+                <Typography variant="subtitle2">{category}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {metrics}
+                </Typography>
+                <Typography variant="body2">{pillar}</Typography>
+              </Box>
+            )}
+          />
+        </SectionCard>
+
+        <SectionCard
+          icon={PeopleIcon}
+          title="How Faculty Use This"
+          subtitle="From monthly submissions to the Academic Review Board."
+        >
+          <Columns md={2}>
+            {STEPS.map(([title, desc], index) => (
+              <Step key={title} number={index + 1} title={title} desc={desc} />
+            ))}
+          </Columns>
+        </SectionCard>
+      </Box>
+    </Box>
   )
 }

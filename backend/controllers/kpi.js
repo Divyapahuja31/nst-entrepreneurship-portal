@@ -1,25 +1,89 @@
 import mongoose from 'mongoose'
+import {
+  canAddKpi,
+  canClearEvidence,
+  canDeleteKpi,
+  canEditKpi,
+  canEvaluateKpi,
+  canLockKpi,
+  canReadKpi,
+  canReadVenture,
+  canSubmitEvidence,
+  canSubmitKpiForApproval,
+  canUnlockKpi,
+  isBoard,
+  isStudent,
+  kpiLockReason,
+} from '@nst/shared/permissions.js'
+import { EVIDENCE_TYPES_MESSAGE } from '@nst/shared/evidenceFiles.js'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
 import Founder from '../models/founder.js'
-import { validateCreateKPI } from '../utils/kpiValidator.js'
+import { dueDateError, validateCreateKPI } from '../utils/kpiValidator.js'
 import { findVentureForUser } from '../utils/founderHelper.js'
 import {
   resolveKPIScope,
   parseEvaluationScore,
+  isValidKPIStatus,
   buildEvaluationFields,
+  evaluationError,
   buildKPIUpdateFields,
   resolveEvidenceData,
-  checkKPILockStatus,
   kpisVisibleTo,
-  canUserManageVentureKPI,
-  canUserAccessKPI,
+  kpiOwnerChangeError,
   buildNewKPIDocument,
   applyKPIProgress,
   buildEvidencePayload,
   streamS3ToResponse,
 } from '../utils/kpiHelper.js'
-import { downloadFromS3 } from '../config/s3.js'
+import {
+  isVentureMember,
+  kpiContext,
+  scopedVentureIds,
+  ventureAccess,
+} from '../utils/access.js'
+import { downloadFromS3, evidenceKeyFromUrl } from '../config/s3.js'
+import {
+  isAllowedEvidenceFile,
+  safeEvidenceFileName,
+} from '../utils/evidenceFile.js'
+import { queueLockedKpiEmails } from '../utils/kpiLockEmails.js'
+
+const STUDENT_SETTABLE_STATUSES = ['DRAFT', 'SUBMIT', 'WAITING_FOR_APPROVAL']
+
+// The startup's mentors come along so the UI can apply the same rules.
+const VENTURE_FIELDS = 'name mentors'
+
+// Loads the KPI in req.params.kpiId with its permission context. Sends 400,
+// 404 or 403 (when the caller may not even see it) and returns null instead.
+const findKPIForCaller = async (req, res) => {
+  const { kpiId } = req.params
+  if (!mongoose.Types.ObjectId.isValid(kpiId)) {
+    res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    return null
+  }
+  const kpi = await KPI.findById(kpiId)
+  if (!kpi) {
+    res.status(404).json({ success: false, message: 'KPI not found' })
+    return null
+  }
+  const ctx = await kpiContext(req.user, kpi)
+  if (!canReadKpi(req.user, ctx)) {
+    res.status(403).json({
+      success: false,
+      message: 'You are not authorized to access this KPI',
+    })
+    return null
+  }
+  return { kpi, ctx }
+}
+
+// The caller can see the KPI but may not do this to it. A lock is the
+// usual reason, so say so when it is.
+const refuse = (res, ctx, message) =>
+  res
+    .status(403)
+    .json({ success: false, message: kpiLockReason(ctx) ?? message })
 
 export const getAllKPIs = async (req, res) => {
   try {
@@ -29,12 +93,17 @@ export const getAllKPIs = async (req, res) => {
     if (scope === 'VENTURE' || scope === 'FOUNDER') {
       filter.scope = scope
     }
-    if (status) {
+    if (typeof status === 'string' && status) {
       filter.status = status
+    }
+    // Mentors see only the startups assigned to them.
+    const ventureIds = await scopedVentureIds(req.user)
+    if (ventureIds) {
+      filter.venture = { $in: ventureIds }
     }
 
     const kpis = await KPI.find(filter)
-      .populate('venture', 'name')
+      .populate('venture', VENTURE_FIELDS)
       .populate('founder', 'username email')
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
@@ -52,9 +121,26 @@ export const getAllKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs',
-      error: error.message,
     })
   }
+}
+
+// Why the caller can't create a KPI for this startup (and member), or null.
+const newKPITargetError = async (user, ventureId, founderId) => {
+  const { venture, mentorIds, isMember } = await ventureAccess(user, ventureId)
+  if (!venture) {
+    return { status: 404, message: 'Venture not found' }
+  }
+  if (!canAddKpi(user, { ventureMentorIds: mentorIds, isMember, founderId })) {
+    return {
+      status: 403,
+      message: 'You are not authorized to create this KPI for this venture',
+    }
+  }
+  if (founderId && !(await isVentureMember(founderId, venture._id))) {
+    return { status: 400, message: 'That member is not part of this venture' }
+  }
+  return null
 }
 
 export const createKPI = async (req, res) => {
@@ -73,19 +159,13 @@ export const createKPI = async (req, res) => {
       description,
       venture,
       userId: req.user.id,
+      dueDate,
     })
 
     if (validationError) {
       return res.status(validationError.statusCode).json({
         success: false,
         message: validationError.message,
-      })
-    }
-
-    if (!(await canUserManageVentureKPI(req.user, venture))) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to create KPIs for this venture',
       })
     }
 
@@ -96,6 +176,17 @@ export const createKPI = async (req, res) => {
         success: false,
         message: resolvedScope.error,
       })
+    }
+
+    const targetError = await newKPITargetError(
+      req.user,
+      venture,
+      resolvedScope.founder
+    )
+    if (targetError) {
+      return res
+        .status(targetError.status)
+        .json({ success: false, message: targetError.message })
     }
 
     const kpi = await KPI.create(
@@ -110,6 +201,8 @@ export const createKPI = async (req, res) => {
       })
     )
 
+    await kpi.populate('founder', 'username email')
+
     return res.status(201).json({
       success: true,
       message: 'KPI created successfully',
@@ -121,7 +214,6 @@ export const createKPI = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to create KPI',
-      error: error.message,
     })
   }
 }
@@ -137,15 +229,40 @@ export const getVentureKPIs = async (req, res) => {
       })
     }
 
-    const ventureFounders = await Founder.find({ venture: ventureId }).select(
-      'user'
-    )
-    const founderUserIds = ventureFounders.map(f => f.user).filter(Boolean)
+    // Staff see the startups they may review; members see only their own,
+    // and only the KPIs /kpis shows them, not teammates' personal ones.
+    const access = await ventureAccess(req.user, ventureId)
+    if (!access.venture) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Venture not found' })
+    }
+    if (!canReadVenture(req.user, access)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to view KPIs for this venture',
+      })
+    }
 
-    const kpis = await KPI.find({
-      $or: [{ venture: ventureId }, { founder: { $in: founderUserIds } }],
-    })
-      .populate('venture', 'name')
+    const ventureFounders = await Founder.find({
+      venture: ventureId,
+      status: 'ACTIVE',
+    }).populate('user', 'username email')
+
+    const members = ventureFounders
+      .filter(f => f.user)
+      .map(f => ({
+        id: f.user._id,
+        username: f.user.username,
+        email: f.user.email,
+      }))
+
+    const kpis = await KPI.find(
+      isStudent(req.user)
+        ? kpisVisibleTo(ventureId, req.user.id)
+        : { venture: ventureId }
+    )
+      .populate('venture', VENTURE_FIELDS)
       .populate('founder', 'username email')
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
@@ -155,6 +272,7 @@ export const getVentureKPIs = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: kpis.length,
+      members,
       data: kpis,
     })
   } catch (error) {
@@ -163,7 +281,6 @@ export const getVentureKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs',
-      error: error.message,
     })
   }
 }
@@ -183,9 +300,23 @@ export const getMyKPIs = async (req, res) => {
         success: true,
         count: 0,
         venture: null,
+        members: [],
         data: [],
       })
     }
+
+    const ventureFounders = await Founder.find({
+      venture: venture._id,
+      status: 'ACTIVE',
+    }).populate('user', 'username email')
+
+    const members = ventureFounders
+      .filter(f => f.user)
+      .map(f => ({
+        id: f.user._id,
+        username: f.user.username,
+        email: f.user.email,
+      }))
 
     const kpis = await KPI.find(kpisVisibleTo(venture._id, req.user.id))
       .populate('createdBy', 'username email')
@@ -198,6 +329,7 @@ export const getMyKPIs = async (req, res) => {
       success: true,
       count: kpis.length,
       venture,
+      members,
       data: kpis,
     })
   } catch (error) {
@@ -206,7 +338,6 @@ export const getMyKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs',
-      error: error.message,
     })
   }
 }
@@ -222,8 +353,12 @@ export const getFounderKPIs = async (req, res) => {
       })
     }
 
-    const venture = await findVentureForUser(founderId)
-    if (!venture) {
+    const founderRecord = await Founder.findOne({
+      $or: [{ user: founderId }, { _id: founderId }],
+      status: 'ACTIVE',
+    }).populate('venture')
+
+    if (!founderRecord || !founderRecord.venture) {
       return res.status(200).json({
         success: true,
         count: 0,
@@ -232,12 +367,30 @@ export const getFounderKPIs = async (req, res) => {
       })
     }
 
-    const kpis = await KPI.find(kpisVisibleTo(venture._id, founderId))
+    const venture = founderRecord.venture
+    const actualUserId =
+      founderRecord.user?._id || founderRecord.user || founderId
+
+    // Students see only their own; staff, the startups they may review.
+    const allowed = isStudent(req.user)
+      ? String(actualUserId) === String(req.user.id)
+      : canReadVenture(req.user, {
+          mentorIds: venture.mentors,
+          isMember: false,
+        })
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to view these KPIs',
+      })
+    }
+
+    const kpis = await KPI.find(kpisVisibleTo(venture._id, actualUserId))
       .populate('createdBy', 'username email')
       .populate('evaluatedBy', 'username email')
       .populate('founder', 'username email')
       .populate('subKPIs')
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
 
     return res.status(200).json({
       success: true,
@@ -251,41 +404,24 @@ export const getFounderKPIs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs for founder',
-      error: error.message,
     })
   }
 }
 
 export const submitKPIForApproval = async (req, res) => {
   try {
-    const { kpiId } = req.params
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid KPI ID',
-      })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
     }
+    const { kpi, ctx } = found
 
-    const kpi = await KPI.findById(kpiId)
-    if (!kpi) {
-      return res.status(404).json({
-        success: false,
-        message: 'KPI not found',
-      })
-    }
-
-    if (!(await canUserAccessKPI(req.user, kpi, true))) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to submit this KPI for approval',
-      })
-    }
-
-    if (kpi.status !== 'DRAFT' && kpi.status !== 'REJECTED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only draft or rejected KPIs can be submitted for approval',
-      })
+    if (!canSubmitKpiForApproval(req.user, ctx)) {
+      return refuse(
+        res,
+        ctx,
+        'Only draft or rejected KPIs can be submitted for approval'
+      )
     }
 
     kpi.status = 'WAITING_FOR_APPROVAL'
@@ -295,7 +431,7 @@ export const submitKPIForApproval = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'KPI submitted for mentor approval',
+      message: 'KPI submitted for approval',
       data: kpi,
     })
   } catch (error) {
@@ -303,48 +439,97 @@ export const submitKPIForApproval = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to submit KPI',
-      error: error.message,
     })
   }
 }
 
+const parseEvaluationRequest = ({ score, status }) => {
+  const parsedScore = parseEvaluationScore(score)
+  if (parsedScore === -1) {
+    return { error: 'Score must be a number from 0 to 100' }
+  }
+  if (!isValidKPIStatus(status)) {
+    return { error: 'Invalid KPI status' }
+  }
+  return { parsedScore }
+}
+
+const populateForReview = query =>
+  query
+    .populate('venture', VENTURE_FIELDS)
+    .populate('founder', 'username email')
+    .populate('createdBy', 'username email')
+    .populate('evaluatedBy', 'username email')
+    .populate('lockedBy', 'username email')
+    .populate('subKPIs')
+
+const STALE_REVIEW =
+  'This KPI changed while you were reviewing it. Reload and try again.'
+
+// The reviewer's page showed another status: someone else acted first.
+const isStaleReview = (body, kpi) =>
+  body.expectedStatus !== undefined && body.expectedStatus !== kpi.status
+
+// Accept, reject, grade or re-grade. The board may do this to any KPI, even a
+// locked one; the startup's mentor only until the KPI is locked.
 export const evaluateKPI = async (req, res) => {
   try {
-    const { kpiId } = req.params
-    const { score, status, feedback } = req.body
+    const { status, feedback } = req.body
+    const parsed = parseEvaluationRequest(req.body)
+    if (parsed.error) {
+      return res.status(400).json({ success: false, message: parsed.error })
+    }
+    const { parsedScore } = parsed
 
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
+    }
+    const { kpi, ctx } = found
+    if (!canEvaluateKpi(req.user, ctx)) {
+      return refuse(res, ctx, 'You are not authorized to review this KPI')
     }
 
-    const parsedScore = parseEvaluationScore(score)
-    if (parsedScore === -1) {
-      return res.status(400).json({
-        success: false,
-        message: 'Score must be a valid non-negative number',
-      })
+    if (isStaleReview(req.body, kpi)) {
+      return res.status(409).json({ success: false, message: STALE_REVIEW })
+    }
+
+    const transitionError = evaluationError(kpi, {
+      status,
+      parsedScore,
+      feedback,
+    })
+    if (transitionError) {
+      return res.status(400).json({ success: false, message: transitionError })
     }
 
     const updateFields = buildEvaluationFields({
       parsedScore,
       status,
       feedback,
-      evaluatorId: req.user?.id,
+      evaluatorId: req.user.id,
     })
 
-    const updatedKPI = await KPI.findByIdAndUpdate(
-      kpiId,
-      { $set: updateFields },
-      { new: true }
+    // Matching on the status read above means two reviewers at once can't
+    // both apply a decision, and a mentor's review can't land on a KPI that
+    // was locked in the meantime.
+    const updatedKPI = await populateForReview(
+      KPI.findOneAndUpdate(
+        {
+          _id: kpi._id,
+          status: kpi.status,
+          ...(isBoard(req.user) ? {} : { isLocked: { $ne: true } }),
+        },
+        { $set: updateFields },
+        { returnDocument: 'after', runValidators: true }
+      )
     )
-      .populate('venture', 'name')
-      .populate('founder', 'username email')
-      .populate('createdBy', 'username email')
-      .populate('evaluatedBy', 'username email')
-      .populate('subKPIs')
 
     if (!updatedKPI) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
+      return res.status(409).json({
+        success: false,
+        message: STALE_REVIEW,
+      })
     }
 
     return res.status(200).json({
@@ -359,40 +544,114 @@ export const evaluateKPI = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to evaluate KPI',
-      error: error.message,
     })
+  }
+}
+
+// Locking makes a graded KPI's score final. Each change is conditional on
+// the state checked, so a concurrent lock, unlock or re-grade gets a 409.
+const setKPILock = (locked, canChange, refusal) => async (req, res) => {
+  try {
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
+    }
+    const { kpi, ctx } = found
+    if (!canChange(req.user, ctx)) {
+      return res.status(403).json({ success: false, message: refusal })
+    }
+
+    const updatedKPI = await populateForReview(
+      KPI.findOneAndUpdate(
+        locked
+          ? { _id: kpi._id, status: 'GRADED', isLocked: { $ne: true } }
+          : { _id: kpi._id, isLocked: true },
+        {
+          $set: {
+            isLocked: locked,
+            lockedBy: locked ? req.user.id : null,
+            lockedAt: locked ? new Date() : null,
+          },
+        },
+        { returnDocument: 'after' }
+      )
+    )
+    if (!updatedKPI) {
+      return res.status(409).json({
+        success: false,
+        message: 'This KPI changed in the meantime. Reload and try again.',
+      })
+    }
+
+    // A locked grade is final, so the student hears about it now, and the
+    // mentor or board too after a run of poor grades. The emails go out on
+    // the server after this response, and only for a lock this caller was
+    // allowed to make.
+    if (locked) {
+      queueLockedKpiEmails(updatedKPI._id)
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: locked ? 'KPI locked' : 'KPI unlocked',
+      data: updatedKPI,
+    })
+  } catch (error) {
+    console.error('Set KPI lock error:', error)
+    return res
+      .status(500)
+      .json({ success: false, message: 'Failed to update the KPI lock' })
+  }
+}
+
+export const lockKPI = setKPILock(
+  true,
+  canLockKpi,
+  'Only a graded KPI can be locked, by its mentors or the academic board'
+)
+
+export const unlockKPI = setKPILock(
+  false,
+  canUnlockKpi,
+  'Only the academic board can unlock a KPI'
+)
+
+// Files only arrive through the upload endpoint. The client can keep the
+// stored file or clear it, never point evidence at another URL: the download
+// would fetch it from our bucket with the server's access.
+const keptEvidenceFile = (kpi, { fileName, fileUrl }) => {
+  if (!fileUrl || !kpi.evidence?.fileUrl) {
+    return { fileName: '', fileUrl: '' }
+  }
+  return {
+    fileName: fileName || kpi.evidence.fileName,
+    fileUrl: kpi.evidence.fileUrl,
   }
 }
 
 export const submitKPIEvidence = async (req, res) => {
   try {
-    const { kpiId } = req.params
     const { actualValue, targetValue, supportingText, fileName, fileUrl } =
       req.body
 
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
     }
-
-    const kpi = await KPI.findById(kpiId)
-    if (!kpi) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
-    }
-
-    if (!(await canUserAccessKPI(req.user, kpi))) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to submit evidence for this KPI',
-      })
-    }
-
-    const lockError = checkKPILockStatus(kpi)
-    if (lockError) {
-      return res.status(400).json({ success: false, message: lockError })
+    const { kpi, ctx } = found
+    if (!canSubmitEvidence(req.user, ctx)) {
+      return refuse(
+        res,
+        ctx,
+        'Only the students whose KPI it is can submit its progress'
+      )
     }
 
     applyKPIProgress(kpi, { actualValue, targetValue })
-    kpi.evidence = buildEvidencePayload({ supportingText, fileName, fileUrl })
+    kpi.evidence = buildEvidencePayload({
+      supportingText,
+      ...keptEvidenceFile(kpi, { fileName, fileUrl }),
+    })
     kpi.submissionDate = new Date()
 
     await kpi.save()
@@ -412,106 +671,118 @@ export const submitKPIEvidence = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to submit evidence',
-      error: error.message,
     })
   }
 }
 
+// Accepting, rejecting and grading go only through the evaluate route, so
+// its review checks can't be skipped by a plain update. Only a student
+// moves their KPI between draft and submitted.
+const kpiUpdateError = async (user, kpi, { status, founder }) => {
+  if (status !== undefined) {
+    if (!isStudent(user)) {
+      return 'Accept, reject or grade a KPI from the review dialog'
+    }
+    if (!STUDENT_SETTABLE_STATUSES.includes(status)) {
+      return 'You can only save a KPI as draft or submit it for approval'
+    }
+  }
+  const ownerError = kpiOwnerChangeError(user, kpi, founder)
+  if (ownerError) {
+    return ownerError
+  }
+  if (founder && !(await isVentureMember(founder, kpi.venture))) {
+    return 'That member is not part of this venture'
+  }
+  return null
+}
+
 export const updateKPI = async (req, res) => {
   try {
-    const { kpiId } = req.params
-
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
+    }
+    const { kpi, ctx } = found
+    if (!canEditKpi(req.user, ctx)) {
+      return refuse(res, ctx, 'This KPI can no longer be edited')
     }
 
-    const kpi = await KPI.findById(kpiId)
-    if (!kpi) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
+    const dateError = dueDateError(req.body?.dueDate)
+    if (dateError) {
+      return res.status(400).json({ success: false, message: dateError })
     }
 
-    if (!(await canUserAccessKPI(req.user, kpi))) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to edit this KPI',
-      })
-    }
-
-    if (kpi.status === 'ACCEPTED') {
-      return res
-        .status(400)
-        .json({ success: false, message: 'Accepted KPI cannot be edited' })
-    }
-
-    const lockError = checkKPILockStatus(kpi)
-    if (lockError) {
-      return res.status(400).json({ success: false, message: lockError })
+    const updateError = await kpiUpdateError(req.user, kpi, req.body)
+    if (updateError) {
+      return res.status(403).json({ success: false, message: updateError })
     }
 
     const updateFields = buildKPIUpdateFields(req.body)
     Object.assign(kpi, updateFields)
     await kpi.save()
+    await kpi.populate('founder', 'username email')
 
     return res
       .status(200)
       .json({ success: true, message: 'KPI updated', data: kpi })
   } catch (error) {
+    console.error('Update KPI error:', error)
     return res.status(500).json({
       success: false,
       message: 'Failed to update KPI',
-      error: error.message,
     })
   }
 }
 
 export const deleteKPI = async (req, res) => {
   try {
-    const { kpiId } = req.params
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
     }
+    const { kpi, ctx } = found
 
-    const kpi = await KPI.findById(kpiId)
-    if (!kpi) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
-    }
-
-    if (!(await canUserManageVentureKPI(req.user, kpi.venture))) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to delete this KPI',
-      })
+    // An accepted or graded KPI (and its grade) can't be erased by students,
+    // nor a locked one by its mentor.
+    if (!canDeleteKpi(req.user, ctx)) {
+      return refuse(res, ctx, 'This KPI can no longer be deleted')
     }
 
     await kpi.deleteOne()
 
-    await SubKPI.deleteMany({ parentKPI: kpiId })
+    await SubKPI.deleteMany({ parentKPI: kpi._id })
 
     return res.status(200).json({ success: true, message: 'KPI deleted' })
   } catch (error) {
+    console.error('Delete KPI error:', error)
     return res.status(500).json({
       success: false,
       message: 'Failed to delete KPI',
-      error: error.message,
     })
   }
 }
 
 export const uploadKPIEvidence = async (req, res) => {
   try {
-    const { kpiId } = req.params
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
+    }
+    const { kpi, ctx } = found
+    if (!canSubmitEvidence(req.user, ctx)) {
+      return refuse(
+        res,
+        ctx,
+        'Only the students whose KPI it is can upload its evidence'
+      )
     }
 
-    const kpi = await KPI.findById(kpiId)
-    if (!kpi) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
-    }
-
-    const lockError = checkKPILockStatus(kpi)
-    if (lockError) {
-      return res.status(400).json({ success: false, message: lockError })
+    if (req.file && !isAllowedEvidenceFile(req.file.originalname)) {
+      return res.status(400).json({
+        success: false,
+        message: EVIDENCE_TYPES_MESSAGE,
+      })
     }
 
     kpi.evidence = await resolveEvidenceData(
@@ -531,34 +802,24 @@ export const uploadKPIEvidence = async (req, res) => {
       data: kpi,
     })
   } catch (error) {
+    // Storage details (bucket names, AWS errors) stay in the server log.
     console.error('Upload KPI evidence error:', error)
-    let message = 'Failed to upload evidence'
-    if (error.name === 'NoSuchBucket' || error.Code === 'NoSuchBucket') {
-      message = `AWS S3 Bucket "${process.env.AWS_S3_BUCKET_NAME || 'nst-evidence-uploads'}" does not exist in your AWS account. Please create the bucket in AWS S3 console or update AWS_S3_BUCKET_NAME in backend/.env`
-    }
     return res.status(500).json({
       success: false,
-      message,
-      error: error.message,
+      message: 'Failed to upload evidence',
     })
   }
 }
 
 export const deleteKPIEvidence = async (req, res) => {
   try {
-    const { kpiId } = req.params
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
     }
-
-    const kpi = await KPI.findById(kpiId)
-    if (!kpi) {
-      return res.status(404).json({ success: false, message: 'KPI not found' })
-    }
-
-    const lockError = checkKPILockStatus(kpi)
-    if (lockError) {
-      return res.status(400).json({ success: false, message: lockError })
+    const { kpi, ctx } = found
+    if (!canClearEvidence(req.user, ctx)) {
+      return refuse(res, ctx, 'You are not authorized to delete this evidence')
     }
 
     kpi.evidence = {
@@ -580,19 +841,31 @@ export const deleteKPIEvidence = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to delete evidence',
-      error: error.message,
     })
   }
 }
 
+// Serves only evidence objects in our bucket. Anything else (another key,
+// another host) is refused rather than fetched or redirected to.
+const sendEvidenceFile = async (fileUrl, res) => {
+  const key = evidenceKeyFromUrl(fileUrl)
+  if (!key) {
+    return res
+      .status(404)
+      .json({ success: false, message: 'Evidence file not found' })
+  }
+  const s3Data = await downloadFromS3(key)
+  return await streamS3ToResponse(s3Data, res)
+}
+
 export const downloadKPIEvidence = async (req, res) => {
   try {
-    const { kpiId } = req.params
-    if (!mongoose.Types.ObjectId.isValid(kpiId)) {
-      return res.status(400).json({ success: false, message: 'Invalid KPI ID' })
+    const found = await findKPIForCaller(req, res)
+    if (!found) {
+      return null
     }
+    const { kpi } = found
 
-    const kpi = await KPI.findById(kpiId)
     const fileUrl = kpi?.evidence?.fileUrl
     if (!fileUrl) {
       return res
@@ -601,26 +874,18 @@ export const downloadKPIEvidence = async (req, res) => {
     }
 
     const downloadName = kpi.evidence.fileName || 'evidence_file'
+    // filename* keeps non-ASCII names readable instead of percent-encoded.
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${encodeURIComponent(downloadName)}"`
+      `attachment; filename="${safeEvidenceFileName(downloadName)}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`
     )
 
-    const isS3 = fileUrl.includes('.s3.') || fileUrl.includes('amazonaws.com')
-    if (isS3) {
-      const pathname = new URL(fileUrl).pathname
-      const key = pathname.startsWith('/') ? pathname.slice(1) : pathname
-      const s3Data = await downloadFromS3(key)
-      return await streamS3ToResponse(s3Data, res)
-    }
-
-    return res.redirect(fileUrl)
+    return await sendEvidenceFile(fileUrl, res)
   } catch (error) {
     console.error('Download KPI evidence error:', error)
     return res.status(500).json({
       success: false,
       message: 'Failed to download evidence',
-      error: error.message,
     })
   }
 }

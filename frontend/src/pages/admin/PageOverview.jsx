@@ -1,104 +1,174 @@
-import Typography from '@mui/material/Typography'
-import Box from '@mui/material/Box'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import CardActionArea from '@mui/material/CardActionArea'
-
-import BarChart from '../../components/BarChart'
-import DonutChart from '../../components/DonutChart'
-import HorizontalBars from '../../components/HorizontalBars'
+import { Box } from '@mui/material'
 import { useLoaderData } from 'react-router'
 
-const cards = [
+import ActionQueue from '../../components/ActionQueue'
+import BarChart from '../../components/BarChart'
+import ChartCard from '../../components/ChartCard'
+import CheckInsSection from '../../components/CheckInsSection'
+import HorizontalBars from '../../components/HorizontalBars'
+import PageHeader from '../../components/PageHeader'
+import StatTile from '../../components/StatTile'
+import VentureCheckIns from '../../components/VentureCheckIns'
+import {
+  ChartIcon,
+  CheckCircleIcon,
+  HourglassIcon,
+  WarningIcon,
+} from '../../components/icons'
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+// Health is per startup, so the four tiles add up to the startup count.
+const HEALTH = [
   {
-    id: 1,
-    title: 'Founder',
-    data: 'founder',
-    description: 'Total active founders enrolled in the program.',
+    key: 'onTrack',
+    label: 'On track',
+    icon: CheckCircleIcon,
+    tint: 'green',
+    detail: 'Average KPI score of 70 or more',
   },
   {
-    id: 2,
-    title: 'On Track',
-    data: 'onTrack',
-    description: 'Founders on track with average KPI score ≥ 70.',
+    key: 'watch',
+    label: 'Watch',
+    icon: HourglassIcon,
+    tint: 'orange',
+    detail: 'Average 40 to 69, needs mentorship',
   },
   {
-    id: 3,
-    title: 'Watch',
-    data: 'watch',
-    description: 'Founders needing mentorship with average KPI score 40–69.',
+    key: 'atRisk',
+    label: 'At risk',
+    icon: WarningIcon,
+    tint: 'red',
+    detail: 'Average below 40, needs intervention',
   },
   {
-    id: 4,
-    title: 'At Risk',
-    data: 'atRisk',
-    description: 'Founders requiring critical intervention with average KPI score < 40.',
+    key: 'noReviews',
+    label: 'No reviews yet',
+    icon: ChartIcon,
+    tint: 'gray',
+    detail: 'No graded KPIs, so health is unknown',
   },
 ]
 
 function Index() {
-  const { result, kpi, overview } = useLoaderData()
+  const {
+    actions,
+    checkIns,
+    inactiveDays,
+    kpi,
+    overview,
+    stages = [],
+    campuses = [],
+    myMeetings,
+  } = useLoaderData()
+  const ventureCount = overview?.ventures ?? 0
+  const hasScores = Object.values(kpi ?? {}).some(score => score != null)
+  // The most recent month with a graded KPI, for the chart's subtitle.
+  const latest = Object.entries(kpi ?? {})
+    .filter(([, score]) => typeof score === 'number')
+    .at(-1)
+  const year = new Date().getFullYear()
+  const scoreSubtitle = latest
+    ? `Out of 100, by month in ${year}. Latest: ${Math.round(latest[1])} in ${
+        latest[0].charAt(0).toUpperCase() + latest[0].slice(1)
+      }.`
+    : `Out of 100, by month in ${year}.`
 
   return (
-    <>
-      <Typography variant="h2">Portfolio overview.</Typography>
-
-      <Typography variant="h6">
-        A live read on every founder pursuing the startup track — health, stage,
-        and momentum.
-      </Typography>
-      <hr />
-      <br />
+    <Box sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <PageHeader
+        title="Overview"
+        subtitle={`${plural(ventureCount, 'startup')} · ${plural(overview?.founders ?? 0, 'founder')}`}
+      />
 
       <Box
         sx={{
-          width: '100%',
           display: 'grid',
-          gridTemplateColumns: 'repeat(4 , 1fr)',
-          gap: 2,
+          gap: { xs: 2, sm: 3 },
+          gridTemplateColumns: 'minmax(0, 1fr)',
         }}
       >
-        {cards.map(card => (
-          <Card key={card.id} sx={{ height: '100%' }}>
-            <CardActionArea
-              sx={{
-                height: '100%',
-                '&[data-active]': {
-                  backgroundColor: 'action.selected',
-                  '&:hover': {
-                    backgroundColor: 'action.selectedHover',
-                  },
-                },
-              }}
-            >
-              <CardContent sx={{ height: '100%' }}>
-                <Typography variant="h5" component="div">
-                  {card.title}
-                </Typography>
-                <Typography variant="h5" component="div">
-                  {overview?.[card.data] ?? 0}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  {card.description}
-                </Typography>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        ))}
+        <ActionQueue actions={actions} />
+
+        {myMeetings?.some(c => c.status !== 'CANCELLED') && (
+          <CheckInsSection
+            checkIns={myMeetings}
+            showVenture
+            title="Your Meetings"
+            subtitle="Programme sessions you run and your own check-ins. Open a past one for its transcript and notes."
+          />
+        )}
+
+        <Box
+          sx={{
+            display: 'grid',
+            gap: { xs: 2, sm: 3 },
+            gridTemplateColumns: {
+              xs: 'repeat(2, minmax(0, 1fr))',
+              md: 'repeat(4, minmax(0, 1fr))',
+            },
+          }}
+        >
+          {HEALTH.map(item => {
+            const value = overview?.[item.key] ?? 0
+            return (
+              <StatTile
+                key={item.key}
+                icon={item.icon}
+                tint={item.tint}
+                label={item.label}
+                value={value}
+                progress={ventureCount ? (value / ventureCount) * 100 : 0}
+                detail={item.detail}
+              />
+            )
+          })}
+        </Box>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gap: { xs: 2, sm: 3 },
+            gridTemplateColumns: {
+              xs: 'minmax(0, 1fr)',
+              md: 'minmax(0, 7fr) minmax(0, 5fr)',
+            },
+          }}
+        >
+          <ChartCard
+            title="Average KPI Score"
+            subtitle={scoreSubtitle}
+            empty={!hasScores}
+            emptyMessage="Monthly scores appear here once KPIs are graded."
+          >
+            <BarChart kpiDistribution={kpi} />
+          </ChartCard>
+          <ChartCard
+            title="Startups by Stage"
+            empty={!ventureCount}
+            emptyMessage="Approved startups will show up here."
+          >
+            <HorizontalBars data={stages} label="Startups" />
+          </ChartCard>
+        </Box>
+
+        <VentureCheckIns
+          checkIns={checkIns}
+          ventureCount={ventureCount}
+          inactiveDays={inactiveDays}
+        />
+
+        {/* A single campus is just the startup total again. */}
+        {campuses.length > 1 && (
+          <ChartCard title="Startups by Campus">
+            <HorizontalBars
+              data={campuses.map(({ name, count }) => ({ label: name, count }))}
+              label="Startups"
+            />
+          </ChartCard>
+        )}
       </Box>
-      <Box
-        sx={{
-          width: '100%',
-          display: 'grid',
-          gridTemplateColumns: '8fr 2fr',
-          gap: 2,
-        }}
-      >
-        <BarChart kpiDistribution={kpi} />
-        <DonutChart stage={result['stage']} />
-      </Box>
-      <HorizontalBars campus={result['campus']} />
-    </>
+    </Box>
   )
 }
 

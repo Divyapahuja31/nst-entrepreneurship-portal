@@ -2,7 +2,11 @@ import mongoose from 'mongoose'
 import Industry from '../models/industry.js'
 import Venture from '../models/venture.js'
 import Founder from '../models/founder.js'
+import VentureProposal from '../models/ventureProposal.js'
+import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import { addFounderToVenture, findVentureForUser } from './founderHelper.js'
+import { refreshMeetingInvites } from './meetingInvites.js'
+import { DUPLICATE_STARTUP_NAME, isStartupNameTaken } from './ventureName.js'
 
 export const validateReviewPayload = (id, status, typeName) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -65,8 +69,13 @@ export const resolveIndustryId = async (existingIndustry, industryName) => {
   return industry?._id || null
 }
 
-export const createVentureFromProposal = async (proposal, industryId) => {
+export const createVentureFromProposal = async (
+  proposal,
+  industryId,
+  mentorId
+) => {
   const venture = await Venture.create({
+    mentors: [mentorId],
     name: proposal.startupName,
     description: proposal.description,
     campus: proposal.campus,
@@ -82,6 +91,7 @@ export const createVentureFromProposal = async (proposal, industryId) => {
     await Venture.deleteOne({ _id: venture._id })
     throw err
   }
+  await refreshMeetingInvites(venture._id)
 
   return venture._id
 }
@@ -108,13 +118,17 @@ export const ensureProposalCanBeReviewed = proposal => {
   return null
 }
 
-export const handleProposalApproval = async proposal => {
+export const handleProposalApproval = async (proposal, mentorId) => {
   const existingVenture = await findVentureForUser(proposal.submittedBy)
   if (existingVenture) {
     return {
       status: 409,
       error: 'This student is already part of an active venture',
     }
+  }
+
+  if (await isStartupNameTaken(proposal.startupName)) {
+    return { status: 409, error: DUPLICATE_STARTUP_NAME }
   }
 
   const industryId = await resolveIndustryId(
@@ -128,7 +142,11 @@ export const handleProposalApproval = async proposal => {
     }
   }
 
-  const ventureId = await createVentureFromProposal(proposal, industryId)
+  const ventureId = await createVentureFromProposal(
+    proposal,
+    industryId,
+    mentorId
+  )
   return { ventureId, industryId }
 }
 
@@ -173,6 +191,9 @@ export const ensureJoinRequestCanBeReviewed = joinRequest => {
   return null
 }
 
+// Adds the student to the startup. Returns { status, error }, or
+// { previous }: their membership record from before (a founder who left and
+// is rejoining), or null for a new one, for rollbackJoinRequestApproval.
 export const handleJoinRequestApproval = async joinRequest => {
   const existingVenture = await findVentureForUser(joinRequest.requestedBy)
   if (existingVenture) {
@@ -187,8 +208,13 @@ export const handleJoinRequestApproval = async joinRequest => {
     return { status: 404, error: 'Venture not found' }
   }
 
+  const previous = await Founder.findOne({
+    user: joinRequest.requestedBy,
+    venture: venture._id,
+  }).lean()
   await addFounderToVenture(joinRequest.requestedBy, venture._id)
-  return null
+  await refreshMeetingInvites(venture._id)
+  return { previous }
 }
 
 export const buildJoinRequestUpdate = ({ status, reviewerId }) => ({
@@ -199,19 +225,61 @@ export const buildJoinRequestUpdate = ({ status, reviewerId }) => ({
   },
 })
 
-export const rollbackJoinRequestApproval = async (
-  joinRequest,
-  wasApproved = true
-) => {
-  if (
-    wasApproved &&
-    joinRequest &&
-    joinRequest.requestedBy &&
-    joinRequest.venture
-  ) {
-    await Founder.deleteOne({
-      user: joinRequest.requestedBy,
-      venture: joinRequest.venture,
-    })
+// A student can be active in only one venture, so once an application is
+// approved their other pending ones can never be approved. Close them with a
+// note instead of leaving them in the admin queue to fail with a 409 later.
+export const closeOtherApplications = async ({
+  studentId,
+  reviewerId,
+  ventureName,
+  keepProposalId = null,
+  keepJoinRequestId = null,
+}) => {
+  const reviewedAt = new Date()
+  const remarks = `Closed automatically: you joined ${ventureName}.`
+  await Promise.all([
+    VentureProposal.updateMany(
+      {
+        submittedBy: studentId,
+        status: 'PENDING',
+        _id: { $ne: keepProposalId },
+      },
+      {
+        $set: { status: 'REJECTED' },
+        $push: {
+          reviews: {
+            reviewer: reviewerId,
+            status: 'REJECTED',
+            reviewedAt,
+            remarks,
+          },
+        },
+      }
+    ),
+    VentureJoinRequest.updateMany(
+      {
+        requestedBy: studentId,
+        status: 'PENDING',
+        _id: { $ne: keepJoinRequestId },
+      },
+      { $set: { status: 'REJECTED', reviewedBy: reviewerId, reviewedAt } }
+    ),
+  ])
+}
+
+// Undoes handleJoinRequestApproval. `approval` is what it returned, or null
+// when nothing was added. A rejoining founder's old record is put back as
+// it was, so the startup keeps them among its past founders.
+export const rollbackJoinRequestApproval = async (joinRequest, approval) => {
+  if (!approval || !joinRequest?.requestedBy || !joinRequest?.venture) {
+    return
   }
+  if (approval.previous) {
+    await Founder.replaceOne({ _id: approval.previous._id }, approval.previous)
+    return
+  }
+  await Founder.deleteOne({
+    user: joinRequest.requestedBy,
+    venture: joinRequest.venture,
+  })
 }

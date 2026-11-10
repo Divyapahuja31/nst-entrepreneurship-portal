@@ -1,60 +1,188 @@
-import { Resend } from 'resend'
+import EmailNotification from '../models/emailNotification.js'
+import { getEmailProvider } from './emailProvider.js'
+import {
+  boardLowScoreEmail,
+  mentorFollowUpEmail,
+  mentorLowScoreEmail,
+  studentResultEmail,
+} from './emailTemplates/kpiEmails.js'
+import {
+  passwordResetEmail,
+  signupVerificationEmail,
+} from './emailTemplates/authEmails.js'
+import {
+  founderSessionEmail,
+  sessionCancelledEmail,
+  staffSessionEmail,
+} from './emailTemplates/sessionEmails.js'
 
-const getResendClient = () => {
-  const apiKey = process.env.RESEND_API_KEY?.trim()
-  if (!apiKey) {
-    throw new Error('RESEND_API_KEY is not configured in environment variables')
+const DUPLICATE_KEY = 11000
+
+// The log is a record, not a gate: if writing it fails the email still goes.
+const logged = async (what, write) => {
+  try {
+    return await write()
+  } catch (error) {
+    console.error(`Email log: could not ${what}:`, error.message)
+    return null
   }
-  return new Resend(apiKey)
 }
 
-const buildOtpEmailContent = (username, otp) => {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
-      <h2 style="color: #0f172a; margin-bottom: 16px;">Password Reset Verification Code</h2>
-      <p style="color: #334155; font-size: 15px; line-height: 1.5;">Hi ${username || 'there'},</p>
-      <p style="color: #334155; font-size: 15px; line-height: 1.5;">You requested to reset your password for your NST Entrepreneurship Tracker account. Use the verification code below to reset your password:</p>
-      <div style="margin: 24px 0; text-align: center;">
-        <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #2563eb; background-color: #eff6ff; padding: 12px 24px; border-radius: 8px; border: 1px dashed #bfdbfe; display: inline-block;">
-          ${otp}
-        </span>
-      </div>
-      <p style="color: #64748b; font-size: 14px; line-height: 1.5;">This code will expire in <strong>5 minutes</strong>.</p>
-      <p style="color: #64748b; font-size: 14px; line-height: 1.5;">If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
-      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-      <p style="color: #94a3b8; font-size: 12px; text-align: center;">NST Entrepreneurship Tracker</p>
-    </div>
-  `
+const alreadySent = ({ recipientEmail, type, dedupeKey }) =>
+  dedupeKey
+    ? logged('check for an earlier send', () =>
+        EmailNotification.exists({
+          recipientEmail,
+          type,
+          dedupeKey,
+          status: 'SENT',
+        })
+      )
+    : null
 
-  const text = `Hi ${username || 'there'},\n\nYou requested to reset your password for your NST Entrepreneurship Tracker account.\n\nYour 6-digit verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request a password reset, please ignore this email.`
-
-  return { html, text }
-}
-
-export const sendResetPasswordOtpEmail = async ({ to, username, otp }) => {
-  const resend = getResendClient()
-  const from =
-    process.env.EMAIL_FROM?.trim() ||
-    'NST Entrepreneurship Tracker <onboarding@resend.dev>'
-  const subject = `${otp} is your Password Reset Code - NST Entrepreneurship Tracker`
-  const { html, text } = buildOtpEmailContent(username, otp)
-
-  const payload = { from, to, subject, html, text }
-  const { data, error } = await resend.emails.send(payload)
-
-  if (!error) {
-    return data
+const markSent = async (entry, messageId) => {
+  const sent = {
+    status: 'SENT',
+    providerMessageId: messageId ?? null,
+    sentAt: new Date(),
   }
-
-  if (from !== 'onboarding@resend.dev') {
-    const fallback = await resend.emails.send({
-      ...payload,
-      from: 'onboarding@resend.dev',
-    })
-    if (!fallback.error) {
-      return fallback.data
+  try {
+    await EmailNotification.updateOne({ _id: entry._id }, { $set: sent })
+  } catch (error) {
+    if (error.code !== DUPLICATE_KEY) {
+      throw error
     }
+    // Another job sent the same email first. This one went out too, so it
+    // is still recorded as sent, just outside the dedupe index.
+    await EmailNotification.updateOne(
+      { _id: entry._id },
+      {
+        $set: {
+          ...sent,
+          dedupeKey: null,
+          error: `Duplicate of an email already sent for ${entry.dedupeKey}`,
+        },
+      }
+    )
+  }
+}
+
+// Logs the email as pending, sends it, then records the outcome. Returns
+// { skipped: true } when this recipient already got it for dedupeKey and
+// { messageId } once sent; throws when the provider can't send it.
+// Subjects are logged, so they must never contain a secret such as a code.
+export const deliver = async ({
+  type,
+  to,
+  recipientUserId = null,
+  dedupeKey = null,
+  email: { subject, html, text },
+}) => {
+  const recipientEmail = String(to).trim().toLowerCase()
+  if (await alreadySent({ recipientEmail, type, dedupeKey })) {
+    return { skipped: true }
   }
 
-  throw new Error(error.message || 'Failed to send verification email')
+  const provider = getEmailProvider()
+  const entry = await logged('record a pending email', () =>
+    EmailNotification.create({
+      recipientEmail,
+      recipientUser: recipientUserId,
+      type,
+      subject,
+      provider: provider.name,
+      dedupeKey,
+    })
+  )
+
+  const { messageId, error } = await provider.sendEmail({
+    to: recipientEmail,
+    subject,
+    html,
+    text,
+  })
+
+  if (error) {
+    if (entry) {
+      await logged('record a failed email', () =>
+        EmailNotification.updateOne(
+          { _id: entry._id },
+          { $set: { status: 'FAILED', error } }
+        )
+      )
+    }
+    throw new Error(`Failed to send the ${type} email: ${error}`)
+  }
+
+  if (entry) {
+    await logged('record a sent email', () => markSent(entry, messageId))
+  }
+  return { messageId }
 }
+
+// ---------------------------------------------- KPI and programme emails
+// recipient: { email, userId? }. For a KPI email dedupeKey identifies the
+// KPI.
+
+const toRecipient =
+  (type, template) =>
+  ({ recipient, dedupeKey, ...props }) =>
+    deliver({
+      type,
+      to: recipient.email,
+      recipientUserId: recipient.userId,
+      dedupeKey,
+      email: template(props),
+    })
+
+export const sendStudentResult = toRecipient(
+  'KPI_SCORED_STUDENT',
+  studentResultEmail
+)
+export const sendMentorFollowUp = toRecipient(
+  'CONSECUTIVE_MID_SCORE_MENTOR',
+  mentorFollowUpEmail
+)
+export const sendMentorLowScore = toRecipient(
+  'CONSECUTIVE_LOW_SCORE_MENTOR',
+  mentorLowScoreEmail
+)
+export const sendBoardLowScore = toRecipient(
+  'CONSECUTIVE_LOW_SCORE_BOARD',
+  boardLowScoreEmail
+)
+
+// ------------------------------------------------------------ code emails
+
+const codeEmail =
+  (type, template) =>
+  ({ to, userId, username, otp, expiresInMinutes }) =>
+    deliver({
+      type,
+      to,
+      recipientUserId: userId,
+      email: template({ recipientName: username, code: otp, expiresInMinutes }),
+    })
+
+export const sendResetPasswordOtpEmail = codeEmail(
+  'PASSWORD_RESET',
+  passwordResetEmail
+)
+export const sendSignupOtpEmail = codeEmail(
+  'SIGNUP_VERIFICATION',
+  signupVerificationEmail
+)
+
+// ------------------------------------------------------ programme emails
+// recipient: { email, userId? }. dedupeKey identifies what the email says,
+// so a changed meeting is emailed again and an unchanged one never is.
+
+export const sendFounderSession = toRecipient(
+  'SESSION_FOUNDER',
+  founderSessionEmail
+)
+export const sendStaffSession = toRecipient('SESSION_STAFF', staffSessionEmail)
+export const sendSessionCancelled = toRecipient(
+  'SESSION_CANCELLED',
+  sessionCancelledEmail
+)

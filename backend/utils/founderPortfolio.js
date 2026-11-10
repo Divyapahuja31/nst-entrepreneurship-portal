@@ -1,6 +1,7 @@
 import Venture from '../models/venture.js'
 import KpiModel from '../models/kpi.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
+import startupStage from '../models/enums/startupStage.js'
 
 const SCORE_ON_TRACK = 70
 const SCORE_WATCH = 40
@@ -18,18 +19,23 @@ export const deriveStatus = score => {
   return ventureHealth.AT_RISK
 }
 
-export const calculateFounderStudents = async () => {
-  const [ventures, kpis] = await Promise.all([
-    Venture.find()
-      .populate('campus', 'name')
-      .populate({
-        path: 'founders',
-        populate: { path: 'user', select: 'username' },
-      })
-      .sort({ name: 1 }),
+// scope is a Venture filter (see ventureScope) limiting which startups and
+// founders are included.
+export const getFounderPortfolioData = async (scope = {}) => {
+  const ventures = await Venture.find(scope)
+    .populate('campus', 'name')
+    .populate({
+      path: 'founders',
+      populate: { path: 'user', select: 'username' },
+    })
+    .sort({ name: 1 })
 
-    KpiModel.find({ status: 'GRADED', score: { $gt: 0 } }),
-  ])
+  // A score of 0 is a real grade; leaving it out inflated every average.
+  const kpis = await KpiModel.find({
+    venture: { $in: ventures.map(venture => venture._id) },
+    status: 'GRADED',
+    score: { $gte: 0 },
+  })
 
   const kpisByVenture = new Map()
   for (const kpi of kpis) {
@@ -42,28 +48,34 @@ export const calculateFounderStudents = async () => {
     }
   }
 
-  const students = ventures.flatMap(venture => {
-    const founders = venture.founders
-      .map(founder => founder.user)
-      .filter(Boolean)
+  // Health is a property of the venture; each founder inherits it.
+  const ventureHealthRows = ventures.map(venture => {
     const ventureKpis = kpisByVenture.get(venture._id.toString()) || []
     const score = ventureKpis.length
       ? Math.round(
           ventureKpis.reduce((sum, k) => sum + k.score, 0) / ventureKpis.length
         )
       : null
+    return { venture, score, status: deriveStatus(score) }
+  })
+
+  const students = ventureHealthRows.flatMap(({ venture, score }) => {
+    const founders = venture.founders
+      .map(founder => founder.user)
+      .filter(Boolean)
 
     return founders.map(founder => ({
       id: founder._id,
       founder: founder.username,
       startup: venture.name,
       campus: venture.campus?.name ?? null,
-      stage: venture.stage,
+      // The label ("Fund Raising"), which is what the stage filter offers.
+      stage: startupStage[venture.stage] ?? venture.stage,
       team: founders.length,
       score,
       status: deriveStatus(score),
     }))
   })
 
-  return { ventures, students }
+  return { ventures, students, ventureHealth: ventureHealthRows }
 }

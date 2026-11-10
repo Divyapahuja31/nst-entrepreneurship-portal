@@ -1,6 +1,12 @@
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || '12345678'
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set')
+  }
+  return secret
+}
 const TOKEN_MAX_AGE = 30 * 24 * 60 * 60 * 1000
 
 export const cookieOptions = {
@@ -18,15 +24,20 @@ const JWT_OPTIONS = {
 export const signToken = user => {
   const roleName = user.role?.name || user.role
   return jwt.sign(
-    { userId: user._id, email: user.email, role: roleName },
-    JWT_SECRET,
+    {
+      userId: user._id,
+      email: user.email,
+      role: roleName,
+      sessionVersion: user.sessionVersion ?? 0,
+    },
+    getJwtSecret(),
     JWT_OPTIONS
   )
 }
 
 export function validateToken(token) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET, JWT_OPTIONS)
+    const decoded = jwt.verify(token, getJwtSecret(), JWT_OPTIONS)
     return { valid: true, payload: decoded }
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -46,7 +57,7 @@ export const signGoogleSignupToken = ({ googleId, email }) => {
       email,
       type: 'google-signup',
     },
-    JWT_SECRET,
+    getJwtSecret(),
     {
       expiresIn: '10m',
     }
@@ -54,7 +65,7 @@ export const signGoogleSignupToken = ({ googleId, email }) => {
 }
 
 export const verifyGoogleSignupToken = token => {
-  const decoded = jwt.verify(token, JWT_SECRET)
+  const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] })
 
   if (decoded.type !== 'google-signup') {
     throw new Error('Invalid Google signup token')

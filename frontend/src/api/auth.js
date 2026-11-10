@@ -1,3 +1,4 @@
+import { STAFF_ROLES } from '@nst/shared/permissions.js'
 import { api } from './client'
 import toError from './toError'
 
@@ -13,9 +14,32 @@ export const signIn = async payload => {
 export const signUp = async payload => {
   try {
     const { data } = await api.post('/auth/signup', payload)
-    return { user: data.user }
+    return {
+      user: data.user,
+      requireOtp: data.requireOtp,
+      email: data.email,
+      message: data.message,
+    }
   } catch (err) {
     return toError(err, 'Something went wrong')
+  }
+}
+
+export const verifySignupOtp = async payload => {
+  try {
+    const { data } = await api.post('/auth/verify-signup-otp', payload)
+    return { user: data.user, message: data.message }
+  } catch (err) {
+    return toError(err, 'Invalid verification code')
+  }
+}
+
+export const resendSignupOtp = async payload => {
+  try {
+    const { data } = await api.post('/auth/resend-signup-otp', payload)
+    return { message: data.message }
+  } catch (err) {
+    return toError(err, 'Failed to resend verification code')
   }
 }
 
@@ -24,7 +48,11 @@ export const completeGoogleSignup = async payload => {
     const { data } = await api.post('/auth/google/complete-signup', payload)
     return { user: data.user }
   } catch (err) {
-    return toError(err, 'Failed to create account.')
+    return {
+      ...toError(err, 'Failed to create account.'),
+      // The sign-up link is invalid or has run out.
+      expired: err.response?.status === 401,
+    }
   }
 }
 
@@ -64,5 +92,6 @@ export const resetPassword = async payload => {
   }
 }
 
+// Staff start on the staff overview; students on their own.
 export const homePathFor = user =>
-  user?.role?.name === 'admin' ? '/admin' : '/'
+  STAFF_ROLES.includes(user?.role?.name) ? '/admin' : '/'

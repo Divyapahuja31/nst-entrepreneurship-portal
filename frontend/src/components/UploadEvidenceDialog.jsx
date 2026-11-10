@@ -14,6 +14,13 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import {
+  EVIDENCE_EXTENSIONS,
+  EVIDENCE_TYPES_MESSAGE,
+  MAX_EVIDENCE_BYTES,
+  isAllowedEvidenceName,
+} from '@nst/shared/evidenceFiles.js'
+import { lockReason } from './kpiStatus'
 
 export default function UploadEvidenceDialog({
   open,
@@ -29,11 +36,13 @@ export default function UploadEvidenceDialog({
   const [supportingText, setSupportingText] = useState('')
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef(null)
 
-  const isPastDue = Boolean(kpi?.dueDate && new Date(kpi.dueDate) < new Date())
-  const isGraded = kpi?.status === 'GRADED'
-  const isLocked = isPastDue || isGraded
+  // Locked, graded or past its due date: the same rules the API applies.
+  const lockedBecause = kpi ? lockReason(kpi) : null
+  const isLocked = Boolean(lockedBecause)
 
   if (open !== prevOpen || kpi !== prevKpi) {
     setPrevOpen(open)
@@ -54,31 +63,52 @@ export default function UploadEvidenceDialog({
     onClose()
   }
 
-  const handleFileChange = e => {
-    if (isLocked) return
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0]
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setError('File size exceeds the 10MB limit.')
-        setFile(null)
-        e.target.value = null
-        return
-      }
-      setError('')
-      setFile(selectedFile)
+  // The same checks the API makes, so a wrong file is caught before upload.
+  const pickFile = selectedFile => {
+    if (isLocked || !selectedFile) return
+    if (!isAllowedEvidenceName(selectedFile.name)) {
+      setError(EVIDENCE_TYPES_MESSAGE)
+      setFile(null)
+      return
     }
+    if (selectedFile.size > MAX_EVIDENCE_BYTES) {
+      setError('File size exceeds the 10MB limit.')
+      setFile(null)
+      return
+    }
+    setError('')
+    setFile(selectedFile)
   }
 
-  const handleSave = () => {
-    if (isLocked) return
-    if (onSave) {
-      onSave({
-        kpi,
-        actualValue: actualValue.trim(),
-        supportingText: supportingText.trim(),
-        file,
-        fileName: file?.name || kpi?.evidence?.fileName || '',
-      })
+  const handleFileChange = e => {
+    pickFile(e.target.files?.[0])
+    // Choosing the same file again after a refusal still fires a change.
+    e.target.value = null
+  }
+
+  const handleDrop = e => {
+    e.preventDefault()
+    setDragging(false)
+    pickFile(e.dataTransfer.files?.[0])
+  }
+
+  // Stays open until the evidence is saved, so a refusal is shown here and
+  // what the student typed is kept.
+  const handleSave = async () => {
+    if (isLocked || saving) return
+    setSaving(true)
+    setError('')
+    const problem = await onSave?.({
+      kpi,
+      actualValue: actualValue.trim(),
+      supportingText: supportingText.trim(),
+      file,
+      fileName: file?.name || kpi?.evidence?.fileName || '',
+    })
+    setSaving(false)
+    if (problem) {
+      setError(problem)
+      return
     }
     handleClose()
   }
@@ -120,9 +150,7 @@ export default function UploadEvidenceDialog({
       <DialogContent sx={{ p: 3, pt: 3 }}>
         {isLocked && (
           <Alert severity="error" sx={{ mb: 2 }}>
-            {isGraded
-              ? 'This KPI has already been graded. Submissions are locked.'
-              : 'The deadline for this KPI has passed. Submissions are closed.'}
+            {lockedBecause}
           </Alert>
         )}
 
@@ -131,6 +159,7 @@ export default function UploadEvidenceDialog({
             Achieved Metric / Number
           </Typography>
           <TextField
+            hiddenLabel
             fullWidth
             size="small"
             value={actualValue}
@@ -145,6 +174,7 @@ export default function UploadEvidenceDialog({
             Supporting Notes / Evidence Description
           </Typography>
           <TextField
+            hiddenLabel
             multiline
             rows={3}
             fullWidth
@@ -163,6 +193,7 @@ export default function UploadEvidenceDialog({
 
           <input
             type="file"
+            accept={EVIDENCE_EXTENSIONS.join(',')}
             ref={fileInputRef}
             onChange={handleFileChange}
             disabled={isLocked}
@@ -171,17 +202,29 @@ export default function UploadEvidenceDialog({
 
           <Box
             onClick={() => !isLocked && fileInputRef.current?.click()}
+            onDragOver={e => {
+              if (isLocked) return
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
             sx={{
-              border: '2px dashed #cbd5e1',
+              border: '2px dashed',
+              borderColor: dragging ? 'primary.main' : 'divider',
               borderRadius: 2,
               p: 3,
               textAlign: 'center',
               cursor: isLocked ? 'not-allowed' : 'pointer',
-              backgroundColor: isLocked ? '#f1f5f9' : '#f8fafc',
+              backgroundColor: isLocked
+                ? 'action.disabledBackground'
+                : 'background.default',
               opacity: isLocked ? 0.7 : 1,
               '&:hover': {
-                borderColor: isLocked ? '#cbd5e1' : 'primary.main',
-                backgroundColor: isLocked ? '#f1f5f9' : '#f1f5f9',
+                borderColor: isLocked ? 'divider' : 'primary.main',
+                backgroundColor: isLocked
+                  ? 'action.disabledBackground'
+                  : 'action.hover',
               },
             }}
           >
@@ -199,7 +242,7 @@ export default function UploadEvidenceDialog({
               ) : kpi?.evidence?.fileName ? (
                 `Current file: ${kpi.evidence.fileName}${isLocked ? '' : ' (Click to replace)'}`
               ) : (
-                'Click to choose file or drag & drop (Max 10MB)'
+                'Click to choose a file or drop it here. PDF, Office, CSV, text, image, MP4/MOV or ZIP, up to 10MB.'
               )}
             </Typography>
           </Box>
@@ -236,6 +279,7 @@ export default function UploadEvidenceDialog({
           <Button
             variant="contained"
             disabled={isLocked}
+            loading={saving}
             onClick={handleSave}
             sx={{ fontWeight: 600, textTransform: 'none' }}
           >

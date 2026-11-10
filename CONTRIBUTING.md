@@ -1,4 +1,4 @@
-# Contributors Guide
+ # Contributors Guide
 
 Welcome to the project! This document outlines the contribution workflow, branching strategies, and Git standards required to merge your code into this repository.
 
@@ -31,6 +31,8 @@ Follow these steps to submit your contributions successfully:
 ### 1. Code & Test Locally
 
 Write your backend logic ensuring your server spins up locally without throwing database connection or Mongoose initialization crashes.
+
+For any frontend change, follow [DESIGN.md](DESIGN.md): use the shared theme instead of custom colors and fonts, and check its PR checklist before opening a PR.
 
 ### 2. Run Quality Gates Before Committing
 
@@ -75,8 +77,8 @@ We follow clean semantic commit formatting. Keep your commit summaries short, sw
 
 Thank you to everyone helping build, maintain, and learn from this project!
 
-- [Divya Pahuja](https://github.com/Divyapahuja31)
 - [Kanishk Ranjan](https://github.com/KanishkRanjan)
+- [Divya Pahuja](https://github.com/Divyapahuja31)
 - [Krit Garg](https://github.com/kritgarg)
 - [Raghav Khandelwal](https://github.com/raghav581)
 - [Krushn Dayshmookh](https://github.com/krushndayshmookh)

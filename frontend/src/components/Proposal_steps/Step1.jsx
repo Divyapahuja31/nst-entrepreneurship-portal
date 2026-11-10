@@ -7,6 +7,10 @@ import {
 } from '@mui/material'
 
 import { getIndustries } from '../../api/industry'
+import {
+  FIELD_LIMITS,
+  validateField,
+} from '../proposalFormConfig.js'
 
 export default function Step1({ formData, setFormData, errors = {}, setErrors }) {
   const [industries, setIndustries] = useState([])
@@ -17,6 +21,13 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
       try {
         const data = await getIndustries()
         setIndustries(data)
+        setFormData((prev) => {
+          if (prev.industry && !prev.industryName) {
+            const match = data.find((i) => i._id === prev.industry)
+            if (match) return { ...prev, industryName: match.name }
+          }
+          return prev
+        })
       } catch (error) {
         console.error('Failed to fetch industries:', error)
       } finally {
@@ -25,7 +36,7 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
     }
 
     fetchIndustries()
-  }, [])
+  }, [setFormData])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -36,9 +47,21 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
     }))
 
     if (setErrors && errors[name]) {
+      const error = validateField(name, value, { ...formData, [name]: value })
       setErrors((prev) => ({
         ...prev,
-        [name]: '',
+        [name]: error,
+      }))
+    }
+  }
+
+  const handleBlur = (event) => {
+    const { name, value } = event.target
+    if (setErrors) {
+      const error = validateField(name, value, formData)
+      setErrors((prev) => ({
+        ...prev,
+        [name]: error,
       }))
     }
   }
@@ -57,25 +80,12 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
         industry: '',
         industryName: '',
       }))
-
       return
     }
 
-    // Existing industry
-    if (!value.isNew) {
-      setFormData((prev) => ({
-        ...prev,
-        industry: value._id,
-        industryName: '',
-      }))
-
-      return
-    }
-
-    // New industry - create only after proposal approval
     setFormData((prev) => ({
       ...prev,
-      industry: '',
+      industry: value.isNew ? '' : value._id,
       industryName: value.name,
     }))
   }
@@ -110,8 +120,13 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
           name="startupName"
           value={formData.startupName}
           onChange={handleChange}
+          onBlur={handleBlur}
           error={Boolean(errors.startupName)}
-          helperText={errors.startupName}
+          helperText={
+            errors.startupName ||
+            `${formData.startupName?.length || 0} / ${FIELD_LIMITS.startupName.maxChars}`
+          }
+          inputProps={{ maxLength: FIELD_LIMITS.startupName.maxChars }}
           fullWidth
           required
           placeholder="e.g. CampusPay"
@@ -122,8 +137,13 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
           name="description"
           value={formData.description}
           onChange={handleChange}
+          onBlur={handleBlur}
           error={Boolean(errors.description)}
-          helperText={errors.description}
+          helperText={
+            errors.description ||
+            `${formData.description?.length || 0} / ${FIELD_LIMITS.description.maxChars}`
+          }
+          inputProps={{ maxLength: FIELD_LIMITS.description.maxChars }}
           fullWidth
           required
           multiline
@@ -136,8 +156,13 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
           name="targetCustomer"
           value={formData.targetCustomer}
           onChange={handleChange}
+          onBlur={handleBlur}
           error={Boolean(errors.targetCustomer)}
-          helperText={errors.targetCustomer}
+          helperText={
+            errors.targetCustomer ||
+            `${formData.targetCustomer?.length || 0} / ${FIELD_LIMITS.targetCustomer.maxChars}`
+          }
+          inputProps={{ maxLength: FIELD_LIMITS.targetCustomer.maxChars }}
           fullWidth
           required
           multiline
@@ -208,6 +233,10 @@ export default function Step1({ formData, setFormData, errors = {}, setErrors })
               error={Boolean(errors.industry)}
               helperText={errors.industry}
               placeholder="Select or create an industry"
+              inputProps={{
+                ...params.inputProps,
+                maxLength: FIELD_LIMITS.industryName.maxChars,
+              }}
             />
           )}
         />

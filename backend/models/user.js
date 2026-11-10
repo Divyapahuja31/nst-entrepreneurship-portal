@@ -1,6 +1,16 @@
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 
+const pendingSignupSchema = new mongoose.Schema(
+  {
+    username: String,
+    passwordHash: String,
+    batch: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch' },
+    campus: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus' },
+  },
+  { _id: false }
+)
+
 const userSchema = new mongoose.Schema(
   {
     username: {
@@ -35,12 +45,6 @@ const userSchema = new mongoose.Schema(
       ref: 'Role',
       required: true,
     },
-    biWeeklySubmission: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'BiWeeklySubmission',
-      },
-    ],
     googleId: {
       type: String,
       unique: true,
@@ -58,14 +62,66 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    resetPasswordOtpFailures: {
+      type: Number,
+      default: 0,
+    },
+    resetPasswordOtpFailuresSince: {
+      type: Date,
+      default: null,
+    },
+    // Bumped to sign out every existing session, e.g. on password reset.
+    sessionVersion: {
+      type: Number,
+      default: 0,
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    signupOtp: {
+      type: String,
+      default: null,
+    },
+    signupOtpExpires: {
+      type: Date,
+      default: null,
+    },
+    signupOtpAttempts: {
+      type: Number,
+      default: 0,
+    },
+    signupOtpFailures: {
+      type: Number,
+      default: 0,
+    },
+    signupOtpFailuresSince: {
+      type: Date,
+      default: null,
+    },
+    // Sign-up details for an account whose email isn't verified yet. They
+    // are applied only once the code emailed to that address is used, so
+    // signing up with someone else's email can't rename or change them.
+    pendingSignup: {
+      type: pendingSignupSchema,
+      default: undefined,
+    },
+    // Set when an admin deactivates the account. The record stays so the
+    // KPIs, reviews and history that point at it still resolve.
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 )
 
 userSchema.pre('save', async function () {
-  if (!this.isModified('password')) {
+  if (!this.isModified('password') || !this.password) {
     return
   }
   const salt = await bcrypt.genSalt(10)
@@ -73,12 +129,29 @@ userSchema.pre('save', async function () {
 })
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.password || typeof candidatePassword !== 'string') {
+    return false
+  }
   return await bcrypt.compare(candidatePassword, this.password)
 }
 
 userSchema.set('toJSON', {
   transform: (_, ret) => {
     delete ret.password
+    delete ret.pendingSignup
+    // A 6-digit code's hash is cracked in under a second, so these never
+    // leave the server.
+    for (const prefix of ['signup', 'resetPassword']) {
+      for (const suffix of [
+        '',
+        'Expires',
+        'Attempts',
+        'Failures',
+        'FailuresSince',
+      ]) {
+        delete ret[`${prefix}Otp${suffix}`]
+      }
+    }
     return ret
   },
 })

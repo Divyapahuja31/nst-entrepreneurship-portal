@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import mongoose from 'mongoose'
+import { ROLES, mustPickMentorToAccept } from '@nst/shared/permissions.js'
 
 import Venture from '../models/venture.js'
 import Campus from '../models/campus.js'
@@ -9,17 +10,23 @@ import Role from '../models/role.js'
 import User from '../models/user.js'
 import startupStage from '../models/enums/startupStage.js'
 import ventureHealth from '../models/enums/ventureHealth.js'
-import { validateEmail, validateName } from '../utils/validator.js'
+import { normalizeName, checkEmail, validateName } from '../utils/validator.js'
+import {
+  DUPLICATE_STARTUP_NAME,
+  isStartupNameTaken,
+} from '../utils/ventureName.js'
 import {
   addFounderToVenture,
   deactivateFounder,
 } from '../utils/founderHelper.js'
-import { calculateFounderStudents } from '../utils/founderPortfolio.js'
+import { refreshMeetingInvites } from '../utils/meetingInvites.js'
+import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
+import { resolveNewVentureMentor, ventureScope } from '../utils/access.js'
 
-const getFounders = async (_, res) => {
+const getFounders = async (req, res) => {
   try {
     const [{ students }, campuses] = await Promise.all([
-      calculateFounderStudents(),
+      getFounderPortfolioData(ventureScope(req.user)),
       Campus.find().sort({ name: 1 }),
     ])
 
@@ -38,11 +45,28 @@ const getFounders = async (_, res) => {
   }
 }
 
-const getFounderOptions = async (_, res) => {
+// Active mentors, for the board to choose one for the new startup.
+const mentorOptions = async () => {
+  const mentorRole = await Role.findOne({ name: ROLES.MENTOR }).select('_id')
+  if (!mentorRole) {
+    return []
+  }
+  const mentors = await User.find({ role: mentorRole._id, deletedAt: null })
+    .select('username email')
+    .sort({ username: 1 })
+  return mentors.map(mentor => ({
+    value: mentor._id,
+    label: `${mentor.username} · ${mentor.email}`,
+  }))
+}
+
+const getFounderFormOptions = async (req, res) => {
   try {
-    const [industries, batches] = await Promise.all([
+    const [industries, batches, mentors] = await Promise.all([
       Industry.find().sort({ name: 1 }),
       Batch.find().populate('campus', 'name').sort({ name: 1 }),
+      // A mentor's new startup is always theirs, so only the board picks.
+      mustPickMentorToAccept(req.user) ? mentorOptions() : null,
     ])
 
     return res.json({
@@ -58,6 +82,7 @@ const getFounderOptions = async (_, res) => {
         value,
         label,
       })),
+      ...(mentors && { mentorId: mentors }),
     })
   } catch (err) {
     console.error('Get founder options error:', err)
@@ -68,10 +93,13 @@ const getFounderOptions = async (_, res) => {
   }
 }
 
-const validateFounderPayload = payload => ({
+const validateCreateFounderInput = async payload => ({
   founder: validateName(payload.founder),
-  email: validateEmail(payload.email),
-  startup: payload.startup ? '' : 'Startup name is required',
+  email: await checkEmail(payload.email),
+  startup:
+    typeof payload.startup === 'string' && payload.startup.trim()
+      ? ''
+      : 'Startup name is required',
   industry: mongoose.isValidObjectId(payload.industry)
     ? ''
     : 'Industry is required',
@@ -81,13 +109,20 @@ const validateFounderPayload = payload => ({
     : 'Stage is required',
 })
 
-const resolveFounderRefs = async ({ email, industry, batch }) => {
-  const [batchDoc, industryDoc, studentRole, existingUser] = await Promise.all([
-    Batch.findById(batch),
-    Industry.findById(industry),
-    Role.findOne({ name: 'student' }),
-    User.findOne({ email }),
-  ])
+const validateAndResolveFounderReferences = async ({
+  email,
+  industry,
+  batch,
+  startup,
+}) => {
+  const [batchDoc, industryDoc, studentRole, existingUser, nameTaken] =
+    await Promise.all([
+      Batch.findById(batch),
+      Industry.findById(industry),
+      Role.findOne({ name: ROLES.STUDENT }),
+      User.findOne({ email }),
+      isStartupNameTaken(startup),
+    ])
 
   if (!studentRole) {
     console.error('Student role does not exist in database')
@@ -105,11 +140,14 @@ const resolveFounderRefs = async ({ email, industry, batch }) => {
       error: { email: 'An account already exists with this email' },
     }
   }
+  if (nameTaken) {
+    return { status: 409, error: { startup: DUPLICATE_STARTUP_NAME } }
+  }
 
   return { batchDoc, industryDoc, studentRole }
 }
 
-const createFounderAccount = async ({
+const createFounderAndVenture = async ({
   founder,
   email,
   startup,
@@ -117,9 +155,10 @@ const createFounderAccount = async ({
   batchDoc,
   industryDoc,
   studentRole,
+  mentorId,
 }) => {
   const user = await User.create({
-    username: founder,
+    username: normalizeName(founder),
     email,
     password: randomUUID(),
     role: studentRole._id,
@@ -129,13 +168,15 @@ const createFounderAccount = async ({
 
   try {
     const venture = await Venture.create({
-      name: startup,
+      name: startup.trim(),
       campus: batchDoc.campus,
       stage,
       industry: industryDoc._id,
+      mentors: [mentorId],
     })
 
     await addFounderToVenture(user._id, venture._id)
+    await refreshMeetingInvites(venture._id)
 
     return { user, venture }
   } catch (err) {
@@ -146,22 +187,29 @@ const createFounderAccount = async ({
 
 const createFounder = async (req, res) => {
   const payload = req.body ?? {}
-  const error = validateFounderPayload(payload)
+  const error = await validateCreateFounderInput(payload)
 
   if (Object.values(error).some(Boolean)) {
     return res.status(400).json({ error })
   }
 
   try {
-    const refs = await resolveFounderRefs(payload)
+    // A mentor's new startup is theirs; the board assigns one.
+    const mentor = await resolveNewVentureMentor(req.user, payload.mentorId)
+    if (mentor.error) {
+      return res.status(400).json({ error: { mentorId: mentor.error } })
+    }
+
+    const refs = await validateAndResolveFounderReferences(payload)
 
     if (refs.error) {
       return res.status(refs.status).json({ error: refs.error })
     }
 
-    const { user, venture } = await createFounderAccount({
+    const { user, venture } = await createFounderAndVenture({
       ...payload,
       ...refs,
+      mentorId: mentor.mentorId,
     })
 
     return res.status(201).json({
@@ -185,7 +233,7 @@ const createFounder = async (req, res) => {
   }
 }
 
-const removeFounderFromVenture = async founderId => {
+const removeFounderFromVentureById = async founderId => {
   if (!mongoose.isValidObjectId(founderId)) {
     return {
       founderId,
@@ -194,6 +242,9 @@ const removeFounderFromVenture = async founderId => {
   }
 
   const founder = await deactivateFounder(founderId)
+  if (founder?.venture) {
+    await refreshMeetingInvites(founder.venture._id)
+  }
 
   if (!founder) {
     return {
@@ -209,10 +260,26 @@ const removeFounderFromVenture = async founderId => {
   }
 }
 
+// Removes founders from their startups (their accounts stay). One request may
+// remove at most this many, matching what an admin can select on one page.
+const MAX_FOUNDERS_PER_REQUEST = 100
+
 const deleteFounders = async (req, res) => {
   try {
-    const founders = req.body.founders || []
-    const response = await Promise.all(founders.map(removeFounderFromVenture))
+    const founders = req.body?.founders
+    if (
+      !Array.isArray(founders) ||
+      founders.length === 0 ||
+      founders.length > MAX_FOUNDERS_PER_REQUEST
+    ) {
+      return res.status(400).json({
+        error: `Send a list of 1 to ${MAX_FOUNDERS_PER_REQUEST} founder IDs`,
+      })
+    }
+
+    const response = await Promise.all(
+      founders.map(removeFounderFromVentureById)
+    )
 
     return res.status(200).json({ result: response })
   } catch (err) {
@@ -223,4 +290,4 @@ const deleteFounders = async (req, res) => {
   }
 }
 
-export { getFounders, getFounderOptions, createFounder, deleteFounders }
+export { getFounders, getFounderFormOptions, createFounder, deleteFounders }

@@ -1,7 +1,5 @@
 import mongoose from 'mongoose'
 
-import KPIScope from './enums/KPIScope.js'
-
 const evidenceLinkSchema = new mongoose.Schema(
   {
     title: {
@@ -41,25 +39,12 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
       index: true,
     },
 
-    // A report is filed for the venture as a whole and shared among co-founders.
-    scope: {
-      type: String,
-      enum: Object.keys(KPIScope),
-      default: 'VENTURE',
-      required: true,
-    },
-
+    // A report belongs to the startup and is shared by its co-founders, as a
+    // startup's KPIs are.
     venture: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Venture',
-      default: null,
-    },
-
-    // Set for FOUNDER-scoped reports or historical records.
-    founder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
+      required: true,
     },
 
     submitted_by: {
@@ -68,6 +53,12 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
       default: null,
     },
     submitted_at: {
+      type: Date,
+      default: null,
+    },
+    // Set when the board reopens the cycle, so the team can edit and submit
+    // it again even after its deadline. Cleared when it is submitted.
+    reopened_at: {
       type: Date,
       default: null,
     },
@@ -141,7 +132,7 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
     },
     biWeeklyObservationSchema: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'BiWeeklyObservationSchema',
+      ref: 'BiWeeklyObservation',
     },
     evidence_links: [evidenceLinkSchema],
   },
@@ -150,18 +141,11 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
   }
 )
 
-biWeeklySubmissionSchema.pre('validate', function () {
-  if (this.scope === 'FOUNDER' && !this.founder) {
-    this.invalidate('founder', 'A founder report must have a founder')
-  }
-
-  if (this.scope === 'VENTURE' && !this.venture) {
-    this.invalidate('venture', 'A venture report must have a venture')
-  }
-})
-
-biWeeklySubmissionSchema.index({ founder: 1, cycle_number: 1 })
-biWeeklySubmissionSchema.index({ venture: 1, cycle_number: 1 })
+// One report per startup per cycle.
+biWeeklySubmissionSchema.index(
+  { venture: 1, cycle_number: 1 },
+  { unique: true }
+)
 
 export const modelName = 'BiWeeklySubmission'
 const BiWeeklySubmission = mongoose.model(modelName, biWeeklySubmissionSchema)

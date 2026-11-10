@@ -2,14 +2,28 @@ import { useEffect, useState } from 'react'
 
 import { useNavigate, useSearchParams } from 'react-router'
 
-import { Alert, Button, Grid, MenuItem, TextField } from '@mui/material'
-
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import { Alert, Button, MenuItem, TextField, Typography } from '@mui/material'
 
 import AuthScreen from '../../components/AuthScreen'
 
 import { useAuthStore } from '../../stores/auth'
 import { completeGoogleSignup } from '../../api/auth'
+
+// The sign-up link's token, unverified. The server checks it properly;
+// reading it here just avoids a form that can't succeed.
+const readToken = token => {
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(part))
+  } catch {
+    return null
+  }
+}
+
+const isUsable = token => {
+  const payload = readToken(token)
+  return payload?.type === 'google-signup' && payload.exp * 1000 > Date.now()
+}
 
 function CompleteSignup() {
   const navigate = useNavigate()
@@ -17,11 +31,15 @@ function CompleteSignup() {
   const [searchParams] = useSearchParams()
 
   const token = searchParams.get('token')
+  const domain = readToken(token)?.email?.split('@')[1]
 
   const [options, setOptions] = useState({
     campuses: [],
     batches: [],
+    staffDomains: [],
   })
+  // Staff have no campus or batch, so they aren't asked for one.
+  const isStaff = options.staffDomains.includes(domain)
 
   const [form, setForm] = useState({
     username: '',
@@ -30,6 +48,7 @@ function CompleteSignup() {
   })
 
   const [error, setError] = useState('')
+  const [expired, setExpired] = useState(() => !token || !isUsable(token))
   const [loading, setLoading] = useState(false)
   const [loadingOptions, setLoadingOptions] = useState(true)
 
@@ -47,6 +66,7 @@ function CompleteSignup() {
         setOptions({
           campuses: data.campuses || [],
           batches: data.batches || [],
+          staffDomains: data.staffDomains || [],
         })
       } catch (error) {
         console.error('Failed to load signup options:', error)
@@ -77,7 +97,7 @@ function CompleteSignup() {
       return
     }
 
-    if (!form.username.trim() || !form.batch || !form.campus) {
+    if (!form.username.trim() || (!isStaff && (!form.batch || !form.campus))) {
       setError('Please complete all required fields.')
       return
     }
@@ -88,12 +108,15 @@ function CompleteSignup() {
     const result = await completeGoogleSignup({
       token,
       username: form.username.trim(),
-      batch: form.batch,
-      campus: form.campus,
+      ...(!isStaff && { batch: form.batch, campus: form.campus }),
     })
 
     setLoading(false)
 
+    if (result.expired) {
+      setExpired(true)
+      return
+    }
     if (result.error) {
       setError(result.error)
       return
@@ -103,111 +126,111 @@ function CompleteSignup() {
     navigate('/', { replace: true })
   }
 
-  if (!token) {
+  if (expired) {
     return (
       <AuthScreen
-        title="Invalid Signup Session"
-        subtitle="Your Google signup session is missing or has expired."
+        title="Session Expired"
+        subtitle="Your Google sign-up link is missing or has expired. Start again from the sign-in page."
       >
-        <Grid size={12} sx={{ padding: 2 }}>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => navigate('/signin')}
-          >
-            Back to Sign In
-          </Button>
-        </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          onClick={() => navigate('/signin')}
+        >
+          Back to Sign In
+        </Button>
       </AuthScreen>
     )
   }
 
   if (loadingOptions) {
     return (
-      <AuthScreen
-        title="Complete Your Profile"
-        subtitle="Loading profile options..."
-      />
+      <AuthScreen title="Complete Your Profile">
+        <Typography color="textSecondary">
+          Loading profile options...
+        </Typography>
+      </AuthScreen>
     )
   }
 
   return (
     <AuthScreen
       title="Complete Your Profile"
-      subtitle="Your Google account has been verified. Complete your profile to create your account."
+      subtitle="Your Google account is verified. Add a few details to finish setting up."
+      shakeOn={error}
     >
-      <Grid size={12} sx={{ padding: 2 }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <TextField
+          fullWidth
+          required
+          label="Name"
+          name="username"
+          autoComplete="name"
+          autoFocus
+          value={form.username}
+          onChange={handleChange}
+          sx={{ mb: 1.5 }}
+          disabled={loading}
+        />
+
+        {!isStaff && (
+          <>
+            <TextField
+              fullWidth
+              required
+              select
+              label="Campus"
+              name="campus"
+              value={form.campus}
+              onChange={handleChange}
+              sx={{ mb: 1.5 }}
+              disabled={loading}
+            >
+              {options.campuses.map(campus => (
+                <MenuItem key={campus._id} value={campus._id}>
+                  {campus.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              fullWidth
+              required
+              select
+              label="Batch"
+              name="batch"
+              value={form.batch}
+              onChange={handleChange}
+              sx={{ mb: 1.5 }}
+              disabled={loading}
+            >
+              {options.batches.map(batch => (
+                <MenuItem key={batch._id} value={batch._id}>
+                  {batch.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            required
-            label="Name"
-            name="username"
-            value={form.username}
-            onChange={handleChange}
-            margin="normal"
-            disabled={loading}
-          />
-
-          <TextField
-            fullWidth
-            required
-            select
-            label="Campus"
-            name="campus"
-            value={form.campus}
-            onChange={handleChange}
-            margin="normal"
-            disabled={loading}
-          >
-            {options.campuses.map(campus => (
-              <MenuItem key={campus._id} value={campus._id}>
-                {campus.name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            fullWidth
-            required
-            select
-            label="Batch"
-            name="batch"
-            value={form.batch}
-            onChange={handleChange}
-            margin="normal"
-            disabled={loading}
-          >
-            {options.batches.map(batch => (
-              <MenuItem key={batch._id} value={batch._id}>
-                {batch.name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <Grid container sx={{ mt: 1, justifyContent: 'flex-end' }}>
-            <Grid size="auto">
-              <Button
-                fullWidth
-                variant="contained"
-                type="submit"
-                sx={{ mb: 1 }}
-                size="large"
-                disabled={loading}
-                endIcon={<ArrowForwardRoundedIcon />}
-              >
-                {loading ? 'Creating Account...' : 'Complete Signup'}
-              </Button>
-            </Grid>
-          </Grid>
-        </form>
-      </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          type="submit"
+          sx={{ mt: 4 }}
+          size="large"
+          loading={loading}
+        >
+          Create Account
+        </Button>
+      </form>
     </AuthScreen>
   )
 }

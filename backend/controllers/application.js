@@ -1,3 +1,4 @@
+import { canReviewJoinRequest } from '@nst/shared/permissions.js'
 import VentureJoinRequest from '../models/ventureJoinRequest.js'
 import VentureProposal from '../models/ventureProposal.js'
 import {
@@ -10,7 +11,21 @@ import {
   handleJoinRequestApproval,
   buildJoinRequestUpdate,
   rollbackJoinRequestApproval,
+  closeOtherApplications,
 } from '../utils/applicationHelper.js'
+import Venture from '../models/venture.js'
+import startupStage from '../models/enums/startupStage.js'
+import { resolveNewVentureMentor, scopedVentureIds } from '../utils/access.js'
+
+// Best effort: the approval already succeeded, so a failure here is logged
+// rather than reported as a failed review.
+const closeOthersAfterApproval = async args => {
+  try {
+    await closeOtherApplications(args)
+  } catch (error) {
+    console.error('Could not close other applications:', error)
+  }
+}
 
 export const getPendingApplications = async (req, res) => {
   try {
@@ -18,17 +33,35 @@ export const getPendingApplications = async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
+    // Any staff member may accept a proposal (a mentor then mentors the new
+    // startup), but join requests go to the startup's own mentor.
+    const ventureIds = await scopedVentureIds(req.user)
+    const joinFilter = { status: 'PENDING' }
+    if (ventureIds) {
+      joinFilter.venture = { $in: ventureIds }
+    }
+
+    // Oldest first, so whoever has waited longest is reviewed first.
     const [proposals, joinRequests] = await Promise.all([
       VentureProposal.find({ status: 'PENDING' })
+        .sort({ createdAt: 1 })
         .populate('submittedBy', 'username email')
         .populate('industry', 'name')
-        .populate('campus', 'name'),
-      VentureJoinRequest.find({ status: 'PENDING' })
+        .populate('campus', 'name')
+        .lean(),
+      VentureJoinRequest.find(joinFilter)
+        .sort({ createdAt: 1 })
         .populate('requestedBy', 'username email')
         .populate('venture', 'name'),
     ])
 
-    return res.status(200).json({ proposals, joinRequests })
+    return res.status(200).json({
+      proposals: proposals.map(proposal => ({
+        ...proposal,
+        stageLabel: startupStage[proposal.stage] ?? proposal.stage,
+      })),
+      joinRequests,
+    })
   } catch (error) {
     console.error('Error fetching pending applications:', error)
 
@@ -67,7 +100,14 @@ export const reviewProposal = async (req, res) => {
     let industryId = null
 
     if (status === 'APPROVED') {
-      const approvalResult = await handleProposalApproval(proposal)
+      const mentor = await resolveNewVentureMentor(req.user, req.body.mentorId)
+      if (mentor.error) {
+        return res.status(400).json({ error: mentor.error })
+      }
+      const approvalResult = await handleProposalApproval(
+        proposal,
+        mentor.mentorId
+      )
       if (approvalResult.error) {
         return res
           .status(approvalResult.status)
@@ -89,13 +129,22 @@ export const reviewProposal = async (req, res) => {
     const updatedProposal = await VentureProposal.findOneAndUpdate(
       { _id: proposalId, status: 'PENDING' },
       updateQuery,
-      { new: true }
+      { returnDocument: 'after' }
     )
 
     if (!updatedProposal) {
       await rollbackProposalApproval(ventureId, proposal.submittedBy)
       return res.status(409).json({
         error: 'This proposal has already been reviewed',
+      })
+    }
+
+    if (status === 'APPROVED') {
+      await closeOthersAfterApproval({
+        studentId: proposal.submittedBy,
+        reviewerId: req.user.id,
+        ventureName: proposal.startupName,
+        keepProposalId: proposal._id,
       })
     }
 
@@ -113,8 +162,26 @@ export const reviewProposal = async (req, res) => {
   }
 }
 
+// Why this caller can't review the join request now, or null. Join requests
+// go to the startup's own mentor or the board.
+const joinRequestReviewError = async (user, joinRequest) => {
+  const stateError = ensureJoinRequestCanBeReviewed(joinRequest)
+  if (stateError) {
+    return stateError
+  }
+  const venture = await Venture.findById(joinRequest.venture).select('mentors')
+  if (!canReviewJoinRequest(user, venture?.mentors)) {
+    return {
+      status: 403,
+      error: "Only this startup's mentors or the academic board can review it",
+    }
+  }
+  return null
+}
+
 export const reviewJoinRequest = async (req, res) => {
-  let approvedFounderAdded = false
+  // What approving changed, to undo if the review can't be saved.
+  let approval = null
   let joinRequest = null
 
   try {
@@ -134,37 +201,45 @@ export const reviewJoinRequest = async (req, res) => {
     }
 
     joinRequest = await VentureJoinRequest.findById(requestId)
-    const stateError = ensureJoinRequestCanBeReviewed(joinRequest)
-    if (stateError) {
-      return res.status(stateError.status).json({ error: stateError.error })
+    const reviewError = await joinRequestReviewError(req.user, joinRequest)
+    if (reviewError) {
+      return res.status(reviewError.status).json({ error: reviewError.error })
     }
 
     if (status === 'APPROVED') {
-      const approvalError = await handleJoinRequestApproval(joinRequest)
-      if (approvalError) {
-        return res
-          .status(approvalError.status)
-          .json({ error: approvalError.error })
+      const approved = await handleJoinRequestApproval(joinRequest)
+      if (approved.error) {
+        return res.status(approved.status).json({ error: approved.error })
       }
-      approvedFounderAdded = true
+      approval = approved
     }
 
     const updatedJoinRequest = await VentureJoinRequest.findOneAndUpdate(
       { _id: requestId, status: 'PENDING' },
       buildJoinRequestUpdate({ status, reviewerId: req.user.id }),
-      { new: true }
+      { returnDocument: 'after' }
     )
 
     if (!updatedJoinRequest) {
-      await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
+      await rollbackJoinRequestApproval(joinRequest, approval)
       return res.status(409).json({
         error: 'This join request has already been reviewed',
       })
     }
 
+    if (status === 'APPROVED') {
+      const venture = await Venture.findById(joinRequest.venture).select('name')
+      await closeOthersAfterApproval({
+        studentId: joinRequest.requestedBy,
+        reviewerId: req.user.id,
+        ventureName: venture?.name ?? 'a venture',
+        keepJoinRequestId: joinRequest._id,
+      })
+    }
+
     return res.status(200).json({ joinRequest: updatedJoinRequest })
   } catch (error) {
-    await rollbackJoinRequestApproval(joinRequest, approvedFounderAdded)
+    await rollbackJoinRequestApproval(joinRequest, approval)
     console.error('Error reviewing join request:', error)
 
     return res.status(500).json({

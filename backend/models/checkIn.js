@@ -95,6 +95,9 @@ const kpiExtractionSchema = new mongoose.Schema(
       type: [mongoose.Schema.Types.Mixed],
       default: undefined,
     },
+    // The first check-in of a group holds this shared extraction lease.
+    // Its siblings wait instead of making another Gemini request.
+    candidatesLeaseUntil: Date,
     // Set once saving KPIs has begun, so a retry finishes the job instead of
     // mistaking its own KPIs for an earlier import.
     started: Boolean,

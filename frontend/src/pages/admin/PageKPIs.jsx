@@ -28,6 +28,7 @@ import {
 } from '../../components/kpiAccess'
 import { evaluateKPI, lockKPI, unlockKPI } from '../../api/kpi'
 import useAccess from '../../hooks/useAccess'
+import { useBatchChosen } from '../../stores/batch'
 import { canEvaluateKpi } from '@nst/shared/permissions.js'
 
 const columns = [
@@ -42,6 +43,7 @@ const STATUSES = Object.keys(KPI_STATUS)
 
 export default function PageKPIs() {
   const { kpis } = useLoaderData()
+  const batchChosen = useBatchChosen()
   const revalidator = useRevalidator()
   const { actor, isMentor } = useAccess()
 
@@ -305,7 +307,13 @@ export default function PageKPIs() {
         <SectionCard>
           <EmptyState
             icon={KpiIcon}
-            title={kpis.length ? 'No matches' : 'No KPIs yet'}
+            title={
+              kpis.length
+                ? 'No matches'
+                : batchChosen
+                  ? 'No KPIs in this batch yet'
+                  : 'No KPIs yet'
+            }
             description={
               kpis.length
                 ? 'No KPIs match these filters.'

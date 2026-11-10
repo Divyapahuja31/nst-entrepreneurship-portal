@@ -20,19 +20,28 @@ import {
   deactivateFounder,
 } from '../utils/founderHelper.js'
 import { refreshMeetingInvites } from '../utils/meetingInvites.js'
-import { getFounderPortfolioData } from '../utils/founderPortfolio.js'
-import { resolveNewVentureMentor, ventureScope } from '../utils/access.js'
+import {
+  batchLabel,
+  getFounderPortfolioData,
+} from '../utils/founderPortfolio.js'
+import { listScope, resolveNewVentureMentor } from '../utils/access.js'
 
 const getFounders = async (req, res) => {
   try {
-    const [{ students }, campuses] = await Promise.all([
-      getFounderPortfolioData(ventureScope(req.user)),
+    const { scope, batchId, error } = await listScope(req.user, req.query)
+    if (error) {
+      return res.status(400).json({ error })
+    }
+    const [{ students }, campuses, batches] = await Promise.all([
+      getFounderPortfolioData(scope, batchId),
       Campus.find().sort({ name: 1 }),
+      Batch.find().populate('campus', 'name').sort({ startYear: -1, name: 1 }),
     ])
 
     return res.json({
       students,
       campus: campuses.map(campus => campus.name),
+      batch: batches.map(batchLabel),
       stage: Object.values(startupStage),
       status: Object.values(ventureHealth),
     })

@@ -19,9 +19,11 @@ import CustomizedTable from '../../components/Table'
 import StatusPill from '../../components/StatusPill'
 import { PeopleIcon, PlusIcon } from '../../components/icons'
 import { deleteFounders } from '../../api/admin'
+import { useBatchChosen } from '../../stores/batch'
 
 const FILTER_LABELS = {
   campus: 'Campus',
+  batch: 'Batch',
   stage: 'Stage',
   status: 'Status',
 }
@@ -30,6 +32,7 @@ const columnNames = [
   { key: 'founder', label: 'Founder' },
   { key: 'startup', label: 'Startup' },
   { key: 'campus', label: 'Campus' },
+  { key: 'batch', label: 'Batch' },
   { key: 'stage', label: 'Stage' },
   { key: 'team', label: 'Team', align: 'right' },
   { key: 'score', label: 'Score', align: 'right' },
@@ -59,7 +62,15 @@ const withStatusPill = student => ({
 })
 
 function Portfolio() {
-  const { students, ...filterData } = useLoaderData()
+  const { students, campus, batch, ...otherFilters } = useLoaderData()
+  // With a batch chosen in the header, a second batch filter would only
+  // ever empty the list.
+  const batchChosen = useBatchChosen()
+  const filterData = {
+    campus,
+    ...(batch && !batchChosen && { batch }),
+    ...otherFilters,
+  }
   const revalidator = useRevalidator()
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [confirming, setConfirming] = React.useState(false)
@@ -230,7 +241,13 @@ function Portfolio() {
         <SectionCard>
           <EmptyState
             icon={PeopleIcon}
-            title={students.length ? 'No matches' : 'No founders yet'}
+            title={
+              students.length
+                ? 'No matches'
+                : batchChosen
+                  ? 'No founders in this batch yet'
+                  : 'No founders yet'
+            }
             description={
               students.length
                 ? 'No founders match these filters.'

@@ -19,14 +19,29 @@ export const deriveStatus = score => {
   return ventureHealth.AT_RISK
 }
 
-// scope is a Venture filter (see ventureScope) limiting which startups and
-// founders are included.
-export const getFounderPortfolioData = async (scope = {}) => {
+// "2026–2030 · Delhi", as the batch filters show it.
+export const batchLabel = batch =>
+  batch?.name
+    ? `${batch.name} · ${batch.campus?.name ?? 'Unknown campus'}`
+    : null
+
+// scope is a Venture filter (see listScope) limiting which startups and
+// founders are included. With batchId, only that batch's founders are
+// listed; a startup's co-founders from another batch are left out.
+export const getFounderPortfolioData = async (scope = {}, batchId = null) => {
   const ventures = await Venture.find(scope)
     .populate('campus', 'name')
     .populate({
       path: 'founders',
-      populate: { path: 'user', select: 'username' },
+      populate: {
+        path: 'user',
+        select: 'username batch',
+        populate: {
+          path: 'batch',
+          select: 'name campus',
+          populate: { path: 'campus', select: 'name' },
+        },
+      },
     })
     .sort({ name: 1 })
 
@@ -64,11 +79,18 @@ export const getFounderPortfolioData = async (scope = {}) => {
       .map(founder => founder.user)
       .filter(Boolean)
 
-    return founders.map(founder => ({
+    const listed = batchId
+      ? founders.filter(
+          founder => String(founder.batch?._id) === String(batchId)
+        )
+      : founders
+
+    return listed.map(founder => ({
       id: founder._id,
       founder: founder.username,
       startup: venture.name,
       campus: venture.campus?.name ?? null,
+      batch: batchLabel(founder.batch),
       // The label ("Fund Raising"), which is what the stage filter offers.
       stage: startupStage[venture.stage] ?? venture.stage,
       team: founders.length,

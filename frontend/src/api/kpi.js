@@ -1,5 +1,6 @@
 import { api } from './client'
 import toError from './toError'
+import { withBatch } from '../stores/batch'
 
 export const getVentureKPIs = async ventureId => {
   try {
@@ -377,7 +378,7 @@ export const updateKPIWithSubKpis = async payload => {
 }
 
 export const allKPIsLoader = async () => {
-  const { data } = await api.get('/kpis/all')
+  const { data } = await withBatch(params => api.get('/kpis/all', { params }))
 
   return { kpis: data.data || [] }
 }

@@ -39,7 +39,8 @@ import {
 import {
   isVentureMember,
   kpiContext,
-  scopedVentureIds,
+  kpisInBatch,
+  listScope,
   ventureAccess,
 } from '../utils/access.js'
 import { downloadFromS3, evidenceKeyFromUrl } from '../config/s3.js'
@@ -89,15 +90,23 @@ export const getAllKPIs = async (req, res) => {
   try {
     const { scope, status } = req.query
 
-    const filter = {}
+    // Mentors see only the startups assigned to them; ?batch= narrows to
+    // one batch's startups and members.
+    const { ventureIds, batchUserIds, error } = await listScope(
+      req.user,
+      req.query
+    )
+    if (error) {
+      return res.status(400).json({ success: false, message: error })
+    }
+
+    const filter = kpisInBatch(batchUserIds)
     if (scope === 'VENTURE' || scope === 'FOUNDER') {
       filter.scope = scope
     }
     if (typeof status === 'string' && status) {
       filter.status = status
     }
-    // Mentors see only the startups assigned to them.
-    const ventureIds = await scopedVentureIds(req.user)
     if (ventureIds) {
       filter.venture = { $in: ventureIds }
     }

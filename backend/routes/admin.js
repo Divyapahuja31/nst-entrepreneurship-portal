@@ -7,6 +7,7 @@ import emails from './emails.js'
 import extraSessions from './extraSessions.js'
 import programme from './programme.js'
 import setup from './setup.js'
+import reportCards from './reportCards.js'
 
 import {
   createFounder,
@@ -51,5 +52,7 @@ router.use('/programme', requireRole(ROLES.ADMIN), programme)
 router.use('/extra-sessions', requireRole(...BOARD_ROLES), extraSessions)
 router.use('/setup', requireRole(ROLES.ADMIN), setup)
 router.use('/emails', requireRole(ROLES.ADMIN), emails)
+
+router.use('/report-cards', requireRole(ROLES.ADMIN), reportCards)
 
 export default router

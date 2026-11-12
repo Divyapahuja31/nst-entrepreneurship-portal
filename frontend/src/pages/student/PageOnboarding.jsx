@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useSearchParams } from 'react-router'
+import { Link, Navigate, useSearchParams } from 'react-router'
 
 import { Alert, Box, Button, Dialog, Grid, Typography } from '@mui/material'
 
@@ -23,7 +23,7 @@ import { needsOnboarding, useAuthStore } from '../../stores/auth'
 
 const firstName = user => user.username?.split(' ')[0] || 'there'
 
-// Onboarding has no sidebar, so this is the only way out of it.
+// Onboarding has no sidebar, so link to the student's report card here.
 export function OnboardingSignOut() {
   const { signingOut, signOutError, handleSignOut } = useSignOut()
 
@@ -34,6 +34,9 @@ export function OnboardingSignOut() {
           {signOutError}
         </Typography>
       )}
+      <Button size="small" color="inherit" component={Link} to="/report-card">
+        My Report Card
+      </Button>
       <Button
         size="small"
         color="inherit"

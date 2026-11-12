@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { ROLES, STAFF_ROLES } from '@nst/shared/permissions.js'
 import admin from './admin.js'
 import auth from './auth.js'
-import requireAuth from '../middleware/requireAuth.js'
+import requireAuth, { requireSignedIn } from '../middleware/requireAuth.js'
 import requireRole from '../middleware/requireRole.js'
 import kpiRoutes from './kpi.js'
 import kpiRecommendationRoutes from './kpiRecommendation.js'
@@ -16,6 +16,7 @@ import notificationRoutes from './notification.js'
 import checkInRoutes from './checkins.js'
 import googleRoutes from './google.js'
 import emailPreview from './emailPreview.js'
+import { getMyReportCard } from '../controllers/reportCards.js'
 const router = Router()
 
 // unprotected routes
@@ -35,6 +36,9 @@ router.use('/biweekly', requireAuth, biweeklyRoutes)
 router.use('/ventures', requireAuth, ventures)
 router.use('/notifications', requireAuth, notificationRoutes)
 router.use('/checkins', requireAuth, checkInRoutes)
+
+// Students can see their own published card before connecting Google.
+router.get('/report-card', requireSignedIn, getMyReportCard)
 
 // a mentor's (or the programme host admin's) Google Calendar connection
 router.use('/google', requireRole(ROLES.MENTOR, ROLES.ADMIN), googleRoutes)

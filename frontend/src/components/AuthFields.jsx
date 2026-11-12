@@ -33,7 +33,9 @@ export function GoogleMark() {
   )
 }
 
-export function GoogleSignInButton() {
+export function GoogleSignInButton({ returnTo } = {}) {
+  const url = '/api/auth/google'
+  const href = returnTo ? `${url}?${new URLSearchParams({ returnTo })}` : url
   return (
     <>
       <Button
@@ -43,7 +45,7 @@ export function GoogleSignInButton() {
         size="large"
         startIcon={<GoogleMark />}
         onClick={() => {
-          window.location.href = '/api/auth/google'
+          window.location.href = href
         }}
       >
         Continue with Google

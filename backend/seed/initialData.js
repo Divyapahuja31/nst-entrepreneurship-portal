@@ -9,6 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') })
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
 import Industry from '../models/industry.js'
+import { seedReportCardTemplates } from './reportCardTemplates.js'
 
 const seedInitialData = async () => {
   try {
@@ -98,6 +99,8 @@ const seedInitialData = async () => {
 
       console.log(`Industry ready: ${industry.name}`)
     }
+
+    await seedReportCardTemplates()
 
     console.log('Initial data seeded successfully')
 

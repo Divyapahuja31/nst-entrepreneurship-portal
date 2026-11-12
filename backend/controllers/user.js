@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { ROLES } from '@nst/shared/permissions.js'
+import { REPORT_CARD_PATH } from '@nst/shared/reportCards.js'
 import User from '../models/user.js'
 import Campus from '../models/campus.js'
 import Batch from '../models/batch.js'
@@ -190,6 +191,7 @@ export const portfolio = async (req, res) => {
 // attacker could send someone their own callback link and sign them in to
 // the attacker's account.
 const OAUTH_STATE_COOKIE = 'google_oauth_state'
+const REPORT_CARD_STATE_SUFFIX = ':report-card'
 const oauthStateCookieOptions = { ...cookieOptions, maxAge: 10 * 60 * 1000 }
 
 // Set while a signed-in user connects their Google account, so the
@@ -197,7 +199,10 @@ const oauthStateCookieOptions = { ...cookieOptions, maxAge: 10 * 60 * 1000 }
 const GOOGLE_LINK_COOKIE = 'google_link'
 
 export const googleAuth = (req, res) => {
-  const state = crypto.randomBytes(32).toString('hex')
+  // The return destination travels with the state verified by the callback.
+  const suffix =
+    req.query.returnTo === REPORT_CARD_PATH ? REPORT_CARD_STATE_SUFFIX : ''
+  const state = crypto.randomBytes(32).toString('hex') + suffix
   return res
     .clearCookie(GOOGLE_LINK_COOKIE, cookieOptions)
     .cookie(OAUTH_STATE_COOKIE, state, oauthStateCookieOptions)
@@ -282,6 +287,17 @@ const finishGoogleLink = async (req, res, verification) => {
   return linkOutcome(res, 'linked')
 }
 
+const googleSignInDestination = (user, state) => {
+  const frontend = process.env.FRONTEND_URL || '/'
+  if (
+    user.role?.name === ROLES.STUDENT &&
+    state.endsWith(REPORT_CARD_STATE_SUFFIX)
+  ) {
+    return frontend.replace(/\/+$/, '') + REPORT_CARD_PATH
+  }
+  return frontend
+}
+
 export const googleAuthCallback = async (req, res) => {
   try {
     const { code } = req.query
@@ -326,7 +342,7 @@ export const googleAuthCallback = async (req, res) => {
 
       return res
         .cookie('token', signToken(user), cookieOptions)
-        .redirect(process.env.FRONTEND_URL)
+        .redirect(googleSignInDestination(user, req.query.state))
     }
 
     const signupToken = signGoogleSignupToken({ googleId, email })

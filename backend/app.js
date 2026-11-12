@@ -50,6 +50,11 @@ app.use(
     credentials: true,
   })
 )
+// The report grid can hold 30 rows of up to 17 cells, including Unicode.
+app.put(
+  '/api/admin/report-cards/students/:studentId',
+  express.json({ limit: '512kb' })
+)
 app.use(express.json())
 app.use(cookieParser())
 app.use(attachUser)

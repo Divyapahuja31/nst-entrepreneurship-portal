@@ -1,5 +1,13 @@
 import { useState } from 'react'
-import { Link as RouterLink, Navigate, useNavigate } from 'react-router'
+import {
+  Link as RouterLink,
+  Navigate,
+  matchPath,
+  useLocation,
+  useNavigate,
+} from 'react-router'
+import { ROLES } from '@nst/shared/permissions.js'
+import { REPORT_CARD_PATH } from '@nst/shared/reportCards.js'
 import { Alert, Box, Button, Link, TextField, Typography } from '@mui/material'
 
 import AuthScreen from '../../components/AuthScreen'
@@ -16,6 +24,15 @@ import {
 
 function SignIn() {
   const navigate = useNavigate()
+  const { state } = useLocation()
+  const reportCardRequested = matchPath(
+    REPORT_CARD_PATH,
+    state?.from?.pathname ?? ''
+  )
+  const destinationFor = account =>
+    reportCardRequested && account?.role?.name === ROLES.STUDENT
+      ? REPORT_CARD_PATH
+      : homePathFor(account)
   const login = useAuthStore(state => state.login)
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
   const user = useAuthStore(state => state.user)
@@ -55,7 +72,7 @@ function SignIn() {
     }
 
     login(result.user)
-    navigate(homePathFor(result.user), { replace: true })
+    navigate(destinationFor(result.user), { replace: true })
   }
 
   const handleVerifyOtp = async otp => {
@@ -72,7 +89,7 @@ function SignIn() {
 
     if (result.user) {
       login(result.user)
-      navigate(homePathFor(result.user), { replace: true })
+      navigate(destinationFor(result.user), { replace: true })
     }
   }
 
@@ -94,7 +111,7 @@ function SignIn() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to={homePathFor(user)} replace />
+    return <Navigate to={destinationFor(user)} replace />
   }
 
   return (
@@ -111,7 +128,9 @@ function SignIn() {
     >
       {step === 1 ? (
         <>
-          <GoogleSignInButton />
+          <GoogleSignInButton
+            returnTo={reportCardRequested ? REPORT_CARD_PATH : undefined}
+          />
 
           <form onSubmit={handleSubmit}>
             {action && action.error && (

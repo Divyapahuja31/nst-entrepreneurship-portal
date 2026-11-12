@@ -79,6 +79,25 @@ export const EMAIL_CATALOG = [
     },
   },
   {
+    key: 'report-card-published',
+    label: 'Report card published, to students',
+    description:
+      'Sent to the student when an admin publishes their report card or publishes an update.',
+    canDisable: true,
+    placeholders: NAME,
+    fields: {
+      subject: { label: 'Subject', default: 'Your report card is ready' },
+      heading: { label: 'Heading', default: 'Your results are published' },
+      intro: {
+        label: 'Opening line',
+        default:
+          'Your report card is available in the Entrepreneurship Portal. Sign in and open My Report Card to view your results.',
+        multiline: true,
+      },
+      button: { label: 'Button', default: 'View your report card' },
+    },
+  },
+  {
     key: 'mentor-follow-up',
     label: 'Follow-up alert, to mentors',
     description:

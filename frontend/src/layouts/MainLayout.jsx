@@ -14,6 +14,7 @@ import {
   BookIcon,
   BriefcaseIcon,
   BuildingIcon,
+  DocTextIcon,
   EnvelopeIcon,
   CalendarIcon,
   ChatIcon,
@@ -27,7 +28,7 @@ import {
   SparklesIcon,
 } from '../components/icons'
 
-import { Navigate, Outlet, useLocation } from 'react-router'
+import { Navigate, Outlet, useLocation, useMatch } from 'react-router'
 
 import { AppBar, Drawer, DrawerHeader } from '../components/Sidebar.style'
 
@@ -102,6 +103,11 @@ const adminMenuItems = [
   },
   extraSessionsItem,
   {
+    menu: 'Report Cards',
+    icon: DocTextIcon,
+    path: '/admin/report-cards',
+  },
+  {
     menu: 'Accounts & Roles',
     icon: ShieldIcon,
     path: '/admin/accounts',
@@ -148,6 +154,11 @@ const menuFor = (user, { isStaff, isMentor, isAdmin, isBoard, isStudent }) => {
         icon: ChatIcon,
         path: '/checkins',
       },
+      {
+        menu: 'My Report Card',
+        icon: DocTextIcon,
+        path: '/report-card',
+      },
       ...commonMenuItems,
     ]
   }
@@ -160,6 +171,8 @@ export default function MiniDrawer() {
   const drawerItems = menuFor(loggedInUserData, access)
 
   const location = useLocation()
+  const isReportCardPage = useMatch('/admin/report-cards/*')
+  const showBatchPicker = access.isAdmin && !isReportCardPage
 
   const { signingOut, signOutError, handleSignOut } = useSignOut()
 
@@ -200,21 +213,21 @@ export default function MiniDrawer() {
               fontWeight: 600,
               letterSpacing: '-0.01em',
               // On a phone the admin's batch picker takes the room.
-              display: access.isAdmin ? { xs: 'none', sm: 'block' } : 'block',
+              display: showBatchPicker ? { xs: 'none', sm: 'block' } : 'block',
             }}
           >
             NST Entrepreneurship Portal
           </Typography>
-          {access.isAdmin && <BatchPicker />}
+          {showBatchPicker && <BatchPicker />}
           {access.role && (
             <Typography
               component="span"
               variant="caption"
               color="text.secondary"
               sx={{
-                ml: access.isAdmin ? 2 : 'auto',
+                ml: showBatchPicker ? 2 : 'auto',
                 fontWeight: 500,
-                display: access.isAdmin
+                display: showBatchPicker
                   ? { xs: 'none', sm: 'inline' }
                   : undefined,
               }}

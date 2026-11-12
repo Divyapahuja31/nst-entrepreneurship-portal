@@ -13,6 +13,7 @@ import {
   sendFounderSession,
   sendMentorFollowUp,
   sendMentorLowScore,
+  sendReportCardPublished,
   sendResetPasswordOtpEmail,
   sendSessionCancelled,
   sendSignupOtpEmail,
@@ -57,6 +58,11 @@ const EVERY_EMAIL = [
     'KPI_SCORED_STUDENT',
     sendStudentResult,
     { ...result, studentName: 'Priya', dashboardUrl: 'https://p.example' },
+  ],
+  [
+    'REPORT_CARD_PUBLISHED',
+    sendReportCardPublished,
+    { recipientName: 'Priya', reportUrl: 'https://p.example/report-card' },
   ],
   ['CONSECUTIVE_MID_SCORE_MENTOR', sendMentorFollowUp, { ...result, ...staff }],
   ['CONSECUTIVE_LOW_SCORE_MENTOR', sendMentorLowScore, { ...result, ...staff }],
@@ -129,7 +135,7 @@ const sendEvery = async () => {
 describe('sending through Resend', () => {
   it('posts every email to Resend with the server sender and no reply-to', async () => {
     await sendEvery()
-    assert.equal(requests.length, 9)
+    assert.equal(requests.length, EVERY_EMAIL.length + 2)
     for (const { url, method, authorization, body } of requests) {
       assert.equal(url, 'https://api.resend.com/emails')
       assert.equal(method, 'POST')
@@ -150,7 +156,7 @@ describe('sending through Resend', () => {
     assert.doesNotMatch(signup.body.subject + reset.body.subject, /\d{6}/)
 
     const logged = await EmailNotification.find().lean()
-    assert.equal(logged.length, 9)
+    assert.equal(logged.length, EVERY_EMAIL.length + 2)
     assert.ok(logged.every(row => row.status === 'SENT'))
     assert.ok(logged.every(row => row.providerMessageId?.startsWith('re_')))
   })
@@ -163,10 +169,11 @@ describe('sending through Resend', () => {
       rules: { strikes: 3 },
       templates: {
         'mentor-follow-up': { subject: 'Check in with {student} ({percent}%)' },
+        'report-card-published': { subject: 'Results ready for {name}' },
       },
     })
     await sendEvery()
-    assert.equal(requests.length, 9)
+    assert.equal(requests.length, EVERY_EMAIL.length + 2)
     for (const { body } of requests) {
       // Quoted, or the comma makes the From header invalid.
       assert.equal(body.from, '"Programme Office, NST" <noreply@nst.dev>')
@@ -174,9 +181,20 @@ describe('sending through Resend', () => {
       assert.match(body.text, /Questions\? Write to the programme office\.$/)
       assert.match(body.html, /Questions\? Write to the programme office\./)
     }
-    const followUp = requests[1].body
+    const followUp =
+      requests[
+        EVERY_EMAIL.findIndex(
+          ([type]) => type === 'CONSECUTIVE_MID_SCORE_MENTOR'
+        )
+      ].body
     assert.equal(followUp.subject, 'Check in with GreenCart (30%)')
     assert.match(followUp.text, /on three locked evaluations in a row/)
+    const report =
+      requests[
+        EVERY_EMAIL.findIndex(([type]) => type === 'REPORT_CARD_PUBLISHED')
+      ].body
+    assert.equal(report.subject, 'Results ready for Priya')
+    assert.match(report.html, /href="https:\/\/p\.example\/report-card"/)
   })
 
   it('makes no request for an email that is switched off', async () => {

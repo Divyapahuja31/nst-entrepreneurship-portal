@@ -1,3 +1,4 @@
+import { REPORT_CARD_PATH } from '@nst/shared/reportCards.js'
 import { appUrl } from '../kpiLockEmails.js'
 import {
   boardLowScoreEmail,
@@ -5,6 +6,7 @@ import {
   mentorLowScoreEmail,
   studentResultEmail,
 } from './kpiEmails.js'
+import { reportCardPublishedEmail } from './reportCardEmails.js'
 import { passwordResetEmail, signupVerificationEmail } from './authEmails.js'
 import {
   founderSessionEmail,
@@ -58,6 +60,18 @@ export const EMAIL_PREVIEWS = {
           ...result(score),
           studentName: 'Priya Sharma',
           dashboardUrl: `${appUrl()}/kpis`,
+        },
+        settings
+      ),
+  },
+  'report-card-published': {
+    label: 'Report card published',
+    usesScore: false,
+    render: (_score, settings) =>
+      reportCardPublishedEmail(
+        {
+          recipientName: 'Priya Sharma',
+          reportUrl: appUrl() + REPORT_CARD_PATH,
         },
         settings
       ),

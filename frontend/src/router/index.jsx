@@ -5,6 +5,7 @@ import {
   ROLES,
   STAFF_ROLES,
 } from '@nst/shared/permissions.js'
+import { REPORT_CARD_PATH } from '@nst/shared/reportCards.js'
 
 import EmptyLayout from '../layouts/EmptyLayout.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
@@ -17,6 +18,7 @@ import PageOnboarding, {
 } from '../pages/student/PageOnboarding.jsx'
 import PageKPIs from '../pages/student/PageKPIs.jsx'
 import PageCheckIns from '../pages/student/PageCheckIns.jsx'
+import PageReportCard from '../pages/student/PageReportCard.jsx'
 
 // Admin pages
 import PageAdminOverview from '../pages/admin/PageOverview.jsx'
@@ -31,6 +33,8 @@ import PageProgramme from '../pages/admin/PageProgramme.jsx'
 import PageExtraSessions from '../pages/admin/PageExtraSessions.jsx'
 import PageSetup from '../pages/admin/PageSetup.jsx'
 import PageEmails from '../pages/admin/PageEmails.jsx'
+import PageReportCards from '../pages/admin/PageReportCards.jsx'
+import PageStudentReportCard from '../pages/admin/PageStudentReportCard.jsx'
 
 // Common pages
 import PageSignIn from '../pages/common/PageSignIn.jsx'
@@ -64,6 +68,11 @@ import { programmeLoader } from '../api/programme.js'
 import { extraSessionsLoader } from '../api/extraSessions.js'
 import { setupLoader } from '../api/setup.js'
 import { emailsLoader } from '../api/emails.js'
+import {
+  myReportCardLoader,
+  reportCardsLoader,
+  studentReportCardLoader,
+} from '../api/reportCards.js'
 import { whenAuthReady } from '../stores/auth.js'
 
 // Runs a route's loader only for the roles RequireRole lets through, once
@@ -117,6 +126,21 @@ export const router = createBrowserRouter([
           {
             path: '/onboarding',
             Component: PageOnboarding,
+          },
+        ],
+      },
+      {
+        element: <RequireRole allow={[ROLES.STUDENT]} />,
+        children: [
+          {
+            Component: MainLayout,
+            children: [
+              {
+                path: REPORT_CARD_PATH,
+                Component: PageReportCard,
+                loader: studentLoader(myReportCardLoader),
+              },
+            ],
           },
         ],
       },
@@ -247,6 +271,16 @@ export const router = createBrowserRouter([
           {
             element: <RequireRole allow={[ROLES.ADMIN]} />,
             children: [
+              {
+                path: '/admin/report-cards',
+                Component: PageReportCards,
+                loader: forRoles([ROLES.ADMIN], reportCardsLoader),
+              },
+              {
+                path: '/admin/report-cards/:studentId',
+                Component: PageStudentReportCard,
+                loader: forRoles([ROLES.ADMIN], studentReportCardLoader),
+              },
               {
                 path: '/admin/accounts',
                 Component: PageAccounts,

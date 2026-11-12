@@ -54,6 +54,7 @@ const LIMITS = {
 }
 const FIELDS = Object.keys(LIMITS)
 const MAX_GOALS = 100
+const WAITING_FOR_MEETING = Symbol('waiting for meeting extraction')
 
 const OUTPUT_SCHEMA = {
   type: 'object',
@@ -513,31 +514,83 @@ const identifiedSpeakers = (entries, founders) => {
 // founder in it, and kept on each of its check-ins. The first answer kept
 // wins, so a retry, a second server or a sibling check-in all use the same
 // goals and never make duplicate KPIs.
-const goalsFor = async (checkIn, meetingDate) => {
-  const stored = checkIn.kpiExtraction.candidates
-  if (Array.isArray(stored)) {
-    return stored
-  }
+const requestGoals = async (checkIn, meetingDate) => {
   const ventures = await CheckIn.distinct('venture', sameMeeting(checkIn))
   const founders = await activeFounders({ venture: { $in: ventures } })
-  const kpis = await extractWithTimeout({
+  return extractWithTimeout({
     text: checkIn.transcript.text,
     meetingDate,
     founders,
     timeZone: timeZoneOf(checkIn),
     identified: identifiedSpeakers(checkIn.transcript.entries, founders),
   })
+}
+
+const shareGoals = async (checkIn, candidates) => {
   await CheckIn.updateMany(
     {
       ...sameMeeting(checkIn),
       'kpiExtraction.candidates': { $exists: false },
     },
-    { $set: { 'kpiExtraction.candidates': keepable(kpis) } }
+    { $set: { 'kpiExtraction.candidates': candidates } }
   )
+}
+
+// Every worker locks the same, oldest check-in before asking Gemini.
+// A crashed or failed request leaves a lease that expires, allowing retry.
+const groupGoalsFor = async (checkIn, meetingDate) => {
+  const anchor = await CheckIn.findOne(sameMeeting(checkIn))
+    .sort({ _id: 1 })
+    .select('_id kpiExtraction.candidates')
+  if (Array.isArray(anchor.kpiExtraction.candidates)) {
+    await shareGoals(checkIn, anchor.kpiExtraction.candidates)
+    return anchor.kpiExtraction.candidates
+  }
+  const leaseUntil = checkIn.kpiExtraction.leaseUntil
+  const now = new Date(leaseUntil.getTime() - LEASE_MS)
+  const claimed = await CheckIn.findOneAndUpdate(
+    {
+      _id: anchor._id,
+      'kpiExtraction.candidates': { $exists: false },
+      $or: [
+        { 'kpiExtraction.candidatesLeaseUntil': null },
+        { 'kpiExtraction.candidatesLeaseUntil': { $lt: now } },
+      ],
+    },
+    { $set: { 'kpiExtraction.candidatesLeaseUntil': leaseUntil } }
+  )
+  if (!claimed) {
+    return WAITING_FOR_MEETING
+  }
+  const candidates = keepable(await requestGoals(checkIn, meetingDate))
+  const saved = await CheckIn.findOneAndUpdate(
+    { _id: anchor._id, 'kpiExtraction.candidatesLeaseUntil': leaseUntil },
+    {
+      $set: { 'kpiExtraction.candidates': candidates },
+      $unset: { 'kpiExtraction.candidatesLeaseUntil': '' },
+    }
+  )
+  if (!saved) {
+    return WAITING_FOR_MEETING
+  }
+  await shareGoals(checkIn, candidates)
+  return candidates
+}
+
+const goalsFor = async (checkIn, meetingDate) => {
+  const stored = checkIn.kpiExtraction.candidates
+  if (Array.isArray(stored)) {
+    return stored
+  }
+  if (checkIn.group) {
+    return groupGoalsFor(checkIn, meetingDate)
+  }
+  const kpis = keepable(await requestGoals(checkIn, meetingDate))
+  await shareGoals(checkIn, kpis)
   const kept = await CheckIn.findById(checkIn._id)
     .select('kpiExtraction.candidates')
     .lean()
-  return kept?.kpiExtraction?.candidates ?? keepable(kpis)
+  return kept?.kpiExtraction?.candidates ?? kpis
 }
 
 // Why a check-in has nothing to extract, or null. Not asked again once it
@@ -571,6 +624,9 @@ const runOne = async checkIn => {
     return { status: 'SKIPPED', error: skip }
   }
   const kpis = await goalsFor(checkIn, meetingDate)
+  if (kpis === WAITING_FOR_MEETING) {
+    return { deferred: true }
+  }
   await CheckIn.updateOne(ownLease(checkIn), {
     $set: { 'kpiExtraction.started': true },
   })
@@ -652,6 +708,17 @@ export const extractCheckInKpis = async ({ now } = {}) => {
       break
     }
     const outcome = await settle(checkIn)
+    if (outcome.deferred) {
+      // Waiting for a sibling is not a failed Gemini attempt. Try again on
+      // a later pass, after the meeting's owner has had time to finish.
+      await CheckIn.updateOne(ownLease(checkIn), {
+        $set: {
+          'kpiExtraction.leaseUntil': new Date(clock().getTime() + MINUTE_MS),
+        },
+        $inc: { 'kpiExtraction.attempts': -1 },
+      })
+      continue
+    }
     summary[outcome.status === 'FAILED' ? 'failed' : 'done']++
     await CheckIn.updateOne(ownLease(checkIn), {
       $set: fieldsFor(outcome, checkIn.kpiExtraction.attempts, clock()),

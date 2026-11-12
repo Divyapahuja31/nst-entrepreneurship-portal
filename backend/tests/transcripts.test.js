@@ -154,10 +154,28 @@ describe('collecting transcripts', () => {
     const checkIn = await pastCheckIn(2)
     addRecord(checkIn, 'conferenceRecords/r1')
 
-    await pollTranscripts()
+    await pollTranscripts(new Date(Date.now() + GIVE_UP_MS))
     const saved = await CheckIn.findById(checkIn._id)
     assert.equal(saved.status, 'HELD')
     assert.equal(saved.transcript.status, 'UNAVAILABLE')
+  })
+
+  it('keeps polling when the transcript appears after the conference ends', async () => {
+    const checkIn = await pastCheckIn(1)
+    addRecord(checkIn, 'conferenceRecords/delayed')
+    const now = new Date()
+    await pollTranscripts(now)
+    const waiting = await CheckIn.findById(checkIn._id)
+    assert.equal(waiting.status, 'HELD')
+    assert.equal(waiting.transcript.status, 'PENDING')
+    assert.ok(waiting.transcript.nextPollAt > now)
+
+    addTranscript('conferenceRecords/delayed')
+    await pollTranscripts(new Date(now.getTime() + 16 * MINUTE_MS))
+    const ready = await CheckIn.findById(checkIn._id)
+    assert.equal(ready.transcript.status, 'READY')
+    assert.equal(ready.transcript.entries.length, 2)
+    assert.equal(ready.transcript.nextPollAt, null)
   })
 
   it('keeps waiting for a conference that is still going', async () => {

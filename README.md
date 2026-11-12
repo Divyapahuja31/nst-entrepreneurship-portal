@@ -11,9 +11,31 @@ Students run startups and track them with KPIs and bi-weekly reports. Mentors an
 ```sh
 npm install
 cp backend/.env.example backend/.env   # then fill it in
-npm run seed:all -w backend            # roles, campus, batches, industries
+npm run seed:all -w backend            # roles, campus, batches, industries, report card template
 npm run dev                            # backend and frontend together
 ```
+
+## Report card demo
+
+Run `npm run demo:report-cards` from the project root. Open
+`http://localhost:5173/signin` in two browser sessions and use the admin and
+student credentials printed in the terminal. The demo uses a temporary database
+and the usual frontend and API ports, 5173 and 4000.
+
+The demo includes **Monthly Entrepreneurship Evaluation**, a numeric template
+with six monthly columns and the four rubric pillars. To add this template to an
+existing database, run `npm run seed:report-cards -w backend`.
+
+To use Google during the demo, supply the exact school address you control when
+starting it. For example, replace the address in this command with your ADYPU
+Google account:
+
+```sh
+DEMO_STUDENT_EMAIL='your-name@adypu.edu.in' npm run demo:report-cards
+```
+
+`DEMO_ADMIN_EMAIL` accepts a Newton School address if you also want to use
+Google to sign in as the admin. The default demo accounts use password sign-in.
 
 ## Roles and permissions
 
@@ -138,6 +160,7 @@ Under `npm run dev` nothing is sent: each email is printed in the backend's term
 
 | When | Who | Email |
 |---|---|---|
+| An admin publishes or updates a report card | Its student | A link to My Report Card |
 | A KPI's grade is locked | Its founder, or every active founder for a startup-wide KPI | The result, with score and status |
 | That grade is the second in a row below 70% | Every mentor of the startup | Follow-up (above 40%) or low score (40% or below) |
 | That grade is the second in a row at 40% or below | Every academic board member | Low-score notification with the student, batch and mentors |

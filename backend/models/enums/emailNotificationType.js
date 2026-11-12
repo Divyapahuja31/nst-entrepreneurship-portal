@@ -1,5 +1,6 @@
 export default {
   KPI_SCORED_STUDENT: 'KPI result to student',
+  REPORT_CARD_PUBLISHED: 'Report card published to student',
   CONSECUTIVE_LOW_SCORE_BOARD: 'Consecutive low scores, to the academic board',
   CONSECUTIVE_LOW_SCORE_MENTOR: 'Consecutive low scores, to the mentor',
   CONSECUTIVE_MID_SCORE_MENTOR: 'Consecutive middling scores, to the mentor',

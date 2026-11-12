@@ -46,6 +46,16 @@ const connect = async user => {
     .set('Cookie', [cookieFor(user), ...cookies].join('; '))
 }
 
+const signIn = async returnTo => {
+  const start = await request(app).get('/api/auth/google').query({ returnTo })
+  const state = new URL(start.headers.location).searchParams.get('state')
+  const cookies = start.headers['set-cookie'].map(c => c.split(';')[0])
+  return request(app)
+    .get('/api/auth/google/callback')
+    .query({ state, code: 'code' })
+    .set('Cookie', cookies.join('; '))
+}
+
 const outcome = res =>
   new URL(res.headers.location, 'http://localhost').searchParams.get('google')
 
@@ -111,14 +121,25 @@ describe('connecting a Google account', () => {
   it('still signs in as usual without connecting', async t => {
     const owner = data.users.owner
     googleSays(t, { sub: 'olu-google-id', email: owner.email })
-    const start = await request(app).get('/api/auth/google')
-    const state = new URL(start.headers.location).searchParams.get('state')
-    const cookies = start.headers['set-cookie'].map(c => c.split(';')[0])
-    const res = await request(app)
-      .get('/api/auth/google/callback')
-      .query({ state, code: 'code' })
-      .set('Cookie', cookies.join('; '))
+    const res = await signIn()
     assert.equal(outcome(res), null)
     assert.ok(res.headers['set-cookie'].some(c => /^token=[^;]/.test(c)))
+  })
+
+  it('returns the student to My Report Card after Google sign-in', async t => {
+    const owner = data.users.owner
+    googleSays(t, { sub: 'olu-google-id', email: owner.email })
+    const res = await signIn('/report-card')
+    assert.equal(res.status, 302)
+    assert.equal(
+      new URL(res.headers.location, 'http://localhost').pathname,
+      '/report-card'
+    )
+    assert.ok(res.headers['set-cookie'].some(c => /^token=[^;]/.test(c)))
+
+    const fallback = await signIn('https://outside.example/report-card')
+    const location = new URL(fallback.headers.location, 'http://localhost')
+    assert.equal(location.pathname, '/')
+    assert.notEqual(location.hostname, 'outside.example')
   })
 })

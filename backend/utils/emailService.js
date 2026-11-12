@@ -7,6 +7,7 @@ import {
   mentorLowScoreEmail,
   studentResultEmail,
 } from './emailTemplates/kpiEmails.js'
+import { reportCardPublishedEmail } from './emailTemplates/reportCardEmails.js'
 import {
   passwordResetEmail,
   signupVerificationEmail,
@@ -125,7 +126,7 @@ export const deliver = async ({
   return { messageId }
 }
 
-// ---------------------------------------------- KPI and programme emails
+// ------------------------------------------------------ notification emails
 // recipient: { email, userId? }. For a KPI email dedupeKey identifies the
 // KPI. key names the email in the settings: one an admin switched off is
 // not sent and returns { skipped: true, disabled: true }.
@@ -151,6 +152,11 @@ export const sendStudentResult = toRecipient(
   'KPI_SCORED_STUDENT',
   'student-result',
   studentResultEmail
+)
+export const sendReportCardPublished = toRecipient(
+  'REPORT_CARD_PUBLISHED',
+  'report-card-published',
+  reportCardPublishedEmail
 )
 export const sendMentorFollowUp = toRecipient(
   'CONSECUTIVE_MID_SCORE_MENTOR',

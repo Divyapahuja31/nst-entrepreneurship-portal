@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { ROLES } from '@nst/shared/permissions.js'
 
 import { useAuthStore } from './auth'
+import { requestWithBatch } from './batchRequest.js'
 
 // The batch an admin is looking at (the picker in the header), or null for
 // every batch. It narrows the staff lists: Overview, Startups, Founders,
@@ -43,18 +44,8 @@ export const batchParams = () => {
 // Runs request(params) with the chosen batch. These lists answer 400 only
 // for a batch that no longer exists (removed in School Setup), so then the
 // batch is cleared and the request is made for every batch.
-export const withBatch = async request => {
-  const params = batchParams()
-  if (!params.batch) {
-    return request({})
-  }
-  try {
-    return await request(params)
-  } catch (err) {
-    if (err.response?.status !== 400) {
-      throw err
-    }
-    useBatchStore.getState().setBatch(null)
-    return request({})
-  }
-}
+export const withBatch = request =>
+  requestWithBatch(request, {
+    getParams: batchParams,
+    clearBatch: () => useBatchStore.getState().setBatch(null),
+  })

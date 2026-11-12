@@ -166,8 +166,9 @@ const inspect = async (google, checkIn, giveUp) => {
       done: true,
     }
   }
-  // The meeting is over and nobody turned transcription on.
-  if (!stillMaking || giveUp) {
+  // An empty list just after the meeting can precede the transcript
+  // resource itself. Keep checking until the same cutoff as other delays.
+  if (giveUp) {
     return { fields: { ...held, ...unavailable }, done: true }
   }
   return { fields: held, done: false }

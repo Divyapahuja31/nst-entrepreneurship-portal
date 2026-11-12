@@ -658,6 +658,94 @@ describe('review findings', () => {
     assert.equal(String(oz.venture), String(data.ventures.beta._id))
   })
 
+  it('shares one Gemini call between concurrent workers in a group meeting', async () => {
+    const group = { group: true, googleEventId: 'concurrent-group' }
+    const alpha = await readyCheckIn(group)
+    const beta = await readyCheckIn({
+      ...group,
+      venture: data.ventures.beta._id,
+    })
+    const started = Promise.withResolvers()
+    const answer = Promise.withResolvers()
+    setKpiExtractor(async input => {
+      calls.push(input)
+      started.resolve()
+      return calls.length === 1 ? answer.promise : GOALS
+    })
+    const first = extractCheckInKpis()
+    await started.promise
+    try {
+      assert.deepEqual(await extractCheckInKpis(), { done: 0, failed: 0 })
+      assert.equal(calls.length, 1)
+      const deferred = await CheckIn.findById(beta._id)
+      assert.equal(deferred.kpiExtraction.attempts, 0)
+    } finally {
+      answer.resolve(GOALS)
+      await first
+    }
+    await extractCheckInKpis({ now: new Date(Date.now() + 2 * 60 * 1000) })
+    assert.equal(calls.length, 1)
+    assert.equal((await CheckIn.findById(alpha._id)).kpiExtraction.created, 2)
+    assert.equal((await CheckIn.findById(beta._id)).kpiExtraction.created, 1)
+  })
+
+  it('retries a failed group extraction after the shared lease expires', async () => {
+    const group = { group: true, googleEventId: 'retry-group' }
+    const alpha = await readyCheckIn(group)
+    const beta = await readyCheckIn({
+      ...group,
+      venture: data.ventures.beta._id,
+    })
+    setKpiExtractor(async input => {
+      calls.push(input)
+      if (calls.length === 1) {
+        throw new Error('Gemini unavailable')
+      }
+      return GOALS
+    })
+    assert.deepEqual(await extractCheckInKpis(), { done: 0, failed: 1 })
+    assert.equal(calls.length, 1)
+    assert.equal((await CheckIn.findById(beta._id)).kpiExtraction.attempts, 0)
+    assert.deepEqual(
+      await extractCheckInKpis({ now: new Date(Date.now() + 11 * 60 * 1000) }),
+      { done: 2, failed: 0 }
+    )
+    assert.equal(calls.length, 2)
+    assert.equal((await CheckIn.findById(alpha._id)).kpiExtraction.created, 2)
+    assert.equal((await CheckIn.findById(beta._id)).kpiExtraction.created, 1)
+  })
+
+  it('discards a group answer from a worker whose shared lease expired', async () => {
+    const group = { group: true, googleEventId: 'expired-group' }
+    const alpha = await readyCheckIn(group)
+    await readyCheckIn({ ...group, venture: data.ventures.beta._id })
+    const started = Promise.withResolvers()
+    const answer = Promise.withResolvers()
+    setKpiExtractor(async input => {
+      calls.push(input)
+      if (calls.length === 1) {
+        started.resolve()
+        return answer.promise
+      }
+      return GOALS
+    })
+    const first = extractCheckInKpis()
+    await started.promise
+    try {
+      await extractCheckInKpis({ now: new Date(Date.now() + 11 * 60 * 1000) })
+    } finally {
+      answer.resolve([])
+      await first
+    }
+    const run = (await CheckIn.findById(alpha._id)).kpiExtraction
+    assert.equal(run.created, 2)
+    assert.deepEqual(
+      run.candidates.map(kpi => kpi.title),
+      GOALS.map(kpi => kpi.title)
+    )
+    assert.equal(calls.length, 2)
+  })
+
   it('caps the length of what Gemini wrote before keeping it', async () => {
     setKpiExtractor(fake([{ ...GOALS[0], description: 'x'.repeat(50000) }]))
     const checkIn = await readyCheckIn()

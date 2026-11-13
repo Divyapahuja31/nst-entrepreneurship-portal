@@ -644,9 +644,10 @@ const runOne = async checkIn => {
 }
 
 // Takes one check-in that is due, so two servers never work on the same one.
-const claimNext = now =>
+const claimNext = (now, checkInId) =>
   CheckIn.findOneAndUpdate(
     {
+      ...(checkInId && { _id: checkInId }),
       'transcript.status': 'READY',
       kpiBotMode: { $in: KPI_BOT_RUNS },
       'kpiExtraction.status': { $nin: ['DONE', 'SKIPPED'] },
@@ -692,8 +693,8 @@ const settle = async checkIn => {
 // after PASS_BUDGET_MS. Returns how many it finished and how many failed (to
 // be retried on a later pass). `now` lets tests move the clock; time still
 // runs on from it during the pass, so a check-in taken late gets a full
-// lease.
-export const extractCheckInKpis = async ({ now } = {}) => {
+// lease. The local browser demo can limit the pass to its sample check-in.
+export const extractCheckInKpis = async ({ now, checkInId } = {}) => {
   const summary = { done: 0, failed: 0 }
   if (extractor === geminiExtractor && !process.env.GEMINI_API_KEY) {
     return summary
@@ -703,7 +704,7 @@ export const extractCheckInKpis = async ({ now } = {}) => {
   const clock = () => new Date(Date.now() + offset)
   const inBudget = () => Date.now() - startedAt < PASS_BUDGET_MS
   for (let i = 0; i < BATCH && inBudget(); i++) {
-    const checkIn = await claimNext(clock())
+    const checkIn = await claimNext(clock(), checkInId)
     if (!checkIn) {
       break
     }

@@ -14,11 +14,8 @@
 import mongoose from 'mongoose'
 import { ROLES } from '@nst/shared/permissions.js'
 
-import Batch from '../models/batch.js'
-import Campus from '../models/campus.js'
 import CheckIn from '../models/checkIn.js'
 import Founder from '../models/founder.js'
-import Industry from '../models/industry.js'
 import KPI from '../models/kpi.js'
 import KpiRecommendation from '../models/kpiRecommendation.js'
 import Role from '../models/role.js'
@@ -32,114 +29,19 @@ import {
   speakerAccounts,
 } from '../utils/kpiBot.js'
 import { migrateRbac } from '../utils/rbacMigration.js'
+import {
+  EVENT_ID,
+  PEOPLE,
+  VENTURE_NAME,
+  createHeldCheckIn,
+  createPeople,
+  createStartup,
+} from './kpi-bot-demo-data.js'
 import { runWithDatabase } from './connect.js'
 
 const PASSWORD = 'Demo@12345'
-const VENTURE_NAME = 'EduSpark (demo)'
-const EVENT_ID = 'demo-kpi-bot'
 const PRESENTER = 'kanishk.ranjan@adypu.edu.in'
 const PORTAL = process.env.FRONTEND_URL || 'http://localhost:5173'
-
-// The people in the meeting. Founders have Google accounts, as the portal
-// requires; Aarav joins Meet from his phone, under a name nobody could match
-// to him, so only his account tells the bot who he is.
-const PEOPLE = {
-  mentor: {
-    username: 'Neha Kapoor',
-    email: 'neha.kapoor.demo@newtonschool.co',
-    role: ROLES.MENTOR,
-  },
-  aarav: {
-    username: 'Aarav Mehta',
-    email: 'aarav.mehta.demo@adypu.edu.in',
-    role: ROLES.STUDENT,
-    googleId: 'demo-google-aarav',
-    inMeet: "Aarav's Pixel",
-  },
-  riya: {
-    username: 'Riya Sharma',
-    email: 'riya.sharma.demo@adypu.edu.in',
-    role: ROLES.STUDENT,
-    googleId: 'demo-google-riya',
-    inMeet: 'Riya Sharma',
-  },
-}
-
-// Who says what, and how far into the meeting (mm:ss). Rahul is a guest
-// without an account, an investor friend: what he says is no one's KPI.
-const MEETING = [
-  [
-    '00:05',
-    'mentor',
-    'Hi both, let us go through last two weeks and then set the goals for the next sprint.',
-  ],
-  [
-    '00:21',
-    'aarav',
-    'Sure. We got 80 signups from the college fest stall last week, mostly first years.',
-  ],
-  [
-    '00:40',
-    'mentor',
-    'Nice. How many of them are actually using the app every week?',
-  ],
-  [
-    '00:52',
-    'aarav',
-    'Around 30 come back weekly. The quiz feature is what keeps them.',
-  ],
-  [
-    '01:15',
-    'mentor',
-    'Then retention is the thing. What can you commit to for the next two weeks?',
-  ],
-  [
-    '01:31',
-    'aarav',
-    'I will ship version one of the Android app on the Play Store by next Friday.',
-  ],
-  [
-    '01:50',
-    'aarav',
-    'And we will reach 200 weekly active users by the 15th of next month.',
-  ],
-  ['02:10', 'mentor', 'Make that 250. With the fest crowd you can do it.'],
-  ['02:18', 'aarav', 'Okay, 250 weekly active users by the 15th then.'],
-  ['02:40', 'mentor', 'Riya, what about the schools?'],
-  [
-    '02:55',
-    'riya',
-    'I spoke to four principals. Two want a trial with their class nine students.',
-  ],
-  [
-    '03:20',
-    'riya',
-    'I will do 30 customer interviews with teachers in the next two weeks.',
-  ],
-  [
-    '03:41',
-    'riya',
-    'And I will close two paid pilot schools by the end of this month.',
-  ],
-  [
-    '04:02',
-    'rahul',
-    'If you get those pilots, I can intro you to two angel investors in Pune.',
-  ],
-  [
-    '04:20',
-    'mentor',
-    'Good. Riya, also put together a one page pricing sheet for schools before the pilots.',
-  ],
-  ['04:35', 'riya', 'Yes, I will have the pricing sheet ready by Monday.'],
-  [
-    '04:58',
-    'mentor',
-    'Everyone should keep posting updates on the group, that is for all of you.',
-  ],
-  ['05:10', 'mentor', 'Great session. See you in two weeks.'],
-]
-const GUEST = 'Rahul (Guest)'
 
 const option = name =>
   process.argv
@@ -180,112 +82,6 @@ const clearEarlierRun = async () => {
   await Venture.deleteMany({ _id: { $in: ventureIds } })
   await User.deleteMany({ _id: { $in: users.map(user => user._id) } })
   return deletedCount
-}
-
-const findOrCreate = (Model, filter, fields = {}) =>
-  Model.findOneAndUpdate(
-    filter,
-    { $setOnInsert: { ...filter, ...fields } },
-    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-  )
-
-const createPeople = async () => {
-  const campus = await findOrCreate(
-    Campus,
-    { name: 'ADYPU' },
-    { location: 'Pune' }
-  )
-  const batch = await findOrCreate(
-    Batch,
-    { name: '2025-2029', campus: campus._id },
-    { startYear: 2025, endYear: 2029 }
-  )
-  const roles = Object.fromEntries(
-    (await Role.find()).map(role => [role.name, role._id])
-  )
-  const people = {}
-  for (const [key, person] of Object.entries(PEOPLE)) {
-    const student = person.role === ROLES.STUDENT
-    people[key] = await User.create({
-      username: person.username,
-      email: person.email,
-      password: PASSWORD,
-      role: roles[person.role],
-      isEmailVerified: true,
-      ...(student && {
-        googleId: person.googleId,
-        campus: campus._id,
-        batch: batch._id,
-      }),
-    })
-  }
-  return { people, campus }
-}
-
-const createStartup = async ({ people, campus }) => {
-  const industry = await findOrCreate(Industry, { name: 'Education' })
-  const venture = await Venture.create({
-    name: VENTURE_NAME,
-    description: 'Quiz-based revision app for school and college students.',
-    campus: campus._id,
-    industry: industry._id,
-    mentors: [people.mentor._id],
-  })
-  await Founder.create([
-    { user: people.aarav._id, venture: venture._id },
-    { user: people.riya._id, venture: venture._id },
-  ])
-  return venture
-}
-
-// The meeting, held yesterday at 4 pm India time, as the transcript poller
-// would have saved it from Meet.
-const createHeldCheckIn = async ({ people, venture }) => {
-  const scheduledAt = new Date()
-  scheduledAt.setUTCDate(scheduledAt.getUTCDate() - 1)
-  scheduledAt.setUTCHours(10, 30, 0, 0)
-
-  const speakerOf = key =>
-    key === 'rahul'
-      ? { speaker: GUEST }
-      : {
-          speaker: PEOPLE[key].inMeet ?? PEOPLE[key].username,
-          googleId: PEOPLE[key].googleId,
-        }
-  const entries = MEETING.map(([at, key, text]) => {
-    const [mm, ss] = at.split(':').map(Number)
-    return {
-      ...speakerOf(key),
-      text,
-      startTime: new Date(scheduledAt.getTime() + (mm * 60 + ss) * 1000),
-    }
-  })
-  const text = MEETING.map(
-    ([at], i) => `[${at}] ${entries[i].speaker}: ${entries[i].text}`
-  ).join('\n')
-
-  return CheckIn.create({
-    venture: venture._id,
-    mentor: people.mentor._id,
-    scheduledAt,
-    durationMinutes: 30,
-    timeZone: 'Asia/Kolkata',
-    googleEventId: EVENT_ID,
-    meetUrl: 'https://meet.google.com/demo-kpi-bot',
-    status: 'HELD',
-    // A mentor's own check-in has the KPI bot only when they add it.
-    kpiBotMode: 'ON',
-    // Held for the demo's own Gemini step, so the server's background job
-    // doesn't take it first.
-    kpiExtraction: { leaseUntil: new Date(Date.now() + 60 * 60 * 1000) },
-    transcript: {
-      status: 'READY',
-      entries,
-      text,
-      truncated: false,
-      fetchedAt: new Date(),
-    },
-  })
 }
 
 const makeAdmin = async email => {
@@ -447,7 +243,7 @@ runWithDatabase(async () => {
   say(`  Removed ${cleared} KPIs from the last run.`)
 
   await step('A startup and its mentor')
-  const { people, campus } = await createPeople()
+  const { people, campus } = await createPeople(PASSWORD)
   const venture = await createStartup({ people, campus })
   say(`  Startup:  ${VENTURE_NAME}`)
   say(`  Mentor:   ${people.mentor.username}`)
@@ -455,7 +251,12 @@ runWithDatabase(async () => {
   await makeAdmin(option('admin') || PRESENTER)
 
   await step("Yesterday's check-in on Google Meet")
-  const checkIn = await createHeldCheckIn({ people, venture })
+  const checkIn = await createHeldCheckIn({
+    people,
+    venture,
+    // Hold the meeting until this script is ready to extract it.
+    leaseUntil: new Date(Date.now() + 60 * 60 * 1000),
+  })
   say(`  Held ${dateOf(checkIn.scheduledAt)}. Meet's transcript:\n`)
   for (const line of checkIn.transcript.text.split('\n')) {
     say(`    ${line}`)

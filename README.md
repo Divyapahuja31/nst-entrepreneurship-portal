@@ -15,6 +15,29 @@ npm run seed:all -w backend            # roles, campus, batches, industries, rep
 npm run dev                            # backend and frontend together
 ```
 
+## KPI bot browser demo
+
+From the project root, run `npm run demo:kpi-bot` and open
+`http://localhost:5173/signin`. Use the demo email addresses and password
+printed in your terminal. The demo uses ports 5173 and 4000 and a temporary
+database. Stop any other local portal server first.
+
+1. Sign in as **Aarav** and open **Check-Ins → Transcript**.
+2. Click **Add KPI Bot**. The dialog updates with the number of recommendations.
+3. Click **Review Recommended KPIs**, then accept one suggestion and dismiss
+   the other. The accepted suggestion appears as a draft under **Your KPIs**.
+4. Optionally sign in as **Riya** in a second browser session to see her
+   recommendation.
+
+The demo supplies a fixed extraction response for the sample transcript. The
+portal runs its usual quote and speaker checks and creates real demo
+recommendations. You can run it without Google Meet or a Gemini key. Stop and
+restart the command to reset the demo.
+
+The separate terminal walkthrough with live Gemini is available as
+`npm run demo:kpi-bot -w backend -- --db=<demo-database-name>`. It uses the
+database configured in `MONGODB_URI`.
+
 ## Report card demo
 
 Run `npm run demo:report-cards` from the project root. Open

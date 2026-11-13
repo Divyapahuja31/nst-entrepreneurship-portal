@@ -41,6 +41,7 @@ const recommend = (founder, fields = {}) =>
 const as = user => ({
   get: url => request(app).get(url).set('Cookie', cookieFor(user)),
   post: url => request(app).post(url).set('Cookie', cookieFor(user)),
+  put: url => request(app).put(url).set('Cookie', cookieFor(user)),
 })
 
 const meeting = (fields = {}) =>
@@ -62,6 +63,7 @@ beforeEach(async () => {
   vic = await User.create({
     username: 'Vic Cofounder',
     email: 'vic@adypu.edu.in',
+    googleId: 'vic-google',
     password: 'password123',
     role: data.users.owner.role,
   })
@@ -204,6 +206,63 @@ describe('adding the KPI bot to a meeting', () => {
       ).status,
       409
     )
+  })
+
+  it('lets an active founder run the bot on the local demo check-in only', async t => {
+    const demo = await meeting({ googleEventId: 'demo-kpi-bot' })
+    const ordinary = await meeting({ googleEventId: 'another-event' })
+    const founder = as(data.users.owner)
+    const demoUrl = `/api/checkins/${demo.id}`
+    const ordinaryUrl = `/api/checkins/${ordinary.id}`
+    assert.equal((await founder.post(demoUrl + '/kpi-bot')).status, 403)
+
+    app.locals.kpiDemoCheckInId = demo.id
+    t.after(() => {
+      delete app.locals.kpiDemoCheckInId
+    })
+
+    const visible = await founder.get(demoUrl)
+    assert.equal(visible.status, 200)
+    assert.equal(visible.body.checkIn.canRunDemoBot, true)
+    assert.equal(
+      (await founder.get(ordinaryUrl)).body.checkIn.canRunDemoBot,
+      undefined
+    )
+    assert.equal((await founder.post(ordinaryUrl + '/kpi-bot')).status, 403)
+    assert.equal(
+      (await founder.put(demoUrl + '/notes').send({ notes: 'Test' })).status,
+      403
+    )
+    assert.equal(
+      (await as(data.users.outsider).post(demoUrl + '/kpi-bot')).status,
+      403
+    )
+    await Founder.updateOne({ user: vic._id }, { status: 'LEFT' })
+    assert.equal((await as(vic).post(demoUrl + '/kpi-bot')).status, 403)
+
+    const added = await founder.post(demoUrl + '/kpi-bot')
+    assert.equal(added.status, 200)
+    assert.equal(added.body.checkIn.kpiBot.mode, 'ON')
+  })
+
+  it('activates the demo bot only once across concurrent founder requests', async t => {
+    const demo = await meeting({ googleEventId: 'demo-kpi-bot' })
+    app.locals.kpiDemoCheckInId = demo.id
+    t.after(() => {
+      delete app.locals.kpiDemoCheckInId
+    })
+
+    const url = `/api/checkins/${demo.id}/kpi-bot`
+    const responses = await Promise.all([
+      as(data.users.owner).post(url),
+      as(vic).post(url),
+    ])
+    assert.deepEqual(responses.map(res => res.status).sort(), [200, 409])
+    assert.equal(
+      responses.find(res => res.status === 409).body.kpiBot.mode,
+      'ON'
+    )
+    assert.equal((await CheckIn.findById(demo._id)).kpiBotMode, 'ON')
   })
 
   it('adds it for every startup in a group session', async () => {

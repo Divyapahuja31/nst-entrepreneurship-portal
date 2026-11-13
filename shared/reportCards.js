@@ -101,6 +101,14 @@ const layoutStructureError = layout => {
   ) {
     return `Use up to ${REPORT_CARD_LIMITS.assessments} assessment columns.`
   }
+  if (
+    assessments.some(
+      item =>
+        item.showAverage !== undefined && typeof item.showAverage !== 'boolean'
+    )
+  ) {
+    return 'Choose whether to show an average for each assessment.'
+  }
   if (layout.subjects !== undefined && !validSubjects(layout.subjects)) {
     return 'Give each template subject a unique name and a maximum mark greater than zero.'
   }
@@ -142,6 +150,9 @@ export const normalizeGradeLayout = layout => ({
       id: item.id,
       name: item.name.trim(),
       max: validMaximum(item.max) ? Number(item.max) : 100,
+      ...(typeof item.showAverage === 'boolean' && {
+        showAverage: item.showAverage,
+      }),
     })),
   })),
   ...(layout.subjects && {
@@ -179,6 +190,41 @@ export const reportGradeError = (
   return Number.isFinite(mark) && mark <= maximum
     ? ''
     : `Enter a mark from 0 to ${maximum}.`
+}
+
+// Each entry corresponds to an assessment column. Undefined means the
+// average is disabled, while null means there are no valid marks yet.
+// Older numeric layouts have no setting, so they show averages by default.
+export const reportColumnAverages = (layout, rows) => {
+  if (layout?.mode !== 'numeric') {
+    return []
+  }
+  return reportAssessments(layout).map((assessment, index) => {
+    if (assessment.showAverage === false) {
+      return undefined
+    }
+    let count = 0
+    let total = 0
+    for (const row of rows) {
+      const subject = row[0]
+      const grade = row[index + 1]?.trim()
+      if (
+        !subject.trim() ||
+        !grade ||
+        reportGradeError(
+          grade,
+          layout.mode,
+          assessment,
+          subjectMarkMaximum(layout, subject)
+        )
+      ) {
+        continue
+      }
+      count++
+      total += readMark(grade)
+    }
+    return count ? total / count : null
+  })
 }
 
 export const gradedReportError = (layout, rows) => {

@@ -17,6 +17,7 @@ import {
   reportGradeError,
   subjectMarkMaximum,
 } from '@nst/shared/reportCards.js'
+import GradeAverageFooter from '../../components/GradeAverageFooter'
 import GradeTableHead, {
   SubjectCell,
   SubjectMaximum,
@@ -173,6 +174,7 @@ export default function GradeEntryTable({ layout, rows, setRows, disabled }) {
               </TableRow>
             )}
           </TableBody>
+          <GradeAverageFooter layout={layout} rows={rows} actions />
         </Table>
       </TableContainer>
       <Button

@@ -1,6 +1,8 @@
 import {
   Box,
   Button,
+  Checkbox,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Stack,
@@ -60,50 +62,71 @@ function TermFields({ term, position, layout, onChange, disabled }) {
         </IconButton>
       </Stack>
       {term.assessments.map((item, index) => (
-        <Stack
-          key={item.id}
-          direction="row"
-          spacing={1}
-          sx={{ alignItems: 'center' }}
-        >
-          <TextField
-            label={`Assessment ${index + 1}`}
-            value={item.name}
-            onChange={event =>
-              updateAssessment(item.id, { name: event.target.value })
-            }
-            size="small"
-            disabled={disabled}
-            fullWidth
-            slotProps={{ htmlInput: { maxLength: limits.column } }}
-          />
-          {numeric && (
+        <Box key={item.id}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <TextField
-              label="Max"
-              size="small"
-              value={item.max}
-              disabled={disabled}
+              label={`Assessment ${index + 1}`}
+              value={item.name}
               onChange={event =>
-                updateAssessment(item.id, { max: event.target.value })
+                updateAssessment(item.id, { name: event.target.value })
               }
-              slotProps={{ htmlInput: { inputMode: 'decimal', maxLength: 10 } }}
-              sx={{ width: 86, flexShrink: 0 }}
+              size="small"
+              disabled={disabled}
+              fullWidth
+              slotProps={{ htmlInput: { maxLength: limits.column } }}
+            />
+            {numeric && (
+              <TextField
+                label="Max"
+                size="small"
+                value={item.max}
+                disabled={disabled}
+                onChange={event =>
+                  updateAssessment(item.id, { max: event.target.value })
+                }
+                slotProps={{
+                  htmlInput: { inputMode: 'decimal', maxLength: 10 },
+                }}
+                sx={{ width: 86, flexShrink: 0 }}
+              />
+            )}
+            <IconButton
+              aria-label={`Remove assessment ${index + 1} from term ${position}`}
+              disabled={disabled || term.assessments.length === 1}
+              onClick={() =>
+                update({
+                  assessments: term.assessments.filter(
+                    entry => entry.id !== item.id
+                  ),
+                })
+              }
+            >
+              <TrashIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+          {numeric && (
+            <FormControlLabel
+              label="Show column average"
+              disabled={disabled}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={item.showAverage !== false}
+                  onChange={event =>
+                    updateAssessment(item.id, {
+                      showAverage: event.target.checked,
+                    })
+                  }
+                  slotProps={{
+                    input: {
+                      'aria-label': `Show column average for ${term.name || `term ${position}`}, ${item.name || `assessment ${index + 1}`}`,
+                    },
+                  }}
+                />
+              }
             />
           )}
-          <IconButton
-            aria-label={`Remove assessment ${index + 1} from term ${position}`}
-            disabled={disabled || term.assessments.length === 1}
-            onClick={() =>
-              update({
-                assessments: term.assessments.filter(
-                  entry => entry.id !== item.id
-                ),
-              })
-            }
-          >
-            <TrashIcon fontSize="small" />
-          </IconButton>
-        </Stack>
+        </Box>
       ))}
       <Button
         onClick={() =>

@@ -11,7 +11,11 @@ import {
 import CheckIn, { KPI_BOT_RUNS } from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import Venture from '../models/venture.js'
-import { scopedVentureIds, ventureAccess } from '../utils/access.js'
+import {
+  isVentureMember,
+  scopedVentureIds,
+  ventureAccess,
+} from '../utils/access.js'
 import {
   checkInEvent,
   checkInFields,
@@ -456,6 +460,10 @@ export const endCheckInSeries = async (req, res) => {
 
 const MAX_NOTES = 20000
 
+// Only the local demo server opts this sample meeting into founder activation.
+const isDemoFounder = req =>
+  isStudent(req.user) && req.params.id === req.app.locals.kpiDemoCheckInId
+
 // One check-in with its transcript and notes, for anyone who can read the
 // startup.
 export const getCheckIn = async (req, res) => {
@@ -475,6 +483,11 @@ export const getCheckIn = async (req, res) => {
     const runsIt = checkIn.session && canRunCheckIn(req.user, checkIn.staff)
     if (!runsIt && !canReadCheckIns(req.user, { mentorIds, isMember })) {
       return res.status(403).json({ error: 'Forbidden' })
+    }
+    if (isMember && isDemoFounder(req)) {
+      return res.json({
+        checkIn: { ...checkIn.toJSON(), canRunDemoBot: true },
+      })
     }
     return res.json({ checkIn })
   } catch (error) {
@@ -537,45 +550,90 @@ export const refreshTranscript = async (req, res) => {
   }
 }
 
+const KPI_BOT_FINISHED = ['DONE', 'SKIPPED']
+
 // Why the KPI bot can't be added to this meeting, or null.
 const kpiBotProblem = checkIn => {
-  if (KPI_BOT_RUNS.includes(checkIn.kpiBotMode)) {
-    return 'The KPI bot is already on for this meeting'
-  }
   if (checkIn.status === 'CANCELLED') {
     return 'This check-in was cancelled'
+  }
+  if (KPI_BOT_RUNS.includes(checkIn.kpiBotMode)) {
+    return 'The KPI bot is already on for this meeting'
   }
   if (checkIn.transcript.status === 'UNAVAILABLE') {
     return 'This meeting has no transcript for the KPI bot to read'
   }
-  if (['DONE', 'SKIPPED'].includes(checkIn.kpiExtraction.status)) {
+  if (KPI_BOT_FINISHED.includes(checkIn.kpiExtraction.status)) {
     return 'The KPI bot has already read this meeting'
   }
   return null
 }
+
+const findBotCheckIn = async (req, res) => {
+  if (!isDemoFounder(req)) {
+    const found = await findManagedCheckIn(req, res, { programme: true })
+    return found?.checkIn
+  }
+
+  const checkIn = await CheckIn.findById(req.params.id)
+  if (!checkIn) {
+    res.status(404).json({ error: 'Check-in not found' })
+    return null
+  }
+  if (!(await isVentureMember(req.user.id, checkIn.venture))) {
+    res.status(403).json({ error: 'Forbidden' })
+    return null
+  }
+  return checkIn
+}
+
+const sendBotConflict = (res, checkIn, error) =>
+  res.status(409).json({
+    error,
+    ...(checkIn.status !== 'CANCELLED' && { kpiBot: checkIn.toJSON().kpiBot }),
+  })
 
 // Adds the KPI bot to a meeting that isn't a bi-weekly session, before or
 // after it is held: once its transcript is ready, the bot recommends KPIs
 // from it. In a group session it is added for every startup in the meeting.
 export const addKpiBot = async (req, res) => {
   try {
-    const found = await findManagedCheckIn(req, res, { programme: true })
-    if (!found) {
+    const checkIn = await findBotCheckIn(req, res)
+    if (!checkIn) {
       return null
     }
-    const { checkIn } = found
     const problem = kpiBotProblem(checkIn)
     if (problem) {
-      return res.status(409).json({ error: problem })
+      return sendBotConflict(res, checkIn, problem)
     }
-    await CheckIn.updateMany(
+    const { matchedCount } = await CheckIn.updateMany(
       // Before the migration a check-in may have no mode, which reads as OFF.
-      { ...sameMeeting(checkIn), kpiBotMode: { $nin: KPI_BOT_RUNS } },
+      {
+        ...sameMeeting(checkIn),
+        status: { $ne: 'CANCELLED' },
+        kpiBotMode: { $nin: KPI_BOT_RUNS },
+        'transcript.status': { $ne: 'UNAVAILABLE' },
+        'kpiExtraction.status': { $nin: KPI_BOT_FINISHED },
+      },
       { $set: { kpiBotMode: 'ON' } }
     )
     const updated = await CheckIn.findById(checkIn._id)
       .select('-transcript.entries -transcript.text')
       .populate(POPULATE)
+    if (!updated) {
+      return res.status(404).json({ error: 'Check-in not found' })
+    }
+    if (
+      !matchedCount ||
+      updated.status === 'CANCELLED' ||
+      !KPI_BOT_RUNS.includes(updated.kpiBotMode)
+    ) {
+      return sendBotConflict(
+        res,
+        updated,
+        kpiBotProblem(updated) || 'This check-in has changed'
+      )
+    }
     return res.json({ checkIn: updated })
   } catch (error) {
     return sendError(res, error, 'Could not add the KPI bot')

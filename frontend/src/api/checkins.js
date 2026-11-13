@@ -127,6 +127,9 @@ export const addKpiBot = async id => {
     const { data } = await api.post(`/checkins/${id}/kpi-bot`)
     return { checkIn: data.checkIn }
   } catch (err) {
-    return toError(err, 'Could not add the KPI bot')
+    return {
+      ...toError(err, 'Could not add the KPI bot'),
+      kpiBot: err.response?.data?.kpiBot,
+    }
   }
 }

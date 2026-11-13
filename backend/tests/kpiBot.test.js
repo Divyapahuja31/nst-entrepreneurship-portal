@@ -193,6 +193,25 @@ describe('matching speakers to founders', () => {
 })
 
 describe('extracting KPIs from transcripts', () => {
+  it('can process the sample meeting without claiming other ready meetings', async () => {
+    const ordinary = await readyCheckIn()
+    const sample = await readyCheckIn({
+      googleEventId: 'demo-kpi-bot',
+      scheduledAt: new Date('2026-10-20T07:30:00Z'),
+    })
+
+    assert.deepEqual(await extractCheckInKpis({ checkInId: sample._id }), {
+      done: 1,
+      failed: 0,
+    })
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].meetingDate, '2026-10-20')
+    assert.equal(
+      (await CheckIn.findById(ordinary._id)).kpiExtraction.attempts,
+      0
+    )
+  })
+
   it("adds draft founder KPIs and reports goals it can't place", async () => {
     const checkIn = await readyCheckIn()
     assert.deepEqual(await extractCheckInKpis(), { done: 1, failed: 0 })

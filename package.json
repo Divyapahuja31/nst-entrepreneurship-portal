@@ -8,6 +8,7 @@
     "shared"
   ],
   "scripts": {
+    "demo:kpi-bot": "npm run demo:kpi-bot:browser -w backend",
     "demo:report-cards": "npm run demo:report-cards -w backend",
     "build": "cd frontend && npm run build",
     "start": "npm start -w backend",

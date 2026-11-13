@@ -1,7 +1,7 @@
 import { Schema } from 'mongoose'
 
 const assessment = new Schema(
-  { id: String, name: String, max: Number },
+  { id: String, name: String, max: Number, showAverage: Boolean },
   { _id: false }
 )
 const term = new Schema(

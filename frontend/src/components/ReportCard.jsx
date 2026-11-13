@@ -13,6 +13,7 @@ import {
   subjectMarkMaximum,
 } from '@nst/shared/reportCards.js'
 import GradeLegend from './GradeLegend'
+import GradeAverageFooter from './GradeAverageFooter'
 import GradeTableHead, { SubjectCell, SubjectMaximum } from './GradeTableHead'
 import SectionCard from './SectionCard'
 
@@ -120,6 +121,7 @@ export default function ReportCard({ studentName, report }) {
                 </TableRow>
               ))}
             </TableBody>
+            <GradeAverageFooter layout={layout} rows={rows} />
           </Table>
         </TableContainer>
         {layout?.mode === 'letter' && <GradeLegend legend={layout.legend} />}

@@ -172,8 +172,8 @@ it('publishes grouped terms and validates the grading mode while preserving the 
         id: 'term-1',
         name: 'Term 1',
         assessments: [
-          { id: 'practice', name: 'Practice', max: 20 },
-          { id: 'final-1', name: 'Final', max: 80 },
+          { id: 'practice', name: 'Practice', max: 20, showAverage: true },
+          { id: 'final-1', name: 'Final', max: 80, showAverage: false },
         ],
       },
       {
@@ -191,6 +191,7 @@ it('publishes grouped terms and validates the grading mode while preserving the 
     .send({ name: title, layout })
     .expect(201)
   assert.deepEqual(template.columns, ['Subject', 'Practice', 'Final', 'Final'])
+  assert.equal(template.layout.terms[0].assessments[0].showAverage, true)
   const {
     body: { card },
   } = await admin.post(target).send({ templateId: template._id }).expect(201)
@@ -232,10 +233,11 @@ it('publishes grouped terms and validates the grading mode while preserving the 
     .send({ ...next, layout: { ...letters, legend: { A: 'Advanced' } } })
     .expect(400)
   await admin.put(target).send(next).expect(400)
-  await admin
+  const draft = await admin
     .put(target)
     .send({ ...next, publish: false })
     .expect(200)
+  assert.deepEqual(draft.body.card.draft.layout.terms, layout.terms)
   await student.get(studentPath).expect(200, published.body)
 
   const letterRows = [
@@ -250,6 +252,7 @@ it('publishes grouped terms and validates the grading mode while preserving the 
     .expect(200)
   const latest = await student.get(studentPath).expect(200)
   assert.equal(latest.body.report.layout.mode, 'letter')
+  assert.deepEqual(latest.body.report.layout.terms, layout.terms)
   assert.deepEqual(latest.body.report.layout.legend, legend)
   assert.deepEqual(latest.body.report.rows, letterRows)
   const failure = await EmailNotification.findOne({

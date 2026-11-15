@@ -41,7 +41,7 @@ it('limits service history to admins and keeps outages and missing checks distin
   await as(users.mentor).expect(403)
   await as(users.owner).expect(403)
   const disconnected = await as(users.admin)
-    .query({ day, reference: '' })
+    .query({ day, reference: ' ' })
     .expect(200)
   assert.equal(disconnected.body.checks.state, 'setup-required')
   assert.equal(disconnected.body.failures.state, 'setup-required')
@@ -99,7 +99,9 @@ it('limits service history to admins and keeps outages and missing checks distin
       },
     })
   })
-  const result = await as(users.admin).query({ day, reference }).expect(200)
+  const result = await as(users.admin)
+    .query({ day, reference: ` ${reference.toUpperCase()} ` })
+    .expect(200)
   const [web, signup] = result.body.checks.items
   assert.deepEqual(web.intervals[0], { start, end: start + 120, state: 'pass' })
   assert.deepEqual(

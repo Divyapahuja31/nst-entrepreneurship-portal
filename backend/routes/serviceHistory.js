@@ -9,7 +9,11 @@ const router = Router()
 
 router.get('/', async (req, res) => {
   const window = historyWindow(req.query.day)
-  const { reference } = req.query
+  const rawReference = req.query.reference
+  const reference =
+    typeof rawReference === 'string'
+      ? rawReference.trim().toLowerCase()
+      : rawReference
   res.set('Cache-Control', 'no-store')
   if (!window) {
     return res.status(400).json({ error: 'Choose a valid date up to today.' })

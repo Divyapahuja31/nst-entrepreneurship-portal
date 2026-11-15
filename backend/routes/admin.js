@@ -8,6 +8,7 @@ import extraSessions from './extraSessions.js'
 import programme from './programme.js'
 import setup from './setup.js'
 import reportCards from './reportCards.js'
+import serviceHistory from './serviceHistory.js'
 
 import {
   createFounder,
@@ -54,5 +55,6 @@ router.use('/setup', requireRole(ROLES.ADMIN), setup)
 router.use('/emails', requireRole(ROLES.ADMIN), emails)
 
 router.use('/report-cards', requireRole(ROLES.ADMIN), reportCards)
+router.use('/service-history', requireRole(ROLES.ADMIN), serviceHistory)
 
 export default router

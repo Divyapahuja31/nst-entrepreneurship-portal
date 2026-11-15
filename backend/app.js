@@ -7,6 +7,7 @@ import cors from 'cors'
 import 'dotenv/config'
 import routes from './routes/index.js'
 import attachUser from './middleware/attachUser.js'
+import serviceErrors from './middleware/serviceErrors.js'
 
 // The Express app, without a database connection or a listening port, so
 // tests can drive it directly. server.js starts it.
@@ -50,6 +51,7 @@ app.use(
     credentials: true,
   })
 )
+app.use('/api', serviceErrors)
 // The report grid can hold 30 rows of up to 17 cells, including Unicode.
 app.put(
   '/api/admin/report-cards/students/:studentId',

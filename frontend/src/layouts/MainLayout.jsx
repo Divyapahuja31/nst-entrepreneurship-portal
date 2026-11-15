@@ -17,6 +17,7 @@ import {
   DocTextIcon,
   EnvelopeIcon,
   CalendarIcon,
+  ChartIcon,
   ChatIcon,
   ChevronLeftIcon,
   KpiIcon,
@@ -121,6 +122,11 @@ const adminMenuItems = [
     menu: 'Emails',
     icon: EnvelopeIcon,
     path: '/admin/emails',
+  },
+  {
+    menu: 'Service History',
+    icon: ChartIcon,
+    path: '/admin/service-history',
   },
 ]
 

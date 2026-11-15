@@ -7,9 +7,14 @@ export default function toError(err, fallback = 'Something went wrong') {
   }
 
   const { data } = err.response
+  const error = data?.error || data?.message || fallback
+  const reference = err.response.headers?.['x-request-id']
 
   return {
-    error: data?.error || data?.message || fallback,
+    error:
+      err.response.status >= 500 && reference && typeof error === 'string'
+        ? `${error} Reference: ${reference}`
+        : error,
     requireOtp: data?.requireOtp,
     email: data?.email,
   }

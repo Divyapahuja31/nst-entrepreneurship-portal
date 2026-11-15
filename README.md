@@ -15,6 +15,29 @@ npm run seed:all -w backend            # roles, campus, batches, industries, rep
 npm run dev                            # backend and frontend together
 ```
 
+## Service History
+
+Admins can look up production availability and failed API requests by date
+in IST under **Admin → Service History**. The data sources are independent
+of the portal database. Keep the monitoring dashboard reachable outside
+the portal so incidents can be checked when the portal itself is down.
+
+- Run external one-minute probes against the production homepage and
+  `/api/auth/google/signup-options`. Record `probe_success` in a
+  Prometheus-compatible store under the exact job labels `portal-web`
+  and `portal-signup`. Check that signup options are JSON and contain
+  `campuses` and `batches`.
+- Collect the production portal's `portal_http_failure` JSON lines in Loki
+  with the stream labels `app="nst-entrepreneurship-portal"` and
+  `environment="production"`. Failed API responses carry `X-Request-ID`.
+- Set `SERVICE_HISTORY_PROMETHEUS_URL` and `SERVICE_HISTORY_LOKI_URL` to
+  the read endpoints and set their optional bearer tokens on the backend.
+  Keep 90 days of history at the monitoring sources if that is the lookup
+  window needed by admins.
+
+Days without probe samples show insufficient evidence. The log search
+returns failed requests that reached the portal and were collected.
+
 ## KPI bot browser demo
 
 From the project root, run `npm run demo:kpi-bot` and open

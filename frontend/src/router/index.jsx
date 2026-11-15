@@ -34,6 +34,7 @@ import PageExtraSessions from '../pages/admin/PageExtraSessions.jsx'
 import PageSetup from '../pages/admin/PageSetup.jsx'
 import PageEmails from '../pages/admin/PageEmails.jsx'
 import PageReportCards from '../pages/admin/PageReportCards.jsx'
+import PageServiceHistory from '../pages/admin/PageServiceHistory.jsx'
 import PageStudentReportCard from '../pages/admin/PageStudentReportCard.jsx'
 
 // Common pages
@@ -68,6 +69,7 @@ import { programmeLoader } from '../api/programme.js'
 import { extraSessionsLoader } from '../api/extraSessions.js'
 import { setupLoader } from '../api/setup.js'
 import { emailsLoader } from '../api/emails.js'
+import { serviceHistoryLoader } from '../api/serviceHistory.js'
 import {
   myReportCardLoader,
   reportCardsLoader,
@@ -300,6 +302,11 @@ export const router = createBrowserRouter([
                 path: '/admin/emails',
                 Component: PageEmails,
                 loader: forRoles([ROLES.ADMIN], emailsLoader),
+              },
+              {
+                path: '/admin/service-history',
+                Component: PageServiceHistory,
+                loader: forRoles([ROLES.ADMIN], serviceHistoryLoader),
               },
             ],
           },

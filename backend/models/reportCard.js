@@ -26,6 +26,8 @@ const schema = new mongoose.Schema(
     _id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     draft: { type: contentSchema, required: true },
     published: { type: publicationSchema, default: null },
+    // Private grading notes, separate from the published report.
+    observation: { type: String },
     revision: { type: Number, default: 0 },
   },
   { timestamps: true }

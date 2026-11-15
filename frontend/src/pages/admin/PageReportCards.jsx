@@ -36,7 +36,9 @@ function TemplateDialog({ template, onClose, onSaved }) {
     event.preventDefault()
     const subjects = layout.subjects?.filter(
       item =>
-        item.name.trim() || item.description?.trim() || Number(item.max) !== 100
+        item.name.trim() ||
+        item.description?.trim() ||
+        (layout.mode === 'numeric' && Number(item.max) !== 100)
     )
     const templateLayout = { ...layout, subjects }
     const problem = gradeLayoutError(templateLayout)

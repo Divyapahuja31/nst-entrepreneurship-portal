@@ -70,11 +70,10 @@ const validLegend = legend =>
     return meaning.length > 0 && meaning.length <= REPORT_CARD_LIMITS.cell
   })
 
-const validSubjects = subjects =>
+const validSubjectNames = subjects =>
   Array.isArray(subjects) &&
   subjects.length <= REPORT_CARD_LIMITS.rows &&
-  (!subjects.length || hasUniqueNames(subjects)) &&
-  subjects.every(subject => validMaximum(subject.max))
+  (!subjects.length || hasUniqueNames(subjects))
 
 const validCriterionDescription = ({ description }) =>
   description === undefined ||
@@ -119,11 +118,20 @@ const termStructureError = layout => {
   return ''
 }
 
-const subjectStructureError = ({ subjects }) => {
-  if (subjects !== undefined && !validSubjects(subjects)) {
-    return 'Give each template subject a unique name and a maximum mark greater than zero.'
+const subjectStructureError = ({ subjects, mode }) => {
+  if (subjects === undefined) {
+    return ''
   }
-  if (subjects?.some(subject => !validCriterionDescription(subject))) {
+  if (!validSubjectNames(subjects)) {
+    return 'Give each template subject a unique name.'
+  }
+  if (
+    mode === 'numeric' &&
+    subjects.some(subject => !validMaximum(subject.max))
+  ) {
+    return 'Enter a maximum mark greater than zero for each template subject.'
+  }
+  if (subjects.some(subject => !validCriterionDescription(subject))) {
     return `Keep each criterion description to ${REPORT_CARD_LIMITS.criterionDescription} characters.`
   }
   return ''
@@ -173,7 +181,7 @@ export const normalizeGradeLayout = layout => ({
   ...(layout.subjects && {
     subjects: layout.subjects.map(({ name, max, description }) => ({
       name: name.trim(),
-      max: Number(max),
+      max: validMaximum(max) ? Number(max) : 100,
       ...(nameOf(description) && { description: nameOf(description) }),
     })),
   }),

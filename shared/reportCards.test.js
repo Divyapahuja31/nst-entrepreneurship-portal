@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  DEFAULT_GRADE_LEGEND,
   gradeLayoutError,
   normalizeGradeLayout,
   reportColumnAverages,
@@ -62,6 +63,22 @@ test('keeps the numeric average preferences when changing grading modes', () => 
 
   assert.deepEqual(reportColumnAverages(letters, rows), [])
   assert.deepEqual(reportColumnAverages(numeric, rows), [8, undefined, null])
+})
+
+test('a hidden subject maximum does not prevent using letter grades', () => {
+  const subjects = [{ name: 'Eating', max: '', description: 'Sample notes' }]
+  assert.match(gradeLayoutError({ ...layout, subjects }), /maximum mark/)
+
+  const letters = {
+    ...layout,
+    mode: 'letter',
+    subjects,
+    legend: DEFAULT_GRADE_LEGEND,
+  }
+  assert.equal(gradeLayoutError(letters), '')
+  assert.deepEqual(normalizeGradeLayout(letters).subjects, [
+    { name: 'Eating', max: 100, description: 'Sample notes' },
+  ])
 })
 
 test('shows averages on older numeric cards without an average setting', () => {

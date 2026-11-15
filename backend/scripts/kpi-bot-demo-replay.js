@@ -19,6 +19,7 @@ const goals = [
     targetValue: '250 weekly active users',
     quote: 'Okay, 250 weekly active users by the 15th then.',
     due: 'next month',
+    forStartup: true,
   },
   {
     speaker: 'Riya Sharma',
@@ -43,10 +44,11 @@ const deadline = (meetingDate, due) => {
   return date.toISOString().slice(0, 10)
 }
 
-const replay = ({ meetingDate }) =>
-  goals.map(({ due, ...goal }) => ({
+const replay = ({ meetingDate, startups }) =>
+  goals.map(({ due, forStartup, ...goal }) => ({
     ...goal,
     dueDate: deadline(meetingDate, due),
+    startupId: forStartup ? String(startups[0]._id) : '',
   }))
 
 export function startDemoKpiWorker(checkInId) {

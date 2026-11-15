@@ -31,7 +31,6 @@ try {
     if (!sample) {
       throw new Error('The sample KPI demo check-in was not seeded.')
     }
-    app.locals.kpiDemoCheckInId = sample.id
     const { startDemoKpiWorker } = await import('./kpi-bot-demo-replay.js')
     stopWorker = startDemoKpiWorker(sample._id)
   }

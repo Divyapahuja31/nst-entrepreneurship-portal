@@ -162,6 +162,20 @@ describe('adding an extra session', () => {
     const modes = async () => (await meetingsOf(session)).map(m => m.kpiBotMode)
     assert.deepEqual(await modes(), ['ON', 'ON'])
 
+    const board = as(data.users.board)
+    const attemptedChange = await board.put(
+      `${URL}/${session._id}`,
+      extra({ mode: 'GROUP', title: 'Founder town hall', kpiBot: false })
+    )
+    assert.equal(attemptedChange.status, 403)
+    const edited = await board.put(
+      `${URL}/${session._id}`,
+      extra({ mode: 'GROUP', title: 'Founder town hall' })
+    )
+    assert.equal(edited.status, 200)
+    assert.equal(edited.body.sessions[0].extra.kpiBot, undefined)
+    assert.deepEqual(await modes(), ['ON', 'ON'])
+
     const off = await as(data.users.admin).put(
       `${URL}/${session._id}`,
       extra({ mode: 'GROUP', title: 'Founder town hall', kpiBot: false })

@@ -1,15 +1,12 @@
 import mongoose from 'mongoose'
-import { canAddKpi, isStudent } from '@nst/shared/permissions.js'
 
 import Founder from '../models/founder.js'
 import KPI from '../models/kpi.js'
 import KpiRecommendation from '../models/kpiRecommendation.js'
-import { isPastDue, isVentureMember, ventureAccess } from '../utils/access.js'
-import { findVentureForUser } from '../utils/founderHelper.js'
+import Venture from '../models/venture.js'
+import { isPastDue, isVentureMember } from '../utils/access.js'
 
-// The KPIs the bot recommends (utils/kpiBot.js). Whoever may add a KPI for
-// a founder sees that founder's recommendations and accepts or dismisses
-// them: the founder, the startup's mentors and the academic board.
+// The admin reviews transcript recommendations for a startup and its founders.
 
 const fail = (res, status, message) =>
   res.status(status).json({ success: false, message })
@@ -22,50 +19,26 @@ const listFor = filter =>
     .populate('founder', 'username email')
     .sort({ meetingDate: -1, createdAt: 1 })
 
-// A student's own recommendations, for the startup they are in now.
-const listForStudent = async (req, res) => {
-  const venture = await findVentureForUser(req.user.id)
-  const data = venture
-    ? await listFor({ venture: venture._id, founder: req.user.id })
-    : []
-  return res.json({ success: true, data })
-}
-
-// A startup's recommendations, for its mentors and the board. A founder who
-// has left no longer gets theirs.
-const listForVenture = async (req, res, ventureId) => {
-  if (!mongoose.isValidObjectId(ventureId)) {
-    return fail(res, 400, 'Valid ventureId is required')
-  }
-  const { venture, mentorIds } = await ventureAccess(req.user, ventureId)
-  if (!venture) {
-    return fail(res, 404, 'Venture not found')
-  }
-  if (
-    !canAddKpi(req.user, {
-      ventureMentorIds: mentorIds,
-      isMember: false,
-      founderId: null,
-    })
-  ) {
-    return fail(res, 403, 'This startup is not assigned to you')
-  }
-  const founders = await Founder.find({
-    venture: venture._id,
-    status: 'ACTIVE',
-  }).distinct('user')
-  return res.json({
-    success: true,
-    data: await listFor({ venture: venture._id, founder: { $in: founders } }),
-  })
-}
-
 export const listRecommendations = async (req, res) => {
   try {
-    if (isStudent(req.user)) {
-      return await listForStudent(req, res)
+    const { ventureId } = req.query
+    if (!mongoose.isObjectIdOrHexString(ventureId)) {
+      return fail(res, 400, 'Valid ventureId is required')
     }
-    return await listForVenture(req, res, req.query.ventureId)
+    if (!(await Venture.exists({ _id: ventureId }))) {
+      return fail(res, 404, 'Venture not found')
+    }
+    const founders = await Founder.find({
+      venture: ventureId,
+      status: 'ACTIVE',
+    }).distinct('user')
+    return res.json({
+      success: true,
+      data: await listFor({
+        venture: ventureId,
+        founder: { $in: [null, ...founders] },
+      }),
+    })
   } catch (error) {
     console.error('List KPI recommendations error:', error)
     return fail(res, 500, 'Failed to fetch recommended KPIs')
@@ -85,19 +58,8 @@ const findDecidable = async (req, res) => {
     fail(res, 404, 'Recommendation not found')
     return null
   }
-  const { venture, mentorIds, isMember } = await ventureAccess(
-    req.user,
-    recommendation.venture
-  )
-  if (
-    !venture ||
-    !canAddKpi(req.user, {
-      ventureMentorIds: mentorIds,
-      isMember,
-      founderId: recommendation.founder,
-    })
-  ) {
-    fail(res, 403, 'You cannot decide this recommendation')
+  if (!(await Venture.exists({ _id: recommendation.venture }))) {
+    fail(res, 404, 'Venture not found')
     return null
   }
   if (recommendation.status !== PENDING) {
@@ -108,7 +70,10 @@ const findDecidable = async (req, res) => {
     )
     return null
   }
-  if (!(await isVentureMember(recommendation.founder, venture._id))) {
+  if (
+    recommendation.founder &&
+    !(await isVentureMember(recommendation.founder, recommendation.venture))
+  ) {
     fail(res, 409, 'This founder is no longer part of the startup')
     return null
   }
@@ -131,14 +96,14 @@ const kpiFrom = (recommendation, userId) => ({
   description: recommendation.description,
   targetValue: recommendation.targetValue,
   dueDate: recommendation.dueDate,
-  scope: 'FOUNDER',
+  scope: recommendation.founder ? 'FOUNDER' : 'VENTURE',
   founder: recommendation.founder,
   venture: recommendation.venture,
   createdBy: userId,
   status: 'DRAFT',
 })
 
-// Turns a recommendation into the founder's draft KPI, with the same id, so
+// Turns a recommendation into a draft KPI, with the same id, so
 // two clicks never make two KPIs.
 export const acceptRecommendation = async (req, res) => {
   try {

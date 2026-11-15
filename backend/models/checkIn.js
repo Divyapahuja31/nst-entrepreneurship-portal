@@ -209,7 +209,7 @@ const checkInSchema = new mongoose.Schema(
       default: () => ({}),
     },
     // Whether the KPI bot reads this meeting's transcript: AUTO for a
-    // bi-weekly programme session, ON once someone adds it to any other
+    // bi-weekly programme session, ON once an admin adds it to any other
     // meeting, OFF until then. Gemini is only asked about AUTO and ON.
     kpiBotMode: {
       type: String,
@@ -230,11 +230,11 @@ const checkInSchema = new mongoose.Schema(
     timestamps: true,
     // The KPI bot's working state (Gemini's raw answer, its lease, its
     // errors) and the speakers' Google account IDs are not for the API; what
-    // the bot did is, as `kpiBot`, so the mentor sees goals it couldn't place.
+    // the bot did is exposed as `kpiBot` on admin queries.
     toJSON: {
       transform: (doc, ret) => {
         const run = ret.kpiExtraction
-        if (run) {
+        if (run && doc.isSelected('kpiExtraction')) {
           ret.kpiBot = {
             mode: ret.kpiBotMode || 'OFF',
             status: run.status,

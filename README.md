@@ -22,12 +22,12 @@ From the project root, run `npm run demo:kpi-bot` and open
 printed in your terminal. The demo uses ports 5173 and 4000 and a temporary
 database. Stop any other local portal server first.
 
-1. Sign in as **Aarav** and open **Check-Ins → Transcript**.
+1. Sign in as **Demo Admin**. Open **Startups → EduSpark (demo) → Check-Ins → Transcript**.
 2. Click **Add KPI Bot**. The dialog updates with the number of recommendations.
-3. Click **Review Recommended KPIs**, then accept one suggestion and dismiss
-   the other. The accepted suggestion appears as a draft under **Your KPIs**.
-4. Optionally sign in as **Riya** in a second browser session to see her
-   recommendation.
+3. Click **Review Recommended KPIs**. Add a founder suggestion and a startup
+   suggestion as drafts.
+4. Sign in as the assigned founder in a second browser session to see the
+   personal and shared drafts under **Your KPIs**.
 
 The demo supplies a fixed extraction response for the sample transcript. The
 portal runs its usual quote and speaker checks and creates real demo
@@ -87,6 +87,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Approve a startup proposal | ✅ (picks its first mentor) | ✅ (picks its first mentor) | ✅ (becomes its first mentor) | ❌ |
 | Review a request to join a startup | ✅ | ✅ | assigned startups | ❌ |
 | Create a KPI | any startup | any startup | assigned startups | own startup; personal KPIs only for themselves |
+| Enable the KPI bot and decide its recommendations | ✅ | ❌ | ❌ | ❌ |
 | Edit or delete a KPI | any, even locked | any, even locked | assigned, while unlocked | own, while a draft, awaiting approval or rejected, not locked or past due |
 | Accept, reject, grade or re-grade a KPI | any, even locked | any, even locked | assigned, while unlocked | ❌ |
 | Lock a graded KPI (its grade becomes final) | ✅ | ✅ | assigned | ❌ |

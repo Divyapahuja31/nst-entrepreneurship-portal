@@ -166,10 +166,24 @@ const CHECK_INS_TAB = 3
 
 export default function PageVentureDetail() {
   // Coming back from connecting Google Calendar lands on the check-ins.
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tabIndex, setTabIndex] = useState(() =>
     searchParams.has('calendar') ? CHECK_INS_TAB : 0
   )
+  const reviewingKpis = searchParams.get('tab') === 'kpis'
+  const selectedTab = reviewingKpis ? 1 : tabIndex
+  const changeTab = (_, value) => {
+    setTabIndex(value)
+    if (reviewingKpis) {
+      setSearchParams(
+        params => {
+          params.delete('tab')
+          return params
+        },
+        { replace: true }
+      )
+    }
+  }
   const {
     venture,
     founders = [],
@@ -231,8 +245,8 @@ export default function PageVentureDetail() {
       <MentorCard venture={venture} />
 
       <Tabs
-        value={tabIndex}
-        onChange={(_, value) => setTabIndex(value)}
+        value={selectedTab}
+        onChange={changeTab}
         aria-label="Startup sections"
         sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
       >
@@ -242,7 +256,7 @@ export default function PageVentureDetail() {
         <Tab label="Check-Ins" />
       </Tabs>
 
-      {tabIndex === 0 && (
+      {selectedTab === 0 && (
         <Box
           sx={{
             display: 'grid',
@@ -281,11 +295,11 @@ export default function PageVentureDetail() {
         </Box>
       )}
 
-      {tabIndex === 1 && (
+      {selectedTab === 1 && (
         <KPIReview kpis={kpis} venture={venture} founders={founders} />
       )}
 
-      {tabIndex === 2 &&
+      {selectedTab === 2 &&
         (biweekly ? (
           <BiWeekly data={biweekly} />
         ) : (
@@ -295,7 +309,7 @@ export default function PageVentureDetail() {
           </Alert>
         ))}
 
-      {tabIndex === CHECK_INS_TAB && (
+      {selectedTab === CHECK_INS_TAB && (
         <CheckInsSection checkIns={checkIns} venture={venture} />
       )}
     </Box>

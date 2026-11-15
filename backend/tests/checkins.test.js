@@ -100,10 +100,10 @@ beforeEach(async () => {
 })
 
 describe('scheduling check-ins', () => {
-  it('can be scheduled with the KPI bot on', async () => {
+  it('prevents a mentor from enabling the bot when scheduling', async () => {
     const res = await schedule(data.users.mentor, { kpiBot: true })
-    assert.equal(res.status, 201)
-    assert.equal(res.body.checkIns[0].kpiBot.mode, 'ON')
+    assert.equal(res.status, 403)
+    assert.equal(google.calls.length, 0)
   })
 
   it("the startup's mentor schedules one on their calendar, inviting the founders", async () => {
@@ -114,8 +114,7 @@ describe('scheduling check-ins', () => {
     // A check-in is the mentor's own meeting, apart from the cycles.
     assert.equal(checkIn.cycle_number, null)
     assert.equal(checkIn.status, 'SCHEDULED')
-    // The KPI bot is off until the mentor adds it.
-    assert.equal(checkIn.kpiBot.mode, 'OFF')
+    assert.equal(checkIn.kpiBot, undefined)
     assert.equal(checkIn.durationMinutes, 45)
     assert.match(checkIn.meetUrl, /^https:\/\/meet\.google\.com\//)
     assert.equal(checkIn.meetingCode, 'abc-defg-001')

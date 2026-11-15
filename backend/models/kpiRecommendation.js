@@ -1,12 +1,10 @@
 import mongoose from 'mongoose'
 
-// A KPI the bot (utils/kpiBot.js) suggests for one founder from a meeting's
-// transcript. It is not a KPI yet: the founder, the startup's mentors or the
-// academic board accept it (it becomes the founder's draft KPI, with the
-// same _id) or dismiss it.
+// A proposed KPI for a founder or their startup. An admin can accept it
+// as a draft KPI with the same _id, or dismiss it.
 const kpiRecommendationSchema = new mongoose.Schema(
   {
-    // The bot sets it from the meeting, founder, quote and title, so a retry
+    // The bot sets it from the meeting, assignee, quote and title, so a retry
     // never suggests the same goal twice.
     _id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -19,7 +17,7 @@ const kpiRecommendationSchema = new mongoose.Schema(
     founder: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
     checkIn: {
       type: mongoose.Schema.Types.ObjectId,

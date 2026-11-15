@@ -21,6 +21,7 @@ import {
   refreshTranscript,
   saveCheckInNotes,
 } from '../api/checkins'
+import useAccess from '../hooks/useAccess'
 
 const formatWhen = date =>
   new Date(date).toLocaleString(undefined, {
@@ -88,7 +89,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 // the goals it couldn't give a founder, so the mentor can add those by hand.
 // A meeting that isn't a bi-weekly session has the bot only once someone
 // adds it (`onAdd`).
-function KpiBotSummary({ kpiBot, ready, adding, onAdd, canRunDemoBot }) {
+function KpiBotSummary({ kpiBot, ready, adding, onAdd, ventureId, onClose }) {
   if (!kpiBot || kpiBot.mode === 'OFF') {
     return (
       <Typography variant="body2" color="text.secondary">
@@ -134,16 +135,14 @@ function KpiBotSummary({ kpiBot, ready, adding, onAdd, canRunDemoBot }) {
     <Box sx={{ display: 'grid', gap: 1 }}>
       <Typography variant="body2">
         {kpiBot.created
-          ? `Recommended ${plural(kpiBot.created, 'KPI')} to the founders.` +
-            (canRunDemoBot
-              ? ''
-              : ' They or you can accept or dismiss each one on the KPIs page.')
+          ? `Suggested ${plural(kpiBot.created, 'KPI')} for admin review.`
           : 'Recommended no KPIs.'}
       </Typography>
-      {canRunDemoBot && kpiBot.created > 0 && (
+      {ventureId && kpiBot.created > 0 && (
         <Button
           component={Link}
-          to="/kpis"
+          to={`/admin/venture/${ventureId}?tab=kpis`}
+          onClick={onClose}
           variant="outlined"
           sx={{ justifySelf: 'start' }}
         >
@@ -189,6 +188,7 @@ export default function TranscriptDialog({
   onClose,
   onChanged,
 }) {
+  const { isAdmin } = useAccess()
   const [checkIn, setCheckIn] = useState(null)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
@@ -208,10 +208,8 @@ export default function TranscriptDialog({
     })
   }, [checkInId])
 
-  const canRunDemoBot = Boolean(checkIn?.canRunDemoBot)
-  const canRunBot = canManage || canRunDemoBot
   const waitingForBot =
-    canRunDemoBot &&
+    isAdmin &&
     checkIn?.transcript?.status === 'READY' &&
     checkIn?.kpiBot?.status === 'PENDING' &&
     ['ON', 'AUTO'].includes(checkIn.kpiBot.mode)
@@ -228,11 +226,11 @@ export default function TranscriptDialog({
         return
       }
       const kpiBot = result.checkIn?.kpiBot
-      if (kpiBot && kpiBot.status !== 'PENDING') {
-        setCheckIn(current => ({ ...current, kpiBot }))
+      if (kpiBot && (kpiBot.status !== 'PENDING' || kpiBot.mode === 'OFF')) {
+        setCheckIn(result.checkIn)
         return
       }
-      timer = setTimeout(refreshBot, 3000)
+      timer = setTimeout(refreshBot, 10000)
     }
     timer = setTimeout(refreshBot, 1000)
     return () => {
@@ -270,11 +268,6 @@ export default function TranscriptDialog({
       return
     }
     setCheckIn(current => ({ ...current, kpiBot }))
-    if (!canRunDemoBot) {
-      setMessage(
-        'KPI bot added. Its recommendations appear once the transcript is read.'
-      )
-    }
     onChanged()
   }
 
@@ -320,7 +313,7 @@ export default function TranscriptDialog({
 
         {checkIn && (
           <Box sx={{ display: 'grid', gap: 3 }}>
-            {canRunBot &&
+            {isAdmin &&
               transcript?.status !== 'UNAVAILABLE' &&
               checkIn.status !== 'CANCELLED' && (
                 <Box sx={{ display: 'grid', gap: 1.5 }}>
@@ -332,7 +325,8 @@ export default function TranscriptDialog({
                     ready={ready}
                     adding={adding}
                     onAdd={addBot}
-                    canRunDemoBot={canRunDemoBot}
+                    ventureId={checkIn.venture?._id}
+                    onClose={onClose}
                   />
                 </Box>
               )}

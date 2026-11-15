@@ -104,7 +104,7 @@ export default function KPIReview({
 
   // Who may review, lock or add KPIs depends on whether the startup is
   // assigned to this mentor (the board may always).
-  const { actor } = useAccess()
+  const { actor, isAdmin } = useAccess()
   const contextOf = kpi => staffKpiContext(kpi, venture?.mentors)
   const mayAddKpi = canAddKpi(actor, {
     ventureMentorIds: mentorIdsOf(venture?.mentors),
@@ -360,7 +360,7 @@ export default function KPIReview({
         />
       </Box>
 
-      {venture && mayAddKpi && (
+      {venture && isAdmin && (
         <KpiRecommendations
           ventureId={venture.id || venture._id}
           founderId={founder ? currentFounderId : null}

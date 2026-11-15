@@ -1,7 +1,7 @@
 // A live demo of the KPI bot. Step by step it clears the last demo, sets up
 // a startup whose mentor check-in has just been held, replays the meeting's
 // Meet transcript, shows who each speaker is, has Gemini find the goals and
-// shows the KPIs the bot recommends, for the founders or their mentor to
+// shows the KPIs the bot recommends for an admin to
 // accept or dismiss.
 //
 // Usage (needs GEMINI_API_KEY in backend/.env):
@@ -207,12 +207,10 @@ const showResult = async ({ people, venture, checkIn }) => {
   say(
     '  Every goal must quote a real line of the transcript, or it is dropped.'
   )
-  say(
-    `\n  ${kpis.length} KPIs recommended, for the founders or the mentor to accept:`
-  )
+  say(`\n  ${kpis.length} KPIs recommended for admin review:`)
   for (const kpi of kpis) {
     await pause(900)
-    say(`\n  ✔ ${names[String(kpi.founder)]}: ${kpi.title}`)
+    say(`\n  ✔ ${names[String(kpi.founder)] ?? venture.name}: ${kpi.title}`)
     say(
       `      target: ${kpi.targetValue || 'none'}  |  due: ${dateOf(kpi.dueDate)}`
     )

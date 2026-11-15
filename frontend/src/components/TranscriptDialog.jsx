@@ -85,6 +85,12 @@ function Transcript({ transcript }) {
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
+const waitingForKpiBot = checkIn =>
+  checkIn?.status !== 'CANCELLED' &&
+  checkIn?.transcript?.status !== 'UNAVAILABLE' &&
+  checkIn?.kpiBot?.status === 'PENDING' &&
+  ['ON', 'AUTO'].includes(checkIn.kpiBot.mode)
+
 // What the KPI bot made of the transcript: the KPIs it recommended, and
 // the goals it couldn't give a founder, so the mentor can add those by hand.
 // A meeting that isn't a bi-weekly session has the bot only once someone
@@ -208,11 +214,7 @@ export default function TranscriptDialog({
     })
   }, [checkInId])
 
-  const waitingForBot =
-    isAdmin &&
-    checkIn?.transcript?.status === 'READY' &&
-    checkIn?.kpiBot?.status === 'PENDING' &&
-    ['ON', 'AUTO'].includes(checkIn.kpiBot.mode)
+  const waitingForBot = isAdmin && waitingForKpiBot(checkIn)
 
   useEffect(() => {
     if (!waitingForBot) {
@@ -225,10 +227,11 @@ export default function TranscriptDialog({
       if (stopped) {
         return
       }
-      const kpiBot = result.checkIn?.kpiBot
-      if (kpiBot && (kpiBot.status !== 'PENDING' || kpiBot.mode === 'OFF')) {
+      if (result.checkIn) {
         setCheckIn(result.checkIn)
-        return
+        if (!waitingForKpiBot(result.checkIn)) {
+          return
+        }
       }
       timer = setTimeout(refreshBot, 10000)
     }

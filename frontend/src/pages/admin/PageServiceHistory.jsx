@@ -196,7 +196,7 @@ export default function PageServiceHistory() {
                 name="reference"
                 label="Request reference (optional)"
                 defaultValue={reference}
-                slotProps={{ htmlInput: { maxLength: 36 } }}
+                slotProps={{ htmlInput: { autoCapitalize: 'off' } }}
                 fullWidth
               />
               <Button

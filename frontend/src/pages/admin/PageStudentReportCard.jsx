@@ -26,13 +26,19 @@ import {
   gradedReportError,
   validReportColumns,
 } from '@nst/shared/reportCards.js'
-import { createReportCard, saveReportCard } from '../../api/reportCards'
+import {
+  createReportCard,
+  saveReportCard,
+  suggestReportGrades,
+} from '../../api/reportCards'
 import PageHeader from '../../components/PageHeader'
 import ReportCard from '../../components/ReportCard'
 import SectionCard from '../../components/SectionCard'
 import { TrashIcon } from '../../components/icons'
 import GradeEntryTable from './GradeEntryTable'
 import GradeSetupDialog from './GradeSetupDialog'
+import ReportObservationFields from './ReportObservationFields'
+import { applyGradeSuggestions } from './applyGradeSuggestions'
 
 const home = '/admin/report-cards'
 
@@ -241,6 +247,7 @@ function ReportEditor({ student, initialCard }) {
   const [rows, setRows] = useState(initialCard.draft.rows)
   const [columns, setColumns] = useState(initialCard.draft.columns)
   const [layout, setLayout] = useState(initialCard.draft.layout)
+  const [observation, setObservation] = useState(initialCard.observation ?? '')
   const [setup, setSetup] = useState(false)
   const [preview, setPreview] = useState(false)
   const [pending, setPending] = useState(null)
@@ -262,6 +269,7 @@ function ReportEditor({ student, initialCard }) {
       columns,
       layout,
       rows,
+      observation,
       publish,
     })
     setPending(null)
@@ -274,12 +282,43 @@ function ReportEditor({ student, initialCard }) {
     setRows(result.card.draft.rows)
     setColumns(result.card.draft.columns)
     setLayout(result.card.draft.layout)
+    setObservation(result.card.observation ?? '')
     setPreview(false)
     setMessage({
       severity: 'success',
       text: publish
         ? 'The student can now see this report card.'
         : 'Draft saved.',
+    })
+  }
+
+  async function suggest(assessmentId) {
+    setPending('suggest')
+    setMessage(null)
+    const result = await suggestReportGrades(student._id, {
+      observation,
+      layout,
+      rows,
+      revision: card.revision,
+      assessmentId,
+    })
+    setPending(null)
+    if (result.error) {
+      setMessage({ severity: 'error', text: result.error })
+      return
+    }
+    if (!result.suggestions.length) {
+      setMessage({
+        severity: 'info',
+        text: 'No grades were suggested. Add more detail to the observation or enter grades manually.',
+      })
+      return
+    }
+    setRows(current => applyGradeSuggestions(current, result.suggestions))
+    const count = result.suggestions.length
+    setMessage({
+      severity: 'info',
+      text: `Added ${count} suggested ${count === 1 ? 'grade' : 'grades'}. Review the table before saving.`,
     })
   }
 
@@ -313,6 +352,14 @@ function ReportEditor({ student, initialCard }) {
             disabled={Boolean(pending)}
             slotProps={{ htmlInput: { maxLength: limits.title } }}
             sx={{ maxWidth: 480 }}
+          />
+          <ReportObservationFields
+            layout={layout}
+            rows={rows}
+            observation={observation}
+            onChange={setObservation}
+            onSuggest={suggest}
+            pending={pending}
           />
           {layout ? (
             <>
@@ -352,7 +399,7 @@ function ReportEditor({ student, initialCard }) {
               variant="outlined"
               onClick={() => save(false)}
               loading={pending === 'draft'}
-              disabled={!title.trim() || !validColumns}
+              disabled={Boolean(pending) || !title.trim() || !validColumns}
             >
               Save Draft
             </Button>

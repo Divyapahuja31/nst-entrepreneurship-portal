@@ -55,6 +55,10 @@ app.put(
   '/api/admin/report-cards/students/:studentId',
   express.json({ limit: '512kb' })
 )
+app.post(
+  '/api/admin/report-cards/students/:studentId/grade-suggestions',
+  express.json({ limit: '512kb' })
+)
 app.use(express.json())
 app.use(cookieParser())
 app.use(attachUser)

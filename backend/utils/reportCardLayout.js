@@ -9,7 +9,10 @@ const term = new Schema(
   { _id: false }
 )
 
-const subject = new Schema({ name: String, max: Number }, { _id: false })
+const subject = new Schema(
+  { name: String, max: Number, description: String },
+  { _id: false }
+)
 
 export default new Schema(
   {

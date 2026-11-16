@@ -5,20 +5,21 @@ import { uploadToS3 } from '../config/s3.js'
 import KPIStatus from '../models/enums/KPIStatus.js'
 import { DEFAULT_TIME_ZONE, zonedDate } from './programme.js'
 
-// A day picked on the KPI form ("2026-11-08") is due at the end of that day
-// in the portal's time zone, as the KPI bot's are: read as UTC midnight it
-// would close at 5:30 am India time on the due day itself. A full date and
-// time is kept as sent; empty means no due date.
+// Every deadline closes at the end of its calendar day in the portal zone.
 export const kpiDueDate = dueDate => {
   if (!dueDate) {
     return null
   }
-  if (typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(dueDate)) {
-    return new Date(
-      zonedDate(dueDate, '23:59', DEFAULT_TIME_ZONE).getTime() + 59999
-    )
-  }
-  return new Date(dueDate)
+  const day =
+    typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(dueDate)
+      ? dueDate
+      : new Intl.DateTimeFormat('en-CA', {
+          timeZone: DEFAULT_TIME_ZONE,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date(dueDate))
+  return new Date(zonedDate(day, '23:59', DEFAULT_TIME_ZONE).getTime() + 59999)
 }
 
 // Scores are out of 100; health thresholds and the overview chart assume it.

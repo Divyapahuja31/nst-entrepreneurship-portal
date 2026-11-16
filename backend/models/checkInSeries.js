@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // A recurring check-in: one Google Calendar event repeating every two weeks
@@ -46,6 +47,8 @@ const checkInSeriesSchema = new mongoose.Schema(
 )
 
 export const modelName = 'CheckInSeries'
+
+auditModel(checkInSeriesSchema, modelName)
 
 const CheckInSeries = mongoose.model(modelName, checkInSeriesSchema)
 

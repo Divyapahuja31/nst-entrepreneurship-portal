@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { auditModel } from '../utils/auditModel.js'
 
 const subKPISchema = new mongoose.Schema(
   {
@@ -25,6 +26,7 @@ const subKPISchema = new mongoose.Schema(
   }
 )
 
+auditModel(subKPISchema, 'SubKPI')
 const SubKPI = mongoose.models.SubKPI || mongoose.model('SubKPI', subKPISchema)
 
 export default SubKPI

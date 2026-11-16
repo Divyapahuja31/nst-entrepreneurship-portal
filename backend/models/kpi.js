@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import KPIStatus from './enums/KPIStatus.js'
 import KPIScope from './enums/KPIScope.js'
@@ -16,6 +17,8 @@ const kpiSchema = new mongoose.Schema(
       trim: true,
     },
 
+    deadlineReminderSentFor: { type: Date, select: false },
+    deadlineReminderLeaseUntil: { type: Date, select: false },
     dueDate: {
       type: Date,
     },
@@ -125,6 +128,7 @@ const kpiSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    optimisticConcurrency: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
@@ -143,9 +147,12 @@ kpiSchema.pre('validate', function () {
 
 kpiSchema.index({ venture: 1, scope: 1 })
 kpiSchema.index({ founder: 1 })
+kpiSchema.index({ status: 1, dueDate: 1 })
 kpiSchema.index({ status: 1, evaluationDate: 1, score: 1 })
 
 export const modelName = 'KPI'
+
+auditModel(kpiSchema, modelName)
 
 const KPI = mongoose.model(modelName, kpiSchema)
 

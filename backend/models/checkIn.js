@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import { CYCLES } from '@nst/shared/biweeklyCycles.js'
 
@@ -276,6 +277,8 @@ checkInSchema.index({
 })
 
 export const modelName = 'CheckIn'
+
+auditModel(checkInSchema, modelName)
 
 const CheckIn = mongoose.model(modelName, checkInSchema)
 

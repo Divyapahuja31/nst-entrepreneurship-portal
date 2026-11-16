@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import {
   evaluationStatus,
@@ -45,6 +46,8 @@ biWeeklyEvaluationSchema.virtual('status').get(function () {
 })
 
 export const modelName = 'BiWeeklyEvaluation'
+auditModel(biWeeklyEvaluationSchema, modelName)
+
 const Evaluation = mongoose.model(modelName, biWeeklyEvaluationSchema)
 
 export default Evaluation

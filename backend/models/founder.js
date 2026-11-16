@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 import founderStatus from './enums/founderStatus.js'
@@ -49,6 +50,8 @@ founderSchema.index(
 founderSchema.index({ venture: 1, status: 1 })
 
 export const modelName = 'Founder'
+
+auditModel(founderSchema, modelName)
 
 const Founder = mongoose.model(modelName, founderSchema)
 

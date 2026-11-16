@@ -18,6 +18,7 @@ import User from '../models/user.js'
 import { sendReportCardPublished } from '../utils/emailService.js'
 import { appUrl } from '../utils/kpiLockEmails.js'
 import { gradeSuggestions } from '../utils/reportCardSuggestions.js'
+import { reportCardEvidence } from '../utils/reportCardEvidence.js'
 
 const studentFields = 'username email'
 const reportFields = 'draft observation published.publishedAt revision'
@@ -289,7 +290,8 @@ export const suggestReportGrades = async (req, res) => {
       .status(409)
       .json({ error: 'Refresh the report card before suggesting grades.' })
   }
-  const result = await gradeSuggestions(input)
+  const evidence = await reportCardEvidence(res.locals.student._id)
+  const result = await gradeSuggestions({ ...input, evidence })
   if (result.error) {
     return res.status(result.status).json({ error: result.error })
   }

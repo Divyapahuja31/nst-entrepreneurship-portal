@@ -38,6 +38,85 @@ the portal so incidents can be checked when the portal itself is down.
 Days without probe samples show insufficient evidence. The log search
 returns failed requests that reached the portal and were collected.
 
+## Portal activity history
+
+Admins can browse **Accounts & Roles → Activity**. Filter by action, resource
+type/ID, actor ID, startup, student, request reference or sign-in email, and
+by an inclusive IST date range. The view uses cursor pagination, shows
+before/after state and keeps legacy account audit entries readable.
+The API is `GET /api/admin/audit-log`, restricted to admins. It accepts
+`action`, `resourceType`, `resourceId`, `actorId`, `ventureId`, `studentId`,
+`cycle`, `requestId`, `identityEmail`, `outcome`, `from`, `until`,
+`cursor`, and `limit` (1–100). Dates use ISO timestamps with a timezone.
+
+The application records two complementary event types.
+
+- Request outcomes cover every API POST, PUT, PATCH and DELETE, Google
+  callbacks and denied reads. They include HTTP status, a route template,
+  selected operation flags and the server-generated request reference.
+  Normal successful GET requests and response bodies are excluded.
+- Model changes cover accounts/roles, startups and memberships, KPIs/sub-KPIs
+  and recommendations, report schedules, bi-weekly drafts/submissions and
+  reopening windows, evaluations, report cards/templates, proposals/join
+  requests, meetings/programme sessions, school setup, email settings and
+  Google Calendar connection state. Before/after allowlists preserve dates,
+  ownership, status, grading/locking and visibility eligibility. Private
+  student work is represented by counts/digests, with no transcript bodies,
+  observations, grades grids or uploaded file contents.
+
+Actions use `<MODEL>_CREATED`, `<MODEL>_CHANGED`, `<MODEL>_DELETED` and
+`<FAMILY>_<METHOD>_REQUEST`, with specific actions for KPI deadline,
+ownership/visibility and status changes, and bi-weekly windows,
+submission timestamps and drafts. `source` distinguishes requests, jobs
+and scripts. A request ID and local sequence connect the component changes
+to the final request outcome. A failed overall request can still have
+successful intermediate changes or compensating deletions.
+
+The writer uses the existing MongoDB collection. It buffers at most 2,000
+events per process, inserts batches of 100 at 250 ms intervals and retries
+failed batches once with stable IDs. It never waits for an insert during a
+business action. Database insert failure cannot roll back account creation.
+Failures/drops produce counters and sanitized server diagnostics, available
+in the admin API. SIGTERM/SIGINT stop requests/jobs and attempt a flush
+before disconnecting, with a ten-second overall shutdown limit.
+
+Document saves use their already-loaded before state. Query mutations use
+one bounded, projected lookup before the write. Returned updated documents
+are reused; updates without a returned document may need a second lookup.
+Maintenance-only lease updates skip snapshots. Batch snapshots cover at most
+100 documents and mark larger or unavailable snapshots as incomplete.
+Metadata, before and after state are each capped at 4 KB, with recursive
+redaction, a depth/node budget, 30-item arrays and 256-character strings.
+Snapshot reads have a one-second client budget and failure isolation.
+
+This is best-effort history. Abrupt termination, an unavailable database or
+queue overload can lose events. Snapshots are observations around the write,
+and concurrent updates can affect them. They are not part of the business
+transaction. Actual first UI views, browser/network failures before reaching
+the server, external provider changes and database writes made outside the
+audited Mongoose models are excluded. Direct `collection` operations and
+`bulkWrite` bypass model hooks. The KPI deadline normalization pipeline
+uses the explicit `auditCollectionMutation` wrapper. Legacy raw migrations
+require that wrapper or their own domain events if per-record history is
+needed. Email delivery already has its separate notification records.
+
+Models opt in with `auditModel(schema, modelName)` and field allowlists in
+`backend/utils/auditFields.js`. New models should register there. Jobs and
+scripts use `withAuditContext`; the common script connector flushes before
+disconnecting. The standalone first-admin script also uses this writer.
+
+Existing audit records require no data migration. Create the additive
+indexes with `AuditLog.createIndexes()` if automatic indexing is disabled.
+Avoid index synchronization that drops older indexes. Compound indexes cover
+resource, actor, startup/cycle, student, action and request lookups.
+Set `AUDIT_HASH_KEY` to a stable private key for identity lookup. The fallback
+is `JWT_SECRET`; changing the key changes the fingerprints used for searches.
+No retention is enabled by default. Optional `AUDIT_RETENTION_DAYS` from
+1–3650 sets an expiry only on subsequently queued events. The TTL index
+does not expire legacy records or earlier events without that expiry.
+Normal model paths reject audit updates/deletions. Database administrators
+and raw collection access remain outside this application-level restriction.
+
 ## KPI bot browser demo
 
 From the project root, run `npm run demo:kpi-bot` and open

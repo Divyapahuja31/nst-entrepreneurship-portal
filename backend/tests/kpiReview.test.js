@@ -107,7 +107,7 @@ describe('due dates', () => {
     assert.equal(edited.body.data.dueDate, '2026-12-01T18:29:59.999Z')
   })
 
-  it('moves the KPIs saved at UTC midnight to the end of their day, once', async () => {
+  it('moves existing midnight and timed deadlines to the end of their day, once', async () => {
     const old = await KPI.create({
       title: 'Old',
       description: 'x',
@@ -129,7 +129,7 @@ describe('due dates', () => {
     )
     assert.equal(
       (await KPI.findById(timed._id)).dueDate.toISOString(),
-      '2026-11-08T12:00:00.000Z'
+      '2026-11-08T18:29:59.999Z'
     )
     assert.equal(await migrateKpiDueDates(), 0)
   })

@@ -1,5 +1,5 @@
 // Usage: npm run migrate:kpi-due-dates -w backend
-// Moves KPIs due at UTC midnight (5:30 am in India) to the end of their day
+// Moves existing KPI deadlines to the end of their calendar day
 // in India; see utils/kpiDueDateMigration.js. Safe to run again.
 import { migrateKpiDueDates } from '../utils/kpiDueDateMigration.js'
 import { runWithDatabase } from './connect.js'

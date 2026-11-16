@@ -31,3 +31,36 @@ export const cycleForDate = (createdAt, date) => {
   const n = Math.floor(elapsed / CYCLE_MS) + 1
   return n <= CYCLES ? n : null
 }
+
+// Submission windows include the portal's existing one-day timezone allowance.
+// Older reopened reports have no expiry and retain their original access.
+export const biweeklyClosesAt = (createdAt, cycle, submission) => {
+  if (submission?.reopened_until) {
+    return new Date(submission.reopened_until)
+  }
+  if (submission?.reopened_at) {
+    return null
+  }
+  return new Date(cycleDeadline(createdAt, cycle).getTime() + DAY_MS)
+}
+
+export const isBiweeklyOpen = (
+  createdAt,
+  cycle,
+  submission,
+  now = Date.now()
+) => {
+  if (submission?.submitted_at) {
+    return false
+  }
+  if (submission?.reopened_until) {
+    return new Date(submission.reopened_until).getTime() > Number(now)
+  }
+  if (submission?.reopened_at) {
+    return true
+  }
+  return (
+    cycleStart(createdAt, cycle).getTime() - DAY_MS <= Number(now) &&
+    biweeklyClosesAt(createdAt, cycle, submission).getTime() >= Number(now)
+  )
+}

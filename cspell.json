@@ -10,7 +10,6 @@
     "paperplane",
     "exclamationmark",
     "autofilled",
-
     "mongoose",
     "expressjs",
     "mjs",
@@ -25,16 +24,13 @@
     "bson",
     "uuid",
     "unlisten",
-
     "useRevalidator",
     "revalidator",
     "clickaway",
     "partialize",
-
     "nosniff",
     "clickjacking",
     "SAMEORIGIN",
-
     "checkin",
     "checkins",
     "rrule",
@@ -43,7 +39,6 @@
     "defg",
     "Kolkata",
     "signedin",
-
     "preheader",
     "cellspacing",
     "dedupe",
@@ -55,7 +50,6 @@
     "Sharma",
     "Rahul",
     "Mehta",
-
     "Divya",
     "Pahuja",
     "Kanishk",
@@ -107,7 +101,6 @@
     "Buildx",
     "ghcr",
     "v1deployed",
-
     "msword",
     "openxmlformats",
     "officedocument",
@@ -115,7 +108,11 @@
     "spreadsheetml",
     "presentationml",
     "quicktime",
-    "Cofounder"
+    "Cofounder",
+    "bsontype",
+    "upserted",
+    "reportschedule",
+    "unsubmitted"
   ],
   "ignorePaths": [
     "node_modules/**",

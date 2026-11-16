@@ -417,6 +417,16 @@ export const getFounderKPIs = async (req, res) => {
   }
 }
 
+const kpiSaveError = (res, error, message) => {
+  const stale = error.name === 'VersionError'
+  return res.status(stale ? 409 : 500).json({
+    success: false,
+    message: stale
+      ? 'This KPI changed in the meantime. Reload and try again.'
+      : message,
+  })
+}
+
 export const submitKPIForApproval = async (req, res) => {
   try {
     const found = await findKPIForCaller(req, res)
@@ -445,10 +455,7 @@ export const submitKPIForApproval = async (req, res) => {
     })
   } catch (error) {
     console.error('Submit KPI error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to submit KPI',
-    })
+    return kpiSaveError(res, error, 'Failed to submit KPI')
   }
 }
 
@@ -529,7 +536,7 @@ export const evaluateKPI = async (req, res) => {
           status: kpi.status,
           ...(isBoard(req.user) ? {} : { isLocked: { $ne: true } }),
         },
-        { $set: updateFields },
+        { $set: updateFields, $inc: { __v: 1 } },
         { returnDocument: 'after', runValidators: true }
       )
     )
@@ -581,6 +588,7 @@ const setKPILock = (locked, canChange, refusal) => async (req, res) => {
             lockedBy: locked ? req.user.id : null,
             lockedAt: locked ? new Date() : null,
           },
+          $inc: { __v: 1 },
         },
         { returnDocument: 'after' }
       )
@@ -677,10 +685,7 @@ export const submitKPIEvidence = async (req, res) => {
     })
   } catch (error) {
     console.error('Submit KPI evidence error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to submit evidence',
-    })
+    return kpiSaveError(res, error, 'Failed to submit evidence')
   }
 }
 
@@ -737,10 +742,7 @@ export const updateKPI = async (req, res) => {
       .json({ success: true, message: 'KPI updated', data: kpi })
   } catch (error) {
     console.error('Update KPI error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update KPI',
-    })
+    return kpiSaveError(res, error, 'Failed to update KPI')
   }
 }
 
@@ -813,10 +815,7 @@ export const uploadKPIEvidence = async (req, res) => {
   } catch (error) {
     // Storage details (bucket names, AWS errors) stay in the server log.
     console.error('Upload KPI evidence error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to upload evidence',
-    })
+    return kpiSaveError(res, error, 'Failed to upload evidence')
   }
 }
 
@@ -847,10 +846,7 @@ export const deleteKPIEvidence = async (req, res) => {
     })
   } catch (error) {
     console.error('Delete KPI evidence error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete evidence',
-    })
+    return kpiSaveError(res, error, 'Failed to delete evidence')
   }
 }
 

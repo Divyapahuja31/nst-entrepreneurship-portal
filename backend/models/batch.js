@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 const batchSchema = new mongoose.Schema(
@@ -39,6 +40,8 @@ batchSchema.pre('validate', function () {
 })
 
 export const modelName = 'Batch'
+
+auditModel(batchSchema, modelName)
 
 const Batch = mongoose.model(modelName, batchSchema)
 

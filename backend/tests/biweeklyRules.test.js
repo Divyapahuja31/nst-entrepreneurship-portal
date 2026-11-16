@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 
 import app from '../app.js'
+import { updateOrCreateVentureSubmission } from '../utils/biweeklyHelper.js'
+import BiWeeklySubmission from '../models/biWeeklySubmission.js'
 import Venture from '../models/venture.js'
 import { cookieFor, seed, startDatabase, stopDatabase } from './helpers.js'
 
@@ -79,7 +81,10 @@ describe('a student report', () => {
 
   it('a late cycle the board reopens can be submitted again', async () => {
     const { board } = data.users
-    const reopened = await staff(board, 'reopen', { cycle_number: 1 })
+    const reopened = await staff(board, 'reopen', {
+      cycle_number: 1,
+      reopened_until: new Date(Date.now() + DAY_MS).toISOString(),
+    })
     assert.equal(reopened.status, 200)
     assert.ok(reopened.body.submission.reopened_at)
 
@@ -130,5 +135,225 @@ describe('faculty reviews', () => {
     res = await score(4, [80, 60, 50, 100])
     assert.equal(res.body.evaluation.total_score, 72)
     assert.equal(res.body.evaluation.status, 'green')
+  })
+})
+
+describe('admin submission windows', () => {
+  const open = (
+    cycle,
+    until = new Date(Date.now() + DAY_MS).toISOString(),
+    user = data.users.admin
+  ) => staff(user, 'reopen', { cycle_number: cycle, reopened_until: until })
+
+  it('opens a future cycle for one startup, including faculty review', async () => {
+    assert.equal((await report(6)).status, 400)
+    const opened = await open(6)
+    assert.equal(opened.status, 200)
+    assert.ok(opened.body.submission.reopened_until)
+    assert.equal((await report(6)).status, 200)
+    const unrelated = await as(data.users.outsider).post(
+      '/api/biweekly/submission',
+      {
+        cycle_number: 6,
+        progress_summary: 'Another startup',
+      }
+    )
+    assert.equal(unrelated.status, 400)
+    assert.equal((await report(6, { isSubmit: true })).status, 200)
+    assert.equal((await report(6)).status, 403)
+    const review = await staff(data.users.mentor, 'observation', {
+      cycle_number: 6,
+      observation: 'Early work reviewed',
+    })
+    assert.equal(review.status, 200)
+  })
+
+  it('closes an expired window and allows the admin to extend it', async () => {
+    await open(1)
+    assert.equal((await report(1)).status, 200)
+    await BiWeeklySubmission.updateOne(
+      { venture: data.ventures.alpha._id, cycle_number: 1 },
+      { reopened_until: new Date(Date.now() - 1000) }
+    )
+    assert.equal((await report(1)).status, 403)
+    assert.equal((await report(1, { isSubmit: true })).status, 403)
+    assert.equal((await open(1)).status, 200)
+    assert.equal((await report(1, { isSubmit: true })).status, 200)
+  })
+
+  it('validates the expiry and prevents mentors and students from opening windows', async () => {
+    for (const until of [
+      null,
+      '',
+      'bad',
+      '2099-12-01T10:00',
+      new Date(Date.now() - 1000).toISOString(),
+    ]) {
+      assert.equal((await open(6, until)).status, 400)
+    }
+    for (const user of [data.users.mentor, data.users.owner]) {
+      assert.equal((await open(6, undefined, user)).status, 403)
+    }
+    assert.equal(
+      (
+        await report(6, {
+          reopened_until: '2099-12-01T10:00:00Z',
+          reopened_at: new Date(),
+        })
+      ).status,
+      400
+    )
+    assert.equal(
+      await BiWeeklySubmission.countDocuments({ cycle_number: 6 }),
+      0
+    )
+  })
+
+  it('preserves an existing submitted report when it is reopened', async () => {
+    await report(4, { isSubmit: true, wins: 'First customer' })
+    const reopened = await open(4)
+    assert.equal(reopened.status, 200)
+    assert.equal(reopened.body.submission.submitted_at, null)
+    assert.equal(reopened.body.submission.wins, 'First customer')
+    assert.equal((await report(4, { isSubmit: true })).status, 200)
+  })
+})
+
+it('rejects a stale save after the admin changes the submission window', async () => {
+  const window = {
+    cycle_number: 1,
+    reopened_until: new Date(Date.now() + DAY_MS).toISOString(),
+  }
+  await staff(data.users.admin, 'reopen', window)
+  const expected = await BiWeeklySubmission.findOne({
+    venture: data.ventures.alpha._id,
+    cycle_number: 1,
+  })
+  await staff(data.users.admin, 'reopen', window)
+  const saved = await updateOrCreateVentureSubmission({
+    ventureId: data.ventures.alpha._id,
+    userId: data.users.owner._id,
+    cycle_number: 1,
+    data: { progress_summary: 'Stale report' },
+    expected,
+    closesAt: new Date(window.reopened_until),
+  })
+  assert.equal(saved, null)
+  assert.equal(
+    (await BiWeeklySubmission.findById(expected._id)).progress_summary,
+    ''
+  )
+})
+
+describe('opening a cycle for selected startups', () => {
+  const openMany = (ids, user = data.users.admin, fields = {}) =>
+    as(user).post('/api/biweekly/windows', {
+      cycle_number: 6,
+      reopened_until: new Date(Date.now() + DAY_MS).toISOString(),
+      ventureIds: ids,
+      ...fields,
+    })
+
+  it('opens all selected startups and keeps other cycles closed', async () => {
+    const ids = [
+      String(data.ventures.alpha._id),
+      String(data.ventures.beta._id),
+    ]
+    const result = await openMany(ids)
+    assert.equal(result.status, 200)
+    assert.deepEqual(result.body.openedVentureIds.sort(), ids.sort())
+    assert.deepEqual(result.body.failedVentureIds, [])
+    assert.equal((await report(6)).status, 200)
+    const beta = await as(data.users.outsider).post(
+      '/api/biweekly/submission',
+      {
+        cycle_number: 6,
+        progress_summary: 'Beta early work',
+      }
+    )
+    assert.equal(beta.status, 200)
+    assert.equal((await report(7)).status, 400)
+  })
+
+  it('supports one startup and ignores repeated IDs', async () => {
+    const id = String(data.ventures.alpha._id)
+    const result = await openMany([id, id])
+    assert.equal(result.status, 200)
+    assert.deepEqual(result.body.openedVentureIds, [id])
+    assert.equal(
+      await BiWeeklySubmission.countDocuments({ cycle_number: 6 }),
+      1
+    )
+    const beta = await as(data.users.outsider).post(
+      '/api/biweekly/submission',
+      {
+        cycle_number: 6,
+        progress_summary: 'Beta early work',
+      }
+    )
+    assert.equal(beta.status, 400)
+  })
+
+  it('validates every startup and the window before writing anything', async () => {
+    const id = String(data.ventures.alpha._id)
+    assert.equal((await openMany([])).status, 400)
+    assert.equal((await openMany([id, 'invalid'])).status, 400)
+    assert.equal((await openMany([id, '000000000000000000000001'])).status, 404)
+    assert.equal(
+      (await openMany([id], undefined, { reopened_until: 'bad' })).status,
+      400
+    )
+    assert.equal(
+      (await openMany([id], undefined, { cycle_number: 14 })).status,
+      400
+    )
+    for (const user of [data.users.owner, data.users.mentor]) {
+      assert.equal((await openMany([id], user)).status, 403)
+    }
+    assert.equal(
+      await BiWeeklySubmission.countDocuments({ cycle_number: 6 }),
+      0
+    )
+  })
+
+  it('reports partial failures so the client can retry only the remaining startups', async t => {
+    const alpha = String(data.ventures.alpha._id)
+    const beta = String(data.ventures.beta._id)
+    const original = BiWeeklySubmission.findOneAndUpdate
+    t.mock.method(
+      BiWeeklySubmission,
+      'findOneAndUpdate',
+      function (query, ...args) {
+        if (query.custom_id.includes(beta)) {
+          throw new Error('Temporary write failure')
+        }
+        return original.call(this, query, ...args)
+      }
+    )
+    const result = await openMany([alpha, beta])
+    assert.equal(result.status, 207)
+    assert.deepEqual(result.body.openedVentureIds, [alpha])
+    assert.deepEqual(result.body.failedVentureIds, [beta])
+    t.mock.restoreAll()
+    const retry = await openMany(result.body.failedVentureIds)
+    assert.equal(retry.status, 200)
+    assert.deepEqual(retry.body.openedVentureIds, [beta])
+  })
+
+  it('handles concurrent openings without duplicating or clearing report content', async () => {
+    await report(4, { wins: 'Existing work', isSubmit: true })
+    const ids = [String(data.ventures.alpha._id)]
+    const results = await Promise.all([
+      openMany(ids, undefined, { cycle_number: 4 }),
+      openMany(ids, undefined, { cycle_number: 4 }),
+    ])
+    assert.ok(results.every(result => result.status === 200))
+    const rows = await BiWeeklySubmission.find({
+      venture: ids[0],
+      cycle_number: 4,
+    })
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].wins, 'Existing work')
+    assert.equal(rows[0].submitted_at, null)
   })
 })

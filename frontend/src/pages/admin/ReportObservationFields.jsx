@@ -35,7 +35,7 @@ export default function ReportObservationFields({
         disabled={Boolean(pending)}
         helperText={
           layout
-            ? 'Private grading notes. Suggest Grades sends this text to Gemini. Include only details relevant to grading.'
+            ? 'Suggest Grades sends these private notes, the student’s KPI work, team reports, and mentor feedback to Gemini for your review. Include only details relevant to grading.'
             : 'Private grading notes. Switch to Term Layout to get grade suggestions.'
         }
         slotProps={{ htmlInput: { maxLength: limits.observation } }}

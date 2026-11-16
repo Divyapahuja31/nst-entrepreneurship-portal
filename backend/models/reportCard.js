@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import layoutSchema from '../utils/reportCardLayout.js'
 
@@ -34,4 +35,6 @@ const schema = new mongoose.Schema(
 )
 
 export const modelName = 'ReportCard'
+auditModel(schema, modelName)
+
 export default mongoose.model(modelName, schema)

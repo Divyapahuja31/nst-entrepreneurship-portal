@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import startupStage from './enums/startupStage.js'
 
@@ -65,6 +66,8 @@ ventureSchema.virtual('biWeeklySubmissions', {
 })
 
 export const modelName = 'Venture'
+
+auditModel(ventureSchema, modelName)
 
 const Venture = mongoose.model(modelName, ventureSchema)
 

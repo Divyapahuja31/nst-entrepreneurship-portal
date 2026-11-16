@@ -286,33 +286,51 @@ export const loadVentureSubmissions = ventureId =>
     .sort({ cycle_number: 1 })
     .exec()
 
+// A student's save must still match the report and window they read.
+const studentWriteCondition = (expected, closesAt) => ({
+  submitted_at: null,
+  __v: expected?.__v ?? { $exists: false },
+  ...(closesAt && { $expr: { $lt: ['$$NOW', closesAt] } }),
+})
+
 export const updateOrCreateVentureSubmission = async ({
   ventureId,
   userId,
   cycle_number,
   data = {},
   isSubmit = false,
+  expected,
+  closesAt,
 }) => {
   const updateData = { ...data, cycle_number, venture: ventureId }
 
   if (isSubmit) {
     updateData.submitted_at = new Date()
     updateData.reopened_at = null
-    if (userId) {
-      updateData.submitted_by = userId
-    }
+    updateData.submitted_by = userId
   }
 
-  const updateQuery = { $set: updateData }
-  if (userId && !isSubmit) {
-    updateQuery.$setOnInsert = { submitted_by: userId }
+  const updateQuery = { $set: updateData, $inc: { __v: 1 } }
+
+  if (userId && !expected) {
+    if (closesAt && closesAt.getTime() <= Date.now()) {
+      return null
+    }
+    return BiWeeklySubmission.create({
+      ...updateData,
+      custom_id: ventureCycleKey(ventureId, cycle_number),
+      submitted_by: userId,
+    })
   }
 
   return BiWeeklySubmission.findOneAndUpdate(
-    { custom_id: ventureCycleKey(ventureId, cycle_number) },
+    {
+      custom_id: ventureCycleKey(ventureId, cycle_number),
+      ...(userId && studentWriteCondition(expected, closesAt)),
+    },
     updateQuery,
     {
-      upsert: true,
+      upsert: !userId,
       returnDocument: 'after',
       setDefaultsOnInsert: true,
       runValidators: true,

@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // A proposed KPI for a founder or their startup. An admin can accept it
@@ -72,6 +73,8 @@ kpiRecommendationSchema.index({ venture: 1, status: 1 })
 kpiRecommendationSchema.index({ founder: 1, status: 1 })
 
 export const modelName = 'KpiRecommendation'
+
+auditModel(kpiRecommendationSchema, modelName)
 
 const KpiRecommendation = mongoose.model(modelName, kpiRecommendationSchema)
 

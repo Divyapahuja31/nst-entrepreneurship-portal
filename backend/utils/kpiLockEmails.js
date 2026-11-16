@@ -33,7 +33,7 @@ const withBatch = { path: 'batch', select: 'name' }
 
 // Whose grade it is: the founder of a personal KPI, or every active founder
 // of the startup for a startup-wide one.
-const findStudents = async kpi => {
+export const findStudents = async kpi => {
   if (kpi.founder) {
     const founder = await User.findOne({ _id: kpi.founder, deletedAt: null })
       .select(STUDENT_FIELDS)

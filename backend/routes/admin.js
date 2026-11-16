@@ -9,6 +9,7 @@ import programme from './programme.js'
 import setup from './setup.js'
 import reportCards from './reportCards.js'
 import serviceHistory from './serviceHistory.js'
+import { getAuditHistory } from '../controllers/audit.js'
 
 import {
   createFounder,
@@ -49,6 +50,7 @@ router.put(
 )
 
 router.use('/accounts', requireRole(ROLES.ADMIN), accounts)
+router.get('/audit-log', requireRole(ROLES.ADMIN), getAuditHistory)
 router.use('/programme', requireRole(ROLES.ADMIN), programme)
 router.use('/extra-sessions', requireRole(...BOARD_ROLES), extraSessions)
 router.use('/setup', requireRole(ROLES.ADMIN), setup)

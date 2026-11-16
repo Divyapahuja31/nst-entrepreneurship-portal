@@ -5,6 +5,7 @@ import {
   saveBiWeeklyObservation,
   saveBiWeeklyEvaluation,
   reopenBiWeeklySubmission,
+  openBiWeeklyWindows,
 } from '../controllers/biweekly.js'
 
 const router = Router()
@@ -14,5 +15,6 @@ router.post('/submission', submitBiWeeklyCycle)
 router.post('/observation', saveBiWeeklyObservation)
 router.post('/evaluation', saveBiWeeklyEvaluation)
 router.post('/reopen', reopenBiWeeklySubmission)
+router.post('/windows', openBiWeeklyWindows)
 
 export default router

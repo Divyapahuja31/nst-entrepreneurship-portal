@@ -25,3 +25,8 @@ export const reopenBiWeeklySubmission = async payload => {
   const { data } = await api.post('/biweekly/reopen', payload)
   return data
 }
+
+export const openBiWeeklyWindows = async payload => {
+  const { data } = await api.post('/biweekly/windows', payload)
+  return data
+}

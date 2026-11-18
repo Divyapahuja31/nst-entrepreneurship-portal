@@ -1,10 +1,7 @@
+import { biweeklyClosesAt } from '@nst/shared/biweeklyCycles.js'
 import mongoose from 'mongoose'
 import { isStaff, isStudent } from '@nst/shared/permissions.js'
-import {
-  CYCLES,
-  cycleDeadline,
-  cycleStart,
-} from '@nst/shared/biweeklyCycles.js'
+import { CYCLES, cycleStart } from '@nst/shared/biweeklyCycles.js'
 import User from '../models/user.js'
 import Venture from '../models/venture.js'
 import Founder from '../models/founder.js'
@@ -45,7 +42,6 @@ export const validateCycleNumber = n => {
 }
 
 const MAX_EVIDENCE_LINKS = 20
-const DAY_MS = 24 * 60 * 60 * 1000
 
 // Evidence URLs are typed by students and shown to faculty as links, so only
 // web addresses are kept: no javascript:, data: or other schemes.
@@ -79,14 +75,13 @@ export const validateEvidenceLinks = links => {
 }
 
 // Cycles open every 14 days from the venture's creation, as on the bi-weekly
-// page. A day of slack covers the student's time zone.
+// page, with the same opening instant on the server.
 export const hasCycleStarted = (ventureCreatedAt, cycleNum, now = Date.now()) =>
-  cycleStart(ventureCreatedAt, cycleNum).getTime() - DAY_MS <= now
+  cycleStart(ventureCreatedAt, cycleNum).getTime() <= now
 
-// Whether a cycle's report deadline has passed. The same day of slack as
-// hasCycleStarted.
+// Whether the exclusive business-calendar cutoff has been reached.
 export const isPastDeadline = (ventureCreatedAt, cycleNum, now = Date.now()) =>
-  cycleDeadline(ventureCreatedAt, cycleNum).getTime() + DAY_MS < now
+  biweeklyClosesAt(ventureCreatedAt, cycleNum).getTime() <= now
 
 const NUMBER_FIELDS = {
   hours_worked: 'Hours worked',
@@ -316,8 +311,9 @@ export const updateOrCreateVentureSubmission = async ({
     if (closesAt && closesAt.getTime() <= Date.now()) {
       return null
     }
-    return BiWeeklySubmission.create({
-      ...updateData,
+    expected = await BiWeeklySubmission.create({
+      venture: ventureId,
+      cycle_number,
       custom_id: ventureCycleKey(ventureId, cycle_number),
       submitted_by: userId,
     })

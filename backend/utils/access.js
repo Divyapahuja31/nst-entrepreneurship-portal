@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { deadlinePassed } from '@nst/shared/deadlines.js'
 import {
   ROLES,
   isBoard,
@@ -120,7 +121,7 @@ export const ventureAccess = async (actor, ventureOrId) => {
 }
 
 export const isPastDue = (dueDate, now = Date.now()) =>
-  Boolean(dueDate) && new Date(dueDate).getTime() < now
+  deadlinePassed(dueDate, now)
 
 // The KPI context the shared can*Kpi rules take.
 export const kpiContext = async (actor, kpi) => {
@@ -131,7 +132,8 @@ export const kpiContext = async (actor, kpi) => {
     kpiFounderId: idOf(kpi.founder),
     status: kpi.status,
     isLocked: Boolean(kpi.isLocked),
-    isPastDue: isPastDue(kpi.dueDate),
+    isPastDue: deadlinePassed(kpi.dueDate, Date.now(), kpi.dueDateKind),
+    deadline: kpi.dueDate,
   }
 }
 

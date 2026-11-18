@@ -4,7 +4,14 @@ import { auditCollectionMutation } from './auditModel.js'
 
 // Idempotent normalization of historical deadlines to the end of their
 // calendar day. Use a pipeline so concurrent edits keep their own date.
-export const migrateKpiDueDates = async () => {
+export const migrateKpiDueDates = async ({
+  confirmedDateOnly = false,
+} = {}) => {
+  if (!confirmedDateOnly) {
+    throw new Error(
+      'Review legacy deadline semantics first and pass confirmedDateOnly explicitly.'
+    )
+  }
   const endOfDay = {
     $subtract: [
       {
@@ -26,6 +33,7 @@ export const migrateKpiDueDates = async () => {
   }
   const filter = {
     dueDate: { $type: 'date' },
+    dueDateKind: { $ne: 'timestamp' },
     $expr: { $ne: ['$dueDate', endOfDay] },
   }
   const { modifiedCount } = await auditCollectionMutation(KPI, filter, () =>

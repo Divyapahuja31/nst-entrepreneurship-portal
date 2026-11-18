@@ -1,3 +1,4 @@
+import { deadlineLabel, openDeadlineFilter } from '@nst/shared/deadlines.js'
 import mongoose from 'mongoose'
 import {
   canAddKpi,
@@ -82,9 +83,15 @@ const findKPIForCaller = async (req, res) => {
 // The caller can see the KPI but may not do this to it. A lock is the
 // usual reason, so say so when it is.
 const refuse = (res, ctx, message) =>
-  res
-    .status(403)
-    .json({ success: false, message: kpiLockReason(ctx) ?? message })
+  res.status(403).json({
+    success: false,
+    message:
+      ctx.isPastDue && ctx.deadline
+        ? 'The KPI deadline was ' +
+          deadlineLabel(ctx.deadline) +
+          '. Submissions and edits are closed.'
+        : (kpiLockReason(ctx) ?? message),
+  })
 
 export const getAllKPIs = async (req, res) => {
   try {
@@ -418,7 +425,10 @@ export const getFounderKPIs = async (req, res) => {
 }
 
 const kpiSaveError = (res, error, message) => {
-  const stale = error.name === 'VersionError'
+  if (error.name === 'DeadlineError') {
+    return res.status(403).json({ success: false, message: error.message })
+  }
+  const stale = ['VersionError', 'DocumentNotFoundError'].includes(error.name)
   return res.status(stale ? 409 : 500).json({
     success: false,
     message: stale
@@ -760,7 +770,18 @@ export const deleteKPI = async (req, res) => {
       return refuse(res, ctx, 'This KPI can no longer be deleted')
     }
 
-    await kpi.deleteOne()
+    const removed = await KPI.deleteOne({
+      _id: kpi._id,
+      __v: kpi.__v,
+      ...(isStudent(req.user) ? openDeadlineFilter() : {}),
+    })
+    if (!removed.deletedCount) {
+      return res.status(409).json({
+        success: false,
+        message:
+          'This KPI changed or its deadline was reached. Reload to review the deadline.',
+      })
+    }
 
     await SubKPI.deleteMany({ parentKPI: kpi._id })
 

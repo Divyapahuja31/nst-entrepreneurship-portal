@@ -11,7 +11,7 @@ export const AUDIT_FIELDS = {
   Role: 'name',
   Venture: 'name description stage mentors campus industry',
   Founder: 'user venture status joinedAt leftAt',
-  KPI: 'title description venture founder scope createdBy dueDate status score isLocked lockedBy lockedAt evaluatedBy evaluationDate submissionDate evidence.fileName evidence.uploadedAt actualValue',
+  KPI: 'title description venture founder scope createdBy dueDate dueDateKind status score isLocked lockedBy lockedAt evaluatedBy evaluationDate submissionDate evidence.fileName evidence.uploadedAt actualValue',
   SubKPI: 'name description parentKPI',
   BiWeeklySubmission:
     'venture cycle_number submitted_by submitted_at reopened_at reopened_until biWeeklyEvaluation biWeeklyObservationSchema progress_summary evidence_links hours_worked customer_interviews features_shipped revenue users_acquired experiments_run',

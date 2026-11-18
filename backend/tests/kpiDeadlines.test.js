@@ -30,18 +30,18 @@ const create = (fields = {}) =>
     founder: data.users.owner._id,
     createdBy: data.users.owner._id,
     status: 'ACCEPTED',
-    dueDate: new Date('2026-12-01T00:00:00Z'),
+    dueDate: kpiDueDate('2026-12-01'),
     ...fields,
   })
 
-it('normalizes timestamps to India end of day, including a UTC date rollover', () => {
+it('preserves explicit timestamps and normalizes date-only deadlines', () => {
   assert.equal(
     kpiDueDate('2026-12-01T12:00:00Z').toISOString(),
-    '2026-12-01T18:29:59.999Z'
+    '2026-12-01T12:00:00.000Z'
   )
   assert.equal(
     kpiDueDate('2026-12-01T20:00:00Z').toISOString(),
-    '2026-12-02T18:29:59.999Z'
+    '2026-12-01T20:00:00.000Z'
   )
   assert.equal(kpiDueDate(null), null)
 })
@@ -152,4 +152,26 @@ it('returns a conflict when automatic grading wins a race with a submission', as
   const saved = await KPI.findById(kpi._id)
   assert.equal(saved.status, 'GRADED')
   assert.equal(saved.evidence.supportingText, '')
+})
+
+it('rejects API evidence at an exact timestamp, with a dated error', async t => {
+  const cutoff = Date.now() + 10000
+  const kpi = await create({
+    dueDate: new Date(cutoff),
+    dueDateKind: 'timestamp',
+  })
+  let clock = cutoff - 1
+  t.mock.method(Date, 'now', () => clock)
+  const send = () =>
+    request(app)
+      .put('/api/kpis/' + kpi.id + '/evidence')
+      .set('Cookie', cookieFor(data.users.owner))
+      .send({ supportingText: 'Findings' })
+  await send().expect(200)
+  clock = cutoff
+  const closed = await send().expect(403)
+  assert.match(closed.body.message, /deadline was/)
+  assert.match(closed.body.message, /IST/)
+  clock = cutoff + 3600000
+  await send().expect(403)
 })

@@ -1,3 +1,4 @@
+import { deadlinePassed, BUSINESS_TIME_ZONE } from '@nst/shared/deadlines.js'
 import { useEffect, useState } from 'react'
 
 import { Alert, Box, Button, Typography } from '@mui/material'
@@ -12,6 +13,7 @@ import { SparklesIcon } from './icons'
 
 const formatDay = date =>
   new Date(date).toLocaleDateString(undefined, {
+    timeZone: BUSINESS_TIME_ZONE,
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -35,8 +37,7 @@ const fetchRecommendations = async (ventureId, founderId) => {
   }
 }
 
-const isPastDue = rec =>
-  Boolean(rec.dueDate) && new Date(rec.dueDate) < new Date()
+const isPastDue = rec => deadlinePassed(rec.dueDate)
 
 function Recommendation({ rec, busy, onAccept, onDismiss }) {
   const pastDue = isPastDue(rec)

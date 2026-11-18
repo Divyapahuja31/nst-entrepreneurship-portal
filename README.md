@@ -394,3 +394,31 @@ The first run downloads a MongoDB binary for the tests.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and, for UI work, [DESIGN.md](DESIGN.md). A change to who may do what updates `shared/permissions.js`, its tests and the table above together.
+
+## Deadline contracts
+
+The portal business timezone is explicitly Asia/Kolkata, shared by the API,
+background jobs and browser. A date-only KPI deadline is stored at the last
+inclusive millisecond of that date and marked dueDateKind=date. Its exclusive
+cutoff is the next local midnight. Explicit timezone-qualified timestamps
+are marked dueDateKind=timestamp and reject actions at that exact instant.
+Changing another field in the date-picker dialog preserves an unchanged
+timestamp. Calendar dates and labels never depend on the host timezone.
+
+Bi-weekly deadlines retain the existing three calendar grace days after the
+cycle, then close at the next business midnight following the displayed due
+date. There is no further 24-hour allowance from the startup creation time.
+Reopening timestamps remain exact exclusive instants. Legacy indefinite
+reopenings still require an administrative closing decision.
+
+Historical timestamps are preserved. Legacy normalized end-of-day values keep
+their date-only meaning. Ambiguous midnight values retain their stored instant.
+The background job no longer normalizes historical data. The manual migration
+requires --confirmed-date-only after operator review, excludes explicit
+timestamps, and must not be run against ambiguous records without reviewing
+the set it will affect. This change performs no live data migration.
+
+MongoDB server-time predicates protect KPI saves and deletes and bi-weekly
+final writes against a deadline passing during the request. Faculty grading,
+locking and authorized deadline corrections retain their role-based permissions
+after student submissions close.

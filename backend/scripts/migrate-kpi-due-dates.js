@@ -6,6 +6,6 @@ import { runWithDatabase } from './connect.js'
 
 runWithDatabase(async () => {
   console.info(
-    `KPIs now due at the end of their day: ${await migrateKpiDueDates()}`
+    `KPIs now due at the end of their day: ${await migrateKpiDueDates({ confirmedDateOnly: process.argv.includes('--confirmed-date-only') })}`
   )
 })

@@ -9,7 +9,7 @@ import {
   paragraph,
   plainText,
 } from './emailTemplates/layout.js'
-import { migrateKpiDueDates } from './kpiDueDateMigration.js'
+import { mongoDeadlineCutoff } from '@nst/shared/deadlines.js'
 import { DEFAULT_TIME_ZONE } from './programme.js'
 
 const DAY_MS = 86400000
@@ -58,10 +58,13 @@ const remind = async kpi => {
 }
 
 export const processKpiDeadlines = async (now = new Date()) => {
-  // Normalize legacy deadlines before enforcing them, including on restart.
-  await migrateKpiDueDates()
+  // Enforce stored instants without rewriting historical deadlines.
   const { modifiedCount: graded } = await KPI.updateMany(
-    { ...unfinished, dueDate: { $type: 'date', $lt: now } },
+    {
+      ...unfinished,
+      dueDate: { $type: 'date' },
+      $expr: { $lte: [mongoDeadlineCutoff(), now] },
+    },
     {
       $set: {
         status: 'GRADED',
@@ -76,9 +79,13 @@ export const processKpiDeadlines = async (now = new Date()) => {
   )
   const eligible = {
     ...unfinished,
-    dueDate: { $gte: now, $lte: new Date(now.getTime() + DAY_MS) },
+    dueDate: { $type: 'date' },
     $expr: {
-      $ne: [{ $ifNull: ['$deadlineReminderSentFor', null] }, '$dueDate'],
+      $and: [
+        { $gt: [mongoDeadlineCutoff(), now] },
+        { $lte: [mongoDeadlineCutoff(), new Date(now.getTime() + DAY_MS)] },
+        { $ne: [{ $ifNull: ['$deadlineReminderSentFor', null] }, '$dueDate'] },
+      ],
     },
     $or: [
       { deadlineReminderLeaseUntil: null },

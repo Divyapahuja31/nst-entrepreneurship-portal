@@ -1,3 +1,4 @@
+import { deadlineLabel } from '@nst/shared/deadlines.js'
 import mongoose from 'mongoose'
 import Venture from '../models/venture.js'
 import { biweeklyClosesAt, isBiweeklyOpen } from '@nst/shared/biweeklyCycles.js'
@@ -104,7 +105,7 @@ const closedCycleRefusal = (existing, origin, cycleNum) => {
   }
   return {
     status: 403,
-    error: `The deadline for cycle ${cycleNum} has passed. Ask faculty to reopen it.`,
+    error: `The deadline for cycle ${cycleNum} has passed. It was ${deadlineLabel(new Date(biweeklyClosesAt(origin, cycleNum, existing).getTime() - 1))}. Ask faculty to reopen it.`,
   }
 }
 

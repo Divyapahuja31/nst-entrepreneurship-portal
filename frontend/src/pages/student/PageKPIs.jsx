@@ -1,3 +1,4 @@
+import useDeadlineRefresh from '../../hooks/useDeadlineRefresh'
 import { useState, Fragment } from 'react'
 import {
   useLoaderData,
@@ -128,6 +129,7 @@ function StudentKpiRow({
 }
 
 export default function Kpis() {
+  useDeadlineRefresh()
   const loaderData = useLoaderData()
   const { ventureId: routeVentureId } = useParams()
   const userProfile = useAuthStore(state => state.user)

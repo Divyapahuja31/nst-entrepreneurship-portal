@@ -1,3 +1,5 @@
+import useDeadlineRefresh from '../../hooks/useDeadlineRefresh'
+import { BUSINESS_TIME_ZONE } from '@nst/shared/deadlines.js'
 import BiweeklyWindowDialog from './BiweeklyWindowDialog'
 import * as React from 'react'
 import { Link as RouterLink, useLoaderData, useRevalidator } from 'react-router'
@@ -258,6 +260,7 @@ function dateRange(start, end) {
 }
 
 function BiWeekly({ data: propData }) {
+  useDeadlineRefresh()
   const loaderData = useLoaderData()
   // Embedded in the admin founder profile, which already has its own page title.
   const embedded = propData !== undefined
@@ -1352,7 +1355,11 @@ function CycleForm({
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {existing?.reopened_until ? 'Open until ' : 'Due '}
-            {(closesAt ?? deadline).toLocaleString(undefined, {
+            {new Date(
+              (closesAt ?? deadline).getTime() -
+                (existing?.reopened_until ? 0 : 1)
+            ).toLocaleString(undefined, {
+              timeZone: BUSINESS_TIME_ZONE,
               month: 'short',
               day: 'numeric',
               year: 'numeric',

@@ -1,3 +1,4 @@
+import { calendarDate } from '@nst/shared/deadlines.js'
 import { useState } from 'react'
 import {
   Dialog,
@@ -33,7 +34,7 @@ export default function AddKpi({
     if (open && initialData) {
       setKpiName(initialData.title || '')
       setDescription(initialData.description || '')
-      setDueDate(initialData.dueDate ? initialData.dueDate.split('T')[0] : '')
+      setDueDate(initialData.dueDate ? calendarDate(initialData.dueDate) : '')
       setFounderId(initialData.founder?._id || initialData.founder || '')
       setSubKpis(
         initialData.subKPIs
@@ -90,7 +91,10 @@ export default function AddKpi({
       await onSave({
         title: kpiName.trim(),
         description: description.trim() || kpiName.trim(),
-        dueDate,
+        ...(initialData?.dueDate &&
+        dueDate === calendarDate(initialData.dueDate)
+          ? {}
+          : { dueDate }),
         status,
         founder: founderId || null,
         subKpis: validSubKpis,

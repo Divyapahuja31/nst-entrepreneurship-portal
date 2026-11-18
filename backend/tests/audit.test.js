@@ -191,7 +191,7 @@ it('captures schedule edits and deadline normalization without auditing maintena
   await withAuditContext(
     { source: 'job', job: 'Deadline normalization' },
     async () => {
-      await migrateKpiDueDates()
+      await migrateKpiDueDates({ confirmedDateOnly: true })
       await ReportSchedule.create({ key: 'reports', startDate: '2026-01-01' })
       await ReportSchedule.findOneAndUpdate(
         { key: 'reports' },

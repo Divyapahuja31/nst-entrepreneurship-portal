@@ -1,3 +1,9 @@
+import {
+  openDeadlineFilter,
+  deadlinePassed,
+  deadlineLabel,
+} from '@nst/shared/deadlines.js'
+import { auditContext } from '../utils/auditContext.js'
 import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import KPIStatus from './enums/KPIStatus.js'
@@ -19,6 +25,7 @@ const kpiSchema = new mongoose.Schema(
 
     deadlineReminderSentFor: { type: Date, select: false },
     deadlineReminderLeaseUntil: { type: Date, select: false },
+    dueDateKind: { type: String, enum: ['date', 'timestamp'] },
     dueDate: {
       type: Date,
     },
@@ -149,6 +156,23 @@ kpiSchema.index({ venture: 1, scope: 1 })
 kpiSchema.index({ founder: 1 })
 kpiSchema.index({ status: 1, dueDate: 1 })
 kpiSchema.index({ status: 1, evaluationDate: 1, score: 1 })
+
+// The conditional save rechecks the stored deadline using MongoDB server time.
+kpiSchema.pre('save', function () {
+  if (this.isNew || auditContext()?.actor?.role !== 'student') {
+    return
+  }
+  if (deadlinePassed(this.dueDate, Date.now(), this.dueDateKind)) {
+    const error = new Error(
+      'The KPI deadline was ' +
+        deadlineLabel(this.dueDate) +
+        '. Submissions are closed.'
+    )
+    error.name = 'DeadlineError'
+    throw error
+  }
+  this.$where = { ...this.$where, ...openDeadlineFilter() }
+})
 
 export const modelName = 'KPI'
 

@@ -3,24 +3,14 @@ import { EVALUATION_TRANSITIONS, isStudent } from '@nst/shared/permissions.js'
 
 import { uploadToS3 } from '../config/s3.js'
 import KPIStatus from '../models/enums/KPIStatus.js'
-import { DEFAULT_TIME_ZONE, zonedDate } from './programme.js'
+import { parseDeadline } from '@nst/shared/deadlines.js'
 
-// Every deadline closes at the end of its calendar day in the portal zone.
-export const kpiDueDate = dueDate => {
-  if (!dueDate) {
-    return null
-  }
-  const day =
-    typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(dueDate)
-      ? dueDate
-      : new Intl.DateTimeFormat('en-CA', {
-          timeZone: DEFAULT_TIME_ZONE,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        }).format(new Date(dueDate))
-  return new Date(zonedDate(day, '23:59', DEFAULT_TIME_ZONE).getTime() + 59999)
-}
+const deadlineKind = value =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? 'date'
+    : 'timestamp'
+
+export const kpiDueDate = parseDeadline
 
 // Scores are out of 100; health thresholds and the overview chart assume it.
 // Returns null when no score was sent and -1 when it is out of range.
@@ -111,6 +101,7 @@ export const buildKPIUpdateFields = ({
   assignIfDefined(fields, 'description', description)
   if (dueDate !== undefined) {
     fields.dueDate = kpiDueDate(dueDate)
+    fields.dueDateKind = deadlineKind(dueDate)
   }
   assignIfDefined(fields, 'targetValue', targetValue)
   assignIfDefined(fields, 'actualValue', actualValue)
@@ -197,6 +188,7 @@ export const buildNewKPIDocument = ({
     title: title.trim(),
     description: description.trim(),
     dueDate: kpiDueDate(dueDate),
+    dueDateKind: deadlineKind(dueDate),
     venture,
     scope: resolvedScope.scope,
     founder: resolvedScope.founder,

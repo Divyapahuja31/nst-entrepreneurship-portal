@@ -197,6 +197,7 @@ Staff means admin, academic board and mentor. The board means admin and academic
 | Add progress or upload evidence | ❌ | ❌ | ❌ | own KPI, while not locked, graded or past due |
 | Remove evidence | ✅ | ✅ | ❌ | own KPI, under the same conditions |
 | Submit a bi-weekly report | ❌ | ❌ | ❌ | own startup, until submitted or past its deadline (unless reopened) |
+| Customize a startup’s bi-weekly form | ✅ | ❌ | ❌ | ❌ |
 | Write bi-weekly observations and evaluations | ✅ | ✅ | assigned startups | ❌ |
 | Reopen a submitted bi-weekly report | ✅ | ✅ | ❌ | ❌ |
 | Set up the programme: calendar, staff, who is invited, sessions | ✅ | ❌ | ❌ | ❌ |
@@ -422,3 +423,26 @@ MongoDB server-time predicates protect KPI saves and deletes and bi-weekly
 final writes against a deadline passing during the request. Faculty grading,
 locking and authorized deadline corrections retain their role-based permissions
 after student submissions close.
+
+
+## Startup-specific bi-weekly forms
+
+Admins open a founder profile, select **Bi-weekly**, and click **Edit Report Form**.
+The editor applies to that founder’s startup and all its co-founders. Add, remove,
+reorder and edit questions, headings, and text blocks; choose short/long text,
+nonnegative numbers, dates, dropdowns, checkboxes, or web links. Required questions
+are checked on submission; incomplete drafts remain saveable. Preview shows the
+student form before saving. Only admins can call `PUT /api/biweekly/form`.
+
+Startups without a customized form keep the existing common form. The editor
+starts with the standard report fields. Keeping their IDs preserves their mapping
+to existing analytics; labels can change and fields can be removed. Custom web-link
+questions can replace the common evidence checklist when a custom form is used.
+Forms are limited to 60 blocks and dropdowns to 30 options.
+
+A report snapshots its form on its first student save. Existing drafts, submitted
+reports and reopened reports keep their original questions; legacy reports retain
+the common form. Editing a startup form affects only reports not yet started.
+Revision checks reject stale admin edits and first saves made against an outdated
+form. Form edits enter the existing audit log; custom answers are fingerprinted
+rather than copied into activity records. No migration of existing reports is needed.

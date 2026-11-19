@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   getBiWeeklyData,
+  saveBiweeklyForm,
   submitBiWeeklyCycle,
   saveBiWeeklyObservation,
   saveBiWeeklyEvaluation,
@@ -10,6 +11,7 @@ import {
 
 const router = Router()
 
+router.put('/form', saveBiweeklyForm)
 router.get('/', getBiWeeklyData)
 router.post('/submission', submitBiWeeklyCycle)
 router.post('/observation', saveBiWeeklyObservation)

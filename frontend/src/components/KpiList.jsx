@@ -1,3 +1,4 @@
+import { formatDeadline } from './kpiStatus'
 import {
   Box,
   ButtonBase,
@@ -224,7 +225,9 @@ export function KpiRow({ kpi, owner, expanded, onToggle, action, children }) {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {owner && <>{owner} · </>}
-              {kpi.dueDate ? `Due ${formatDate(kpi.dueDate)}` : 'No due date'}
+              {kpi.dueDate
+                ? `Due ${formatDeadline(kpi.dueDate)}`
+                : 'No due date'}
               {kpi.status === 'GRADED' && kpi.score != null && (
                 <> · {kpi.score} pts</>
               )}

@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // A mentor's connection to their Google Calendar, used to put check-ins on
@@ -36,6 +37,8 @@ const googleCredentialSchema = new mongoose.Schema(
 )
 
 export const modelName = 'GoogleCredential'
+
+auditModel(googleCredentialSchema, modelName)
 
 const GoogleCredential = mongoose.model(modelName, googleCredentialSchema)
 

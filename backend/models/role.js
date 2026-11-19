@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 const roleSchema = new mongoose.Schema(
@@ -17,6 +18,8 @@ const roleSchema = new mongoose.Schema(
 )
 
 export const modelName = 'Role'
+
+auditModel(roleSchema, modelName)
 
 const Role = mongoose.model(modelName, roleSchema)
 

@@ -1,13 +1,12 @@
 import { api } from './client'
 import toError from './toError'
 
-// KPIs the bot recommends from meeting transcripts. A student gets their
-// own; staff name the startup. Each returns { error } on failure.
+// Admin review of the KPIs the bot recommends for a startup.
 
 export const listRecommendations = async ventureId => {
   try {
     const { data } = await api.get('/kpi-recommendations', {
-      params: ventureId ? { ventureId } : undefined,
+      params: { ventureId },
     })
     return { recommendations: data.data }
   } catch (err) {
@@ -15,7 +14,7 @@ export const listRecommendations = async ventureId => {
   }
 }
 
-// Makes it the founder's draft KPI, returned as `kpi`.
+// Makes it a draft KPI, returned as `kpi`.
 export const acceptRecommendation = async id => {
   try {
     const { data } = await api.post(`/kpi-recommendations/${id}/accept`)

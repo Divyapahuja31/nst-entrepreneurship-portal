@@ -17,28 +17,43 @@ import {
   REPORT_CARD_LIMITS as limits,
   gradeLayoutError,
 } from '@nst/shared/reportCards.js'
-import { createTemplate } from '../../api/reportCards'
+import { createTemplate, updateTemplateCriteria } from '../../api/reportCards'
 import PageHeader from '../../components/PageHeader'
 import SectionCard from '../../components/SectionCard'
 import GradeLayoutFields from '../../components/GradeLayoutFields'
+import TemplateCriteriaFields from '../../components/TemplateCriteriaFields'
 import { newGradeLayout } from '../../components/gradeLayout'
 
-function TemplateDialog({ onClose, onSaved }) {
-  const [name, setName] = useState('')
-  const [layout, setLayout] = useState(newGradeLayout)
+function TemplateDialog({ template, onClose, onSaved }) {
+  const [name, setName] = useState(template?.name ?? '')
+  const [layout, setLayout] = useState(
+    () => template?.layout ?? newGradeLayout()
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   async function save(event) {
     event.preventDefault()
-    const problem = gradeLayoutError(layout)
+    const subjects = layout.subjects?.filter(
+      item =>
+        item.name.trim() ||
+        item.description?.trim() ||
+        (layout.mode === 'numeric' && Number(item.max) !== 100)
+    )
+    const templateLayout = { ...layout, subjects }
+    const problem = gradeLayoutError(templateLayout)
     if (problem) {
       setError(problem)
       return
     }
     setSaving(true)
     setError('')
-    const result = await createTemplate({ name, layout })
+    const result = template
+      ? await updateTemplateCriteria(template._id, {
+          subjects: subjects ?? [],
+          updatedAt: template.updatedAt ?? null,
+        })
+      : await createTemplate({ name, layout: templateLayout })
     setSaving(false)
     if (result.error) {
       setError(result.error)
@@ -50,23 +65,40 @@ function TemplateDialog({ onClose, onSaved }) {
   return (
     <Dialog open onClose={saving ? undefined : onClose} fullWidth maxWidth="md">
       <form onSubmit={save}>
-        <DialogTitle>New Template</DialogTitle>
+        <DialogTitle>
+          {template ? 'Edit Template Criteria' : 'New Template'}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}
-            <TextField
-              label="Template name"
-              autoFocus
-              required
-              value={name}
-              onChange={event => setName(event.target.value)}
-              slotProps={{ htmlInput: { maxLength: limits.title } }}
-            />
-            <GradeLayoutFields
+            {template ? (
+              <Typography variant="body2" color="text.secondary">
+                {template.name} · Changes apply to new report cards.
+              </Typography>
+            ) : (
+              <TextField
+                label="Template name"
+                autoFocus
+                required
+                value={name}
+                onChange={event => setName(event.target.value)}
+                slotProps={{ htmlInput: { maxLength: limits.title } }}
+              />
+            )}
+            <TemplateCriteriaFields
               layout={layout}
-              onChange={setLayout}
+              onChange={subjects =>
+                setLayout(current => ({ ...current, subjects }))
+              }
               disabled={saving}
             />
+            {!template && (
+              <GradeLayoutFields
+                layout={layout}
+                onChange={setLayout}
+                disabled={saving}
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -87,7 +119,7 @@ export default function PageReportCards() {
   const navigate = useNavigate()
   const [templates, setTemplates] = useState(data.templates)
   const [student, setStudent] = useState(null)
-  const [addingTemplate, setAddingTemplate] = useState(false)
+  const [editing, setEditing] = useState(null)
 
   return (
     <Box sx={{ maxWidth: 1040, mx: 'auto' }}>
@@ -125,7 +157,7 @@ export default function PageReportCards() {
         <SectionCard
           title="Templates"
           action={
-            <Button variant="outlined" onClick={() => setAddingTemplate(true)}>
+            <Button variant="outlined" onClick={() => setEditing({})}>
               New Template
             </Button>
           }
@@ -146,7 +178,24 @@ export default function PageReportCards() {
                     bgcolor: 'background.default',
                   }}
                 >
-                  <Typography variant="subtitle1">{template.name}</Typography>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Typography variant="subtitle1">{template.name}</Typography>
+                    {template.layout && (
+                      <Button
+                        size="small"
+                        onClick={() => setEditing({ template })}
+                      >
+                        Edit Criteria
+                      </Button>
+                    )}
+                  </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {template.layout
                       ? template.layout.terms
@@ -167,12 +216,19 @@ export default function PageReportCards() {
           )}
         </SectionCard>
       </Stack>
-      {addingTemplate && (
+      {editing && (
         <TemplateDialog
-          onClose={() => setAddingTemplate(false)}
+          template={editing.template}
+          onClose={() => setEditing(null)}
           onSaved={template => {
-            setTemplates(current => [...current, template])
-            setAddingTemplate(false)
+            setTemplates(current =>
+              editing.template
+                ? current.map(item =>
+                    item._id === template._id ? template : item
+                  )
+                : [...current, template]
+            )
+            setEditing(null)
           }}
         />
       )}

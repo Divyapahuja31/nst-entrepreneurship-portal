@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // The admin whose Google Calendar holds every programme session, bi-weekly
@@ -21,6 +22,8 @@ const calendarHostSchema = new mongoose.Schema(
 )
 
 export const modelName = 'CalendarHost'
+
+auditModel(calendarHostSchema, modelName)
 
 const CalendarHost = mongoose.model(modelName, calendarHostSchema)
 

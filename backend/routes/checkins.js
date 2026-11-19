@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { ROLES } from '@nst/shared/permissions.js'
 import {
   addKpiBot,
   cancelCheckIn,
@@ -10,6 +11,7 @@ import {
   rescheduleCheckIn,
   saveCheckInNotes,
 } from '../controllers/checkin.js'
+import requireRole from '../middleware/requireRole.js'
 
 const router = Router()
 
@@ -19,7 +21,7 @@ router.get('/:id', getCheckIn)
 router.patch('/:id', rescheduleCheckIn)
 router.put('/:id/notes', saveCheckInNotes)
 router.post('/:id/transcript/refresh', refreshTranscript)
-router.post('/:id/kpi-bot', addKpiBot)
+router.post('/:id/kpi-bot', requireRole(ROLES.ADMIN), addKpiBot)
 router.delete('/:id', cancelCheckIn)
 router.delete('/series/:seriesId', endCheckInSeries)
 

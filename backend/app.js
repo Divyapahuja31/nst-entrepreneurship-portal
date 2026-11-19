@@ -7,6 +7,8 @@ import cors from 'cors'
 import 'dotenv/config'
 import routes from './routes/index.js'
 import attachUser from './middleware/attachUser.js'
+import serviceErrors from './middleware/serviceErrors.js'
+import audit from './middleware/audit.js'
 
 // The Express app, without a database connection or a listening port, so
 // tests can drive it directly. server.js starts it.
@@ -50,11 +52,20 @@ app.use(
     credentials: true,
   })
 )
+app.use('/api', serviceErrors)
+app.use('/api', audit)
 // The report grid can hold 30 rows of up to 17 cells, including Unicode.
 app.put(
   '/api/admin/report-cards/students/:studentId',
   express.json({ limit: '512kb' })
 )
+app.post(
+  '/api/admin/report-cards/students/:studentId/grade-suggestions',
+  express.json({ limit: '512kb' })
+)
+// Form limits cover 60 bounded Unicode blocks and their long-text answers.
+app.put('/api/biweekly/form', express.json({ limit: '2mb' }))
+app.post('/api/biweekly/submission', express.json({ limit: '4mb' }))
 app.use(express.json())
 app.use(cookieParser())
 app.use(attachUser)

@@ -1,3 +1,4 @@
+import { calendarDate, dateCutoff } from './deadlines.js'
 // Bi-weekly cycles, shared by the API and the UI. A startup's programme runs
 // 13 cycles of 14 days, counted from the day the startup was created.
 
@@ -30,4 +31,37 @@ export const cycleForDate = (createdAt, date) => {
   }
   const n = Math.floor(elapsed / CYCLE_MS) + 1
   return n <= CYCLES ? n : null
+}
+
+// Date-only submission windows close at the next business-calendar midnight.
+// Older reopened reports have no expiry and retain their original access.
+export const biweeklyClosesAt = (createdAt, cycle, submission) => {
+  if (submission?.reopened_until) {
+    return new Date(submission.reopened_until)
+  }
+  if (submission?.reopened_at) {
+    return null
+  }
+  return dateCutoff(calendarDate(cycleDeadline(createdAt, cycle)))
+}
+
+export const isBiweeklyOpen = (
+  createdAt,
+  cycle,
+  submission,
+  now = Date.now()
+) => {
+  if (submission?.submitted_at) {
+    return false
+  }
+  if (submission?.reopened_until) {
+    return new Date(submission.reopened_until).getTime() > Number(now)
+  }
+  if (submission?.reopened_at) {
+    return true
+  }
+  return (
+    cycleStart(createdAt, cycle).getTime() <= Number(now) &&
+    biweeklyClosesAt(createdAt, cycle, submission).getTime() > Number(now)
+  )
 }

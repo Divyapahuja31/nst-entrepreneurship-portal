@@ -19,6 +19,7 @@ import {
 import { settleEmailJobs } from '../utils/kpiLockEmails.js'
 import { migrateRbac } from '../utils/rbacMigration.js'
 import { signToken } from '../utils/token.js'
+import { flushAudit } from '../utils/audit.js'
 import { encryptToken } from '../utils/tokenCrypto.js'
 
 process.env.JWT_SECRET ||= 'test-secret'
@@ -180,6 +181,7 @@ export const startDatabase = async () => {
 
 export const stopDatabase = async () => {
   await settleEmailJobs()
+  await flushAudit()
   await mongoose.disconnect()
   await mongod?.stop()
 }
@@ -193,6 +195,7 @@ export const cookieFor = user => `token=${signToken(user)}`
 //   Beta:  mentored by `otherMentor`, founded by `outsider`
 export const seed = async () => {
   await settleEmailJobs()
+  await flushAudit()
   sentEmails.length = 0
   emailFailures.clear()
   google.events.clear()

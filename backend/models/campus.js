@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 const campusSchema = new mongoose.Schema(
@@ -18,6 +19,8 @@ const campusSchema = new mongoose.Schema(
 )
 
 export const modelName = 'Campus'
+
+auditModel(campusSchema, modelName)
 
 const Campus = mongoose.model(modelName, campusSchema)
 

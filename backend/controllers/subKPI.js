@@ -1,3 +1,4 @@
+import { deadlineLabel } from '@nst/shared/deadlines.js'
 import mongoose from 'mongoose'
 import SubKPI from '../models/subKPI.js'
 import KPI from '../models/kpi.js'
@@ -14,6 +15,13 @@ const subKPIChangeError = async (user, kpi) => {
   const ctx = await kpiContext(user, kpi)
   if (canEditKpi(user, ctx)) {
     return null
+  }
+  if (ctx.isPastDue) {
+    return (
+      'The KPI deadline was ' +
+      deadlineLabel(kpi.dueDate) +
+      '. Edits are closed.'
+    )
   }
   return kpiLockReason(ctx) ?? 'You are not allowed to change this KPI'
 }

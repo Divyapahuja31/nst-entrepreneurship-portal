@@ -1,15 +1,25 @@
+import BiweeklyFormEditor, { FormFields } from './BiweeklyFormEditor'
+import { validateAnswers } from '@nst/shared/biweeklyForm.js'
+import useDeadlineRefresh from '../../hooks/useDeadlineRefresh'
+import { BUSINESS_TIME_ZONE } from '@nst/shared/deadlines.js'
+import BiweeklyWindowDialog from './BiweeklyWindowDialog'
 import * as React from 'react'
 import { Link as RouterLink, useLoaderData, useRevalidator } from 'react-router'
 
 import {
-  reopenBiWeeklySubmission,
+  openBiWeeklyWindows,
   saveBiWeeklyEvaluation,
   saveBiWeeklyObservation,
   submitBiWeeklyCycle,
 } from '../../api/biweekly'
 import toError from '../../api/toError'
 
-import { CYCLES, CYCLE_DAYS } from '@nst/shared/biweeklyCycles.js'
+import {
+  CYCLES,
+  cycleStart,
+  biweeklyClosesAt,
+  isBiweeklyOpen,
+} from '@nst/shared/biweeklyCycles.js'
 import {
   PILLAR_WEIGHTS,
   evaluationStatus,
@@ -61,8 +71,6 @@ import SectionCard from '../../components/SectionCard'
 import StatTile from '../../components/StatTile'
 import StatusPill from '../../components/StatusPill'
 import { tints, tokens } from '../../theme'
-
-const GRACE_DAYS = 3
 
 /* ---------- Evidence checklist per cycle (stage-aware) ---------- */
 const CHECKLISTS = [
@@ -210,13 +218,10 @@ const isWebUrl = value => {
 function computeCycles(startISO) {
   const start = new Date(startISO)
   return Array.from({ length: CYCLES }, (_, i) => {
-    const s = new Date(start)
-    s.setDate(start.getDate() + i * CYCLE_DAYS)
-    const e = new Date(s)
-    e.setDate(s.getDate() + CYCLE_DAYS - 1)
-    const deadline = new Date(e)
-    deadline.setDate(deadline.getDate() + GRACE_DAYS)
-    return { n: i + 1, start: s, end: e, deadline }
+    const s = cycleStart(start, i + 1)
+    const e = new Date(cycleStart(start, i + 2).getTime() - 86400000)
+    const deadline = biweeklyClosesAt(start, i + 1)
+    return { n: i + 1, origin: start, start: s, end: e, deadline }
   })
 }
 
@@ -228,10 +233,9 @@ const checklistFor = cycleNumber => CHECKLISTS[cycleNumber + 1]
 // One status per cycle, shared by the cycle cards and the filters.
 function cycleStatus(cycle, row, now = new Date()) {
   if (row?.submitted_at) return 'completed'
-  // Reopened by faculty: open again, whatever the deadline.
-  if (row?.reopened_at) return 'inProgress'
-  if (cycle.deadline < now) return 'missed'
-  if (row || now >= cycle.start) return 'inProgress'
+  if (isBiweeklyOpen(cycle.origin, cycle.n, row, now)) return 'inProgress'
+  const closesAt = biweeklyClosesAt(cycle.origin, cycle.n, row)
+  if (closesAt && closesAt <= now) return 'missed'
   return 'upcoming'
 }
 
@@ -258,6 +262,7 @@ function dateRange(start, end) {
 }
 
 function BiWeekly({ data: propData }) {
+  useDeadlineRefresh()
   const loaderData = useLoaderData()
   // Embedded in the admin founder profile, which already has its own page title.
   const embedded = propData !== undefined
@@ -265,10 +270,14 @@ function BiWeekly({ data: propData }) {
   const revalidator = useRevalidator()
   // Staff read the report; the startup's mentors and the board write
   // observations and evaluations; only the board reopens a cycle.
-  const { actor, isStaff } = useAccess()
+  const { actor, isStaff, isAdmin } = useAccess()
+  const [editingForm, setEditingForm] = React.useState(false)
+  const [savedForm, setSavedForm] = React.useState(null)
 
   // Reports belong to the startup and are shared by its co-founders.
   const { venture, coFounders = [] } = data || {}
+  const activeForm =
+    savedForm?.venture === venture?._id ? savedForm : data?.form
   const canReview = canAuthorBiweeklyReview(actor, venture?.mentors)
   const canReopen = canReopenBiweekly(actor)
   const rows = data?.submissions ?? []
@@ -278,6 +287,11 @@ function BiWeekly({ data: propData }) {
   // { text, severity }: progress and success in green, failures in red.
   const [message, setMessage] = React.useState(null)
   const detailRef = React.useRef(null)
+  const [now, setNow] = React.useState(() => new Date())
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   const cycles = React.useMemo(
     // Every startup's cycles count from the reports' start once it is set.
@@ -327,11 +341,13 @@ function BiWeekly({ data: propData }) {
       await operation()
       setMessage({ text: done, severity: 'success' })
       revalidator.revalidate()
+      return true
     } catch (err) {
       setMessage({
         text: toError(err, 'Action failed').error,
         severity: 'error',
       })
+      return false
     }
   }
 
@@ -347,16 +363,20 @@ function BiWeekly({ data: propData }) {
         })
     )
 
-  const reopenSubmission = cycleNumber => {
-    if (!window.confirm('Unlock to edit? Faculty will see this as re-opened.'))
-      return
-
-    return run('Unlocking...', 'Unlocked for the team.', () =>
-      reopenBiWeeklySubmission({
-        ventureId: venture?._id,
-        cycle_number: cycleNumber,
+  const reopenSubmission = async (cycleNumber, until, ventureIds) => {
+    const result = await openBiWeeklyWindows({
+      ventureIds,
+      cycle_number: cycleNumber,
+      reopened_until: until,
+    })
+    revalidator.revalidate()
+    if (!result.failedVentureIds.length) {
+      setMessage({
+        text: `Cycle ${cycleNumber} opened for ${result.openedVentureIds.length} startups.`,
+        severity: 'success',
       })
-    )
+    }
+    return result
   }
 
   const saveObservation = payload =>
@@ -404,6 +424,11 @@ function BiWeekly({ data: propData }) {
               your journey.
             </Typography>
           </Box>
+          {isAdmin && (
+            <Button variant="outlined" onClick={() => setEditingForm(true)}>
+              Edit Report Form
+            </Button>
+          )}
           <Button
             component={RouterLink}
             to="/methodology"
@@ -442,7 +467,25 @@ function BiWeekly({ data: propData }) {
         )}
       </Box>
 
+      {editingForm && isAdmin && (
+        <BiweeklyFormEditor
+          key={venture._id}
+          ventureId={venture._id}
+          form={activeForm}
+          onClose={() => setEditingForm(false)}
+          onSaved={form => {
+            setSavedForm(form)
+            setEditingForm(false)
+            revalidator.revalidate()
+            setMessage({
+              text: 'Report form saved for this startup.',
+              severity: 'success',
+            })
+          }}
+        />
+      )}
       <ProgressStats
+        rows={rows}
         cycles={cycles}
         currentCycle={currentCycle}
         submittedCount={submittedCount}
@@ -463,6 +506,7 @@ function BiWeekly({ data: propData }) {
       >
         <Stack spacing={3}>
           <AllCycles
+            form={activeForm}
             cycles={cycles}
             rows={rows}
             active={active}
@@ -486,15 +530,19 @@ function BiWeekly({ data: propData }) {
 
         <Stack spacing={3} ref={detailRef} sx={{ scrollMarginTop: 80 }}>
           <CycleForm
-            key={activeMeta.n}
+            key={`${venture._id}-${activeMeta.n}-${activeForm?.revision ?? 0}-${activeRow?._id ?? 'new'}`}
+            form={activeForm}
             status={cycleStatus(activeMeta, activeRow)}
             cycleNumber={activeMeta.n}
             periodStart={localDate(activeMeta.start)}
             periodEnd={localDate(activeMeta.end)}
             deadline={activeMeta.deadline}
+            origin={activeMeta.origin}
+            now={now}
             existing={activeRow}
             isStaff={isStaff}
             canReopen={canReopen}
+            onEditForm={isAdmin ? () => setEditingForm(true) : undefined}
             onSave={saveSubmission}
             onReopen={reopenSubmission}
           />
@@ -546,7 +594,7 @@ const FILTERS = [
   { key: 'missed', label: 'Missed' },
 ]
 
-function AllCycles({ cycles, rows, active, onSelect }) {
+function AllCycles({ cycles, rows, active, onSelect, form }) {
   const [filter, setFilter] = React.useState('all')
 
   const items = cycles.map(c => {
@@ -608,6 +656,7 @@ function AllCycles({ cycles, rows, active, onSelect }) {
       >
         {shown.map(({ cycle, row, status }) => (
           <CycleCard
+            form={form}
             key={cycle.n}
             cycle={cycle}
             row={row}
@@ -678,11 +727,25 @@ function ProgressRing({ value, status }) {
   )
 }
 
-function CycleCard({ cycle, row, status, selected, onClick }) {
+function CycleCard({ cycle, row, status, selected, onClick, form }) {
   const items = checklistFor(cycle.n)?.items ?? []
   const links = Array.isArray(row?.evidence_links) ? row.evidence_links : []
-  const done = items.filter(i => links.some(l => l.check === i.key)).length
-  const total = items.length
+  const definition = row ? row.form_snapshot : form?.definition
+  const fields =
+    definition?.blocks.filter(
+      b => !['heading', 'paragraph'].includes(b.type)
+    ) ?? []
+  const done = definition
+    ? fields.filter(
+        b =>
+          !validateAnswers(
+            { blocks: [{ ...b, required: true }] },
+            { [b.id]: row?.custom_answers?.[b.id] },
+            true
+          )
+      ).length
+    : items.filter(i => links.some(l => l.check === i.key)).length
+  const total = definition ? fields.length : items.length
   const value =
     status === 'completed' ? 100 : total ? Math.round((done / total) * 100) : 0
   const caption = {
@@ -757,6 +820,7 @@ const REVIEW_META = {
 }
 
 function ProgressStats({
+  rows,
   cycles,
   currentCycle,
   submittedCount,
@@ -766,8 +830,15 @@ function ProgressStats({
   const pct = Math.round((submittedCount / CYCLES) * 100)
   const now = new Date()
   const current = cycles.find(c => c.n === currentCycle)
-  const daysLeft = current
-    ? Math.ceil((current.deadline.getTime() - now.getTime()) / 86400000)
+  const closesAt =
+    current &&
+    biweeklyClosesAt(
+      current.origin,
+      current.n,
+      rows.find(row => row.cycle_number === currentCycle)
+    )
+  const daysLeft = closesAt
+    ? Math.ceil((closesAt.getTime() - now.getTime()) / 86400000)
     : 0
   const latest = evaluations[0]
   const review = latest && REVIEW_META[latest.status]
@@ -884,14 +955,18 @@ const localDate = date => {
 const dayOf = ymd => new Date(`${ymd}T00:00`)
 
 function CycleForm({
+  form,
   status,
   cycleNumber,
   periodStart,
   periodEnd,
   deadline,
+  origin,
+  now,
   existing,
   isStaff,
   canReopen,
+  onEditForm,
   onSave,
   onReopen,
 }) {
@@ -902,6 +977,10 @@ function CycleForm({
         )
       : BASELINE
   )
+  const definition = existing ? existing.form_snapshot : form?.definition
+  const revision = existing ? existing.form_revision : form?.revision
+  const [answers, setAnswers] = React.useState(existing?.custom_answers ?? {})
+  const [formError, setFormError] = React.useState('')
   const [links, setLinks] = React.useState(() =>
     Array.isArray(existing?.evidence_links) ? existing.evidence_links : []
   )
@@ -916,14 +995,11 @@ function CycleForm({
     return map
   })
 
-  const now = new Date()
+  const [windowDialog, setWindowDialog] = React.useState(false)
   const submitted = !!existing?.submitted_at
-  const pastDeadline = deadline < now
-  // Faculty reopened it: the team may edit and submit again, deadline or not.
-  const reopened = !submitted && Boolean(existing?.reopened_at)
-  // Staff view is read-only (staff never submit student progress). Students
-  // are locked out once it is submitted, or past its deadline unless reopened.
-  const locked = isStaff ? true : submitted || (pastDeadline && !reopened)
+  const closesAt = biweeklyClosesAt(origin, cycleNumber, existing)
+  const pastDeadline = closesAt && closesAt <= now
+  const locked = isStaff || !isBiweeklyOpen(origin, cycleNumber, existing, now)
   const checklist = checklistFor(cycleNumber)
 
   const requiredCount = checklist?.items.length ?? 0
@@ -932,10 +1008,27 @@ function CycleForm({
       i => checked[i.key] || links.some(l => l.check === i.key && l.url)
     ).length ?? 0
   const daysToDeadline = Math.ceil(
-    (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    ((closesAt ?? deadline).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
   )
 
   const save = submit => {
+    if (definition) {
+      const error = validateAnswers(definition, answers, submit)
+      if (error) {
+        setFormError(error)
+        return
+      }
+      setFormError('')
+      onSave(
+        {
+          cycle_number: cycleNumber,
+          form_revision: revision,
+          custom_answers: answers,
+        },
+        submit
+      )
+      return
+    }
     const linksWithChecks = links.map(l => ({
       title: l.title,
       url: l.url,
@@ -1330,10 +1423,20 @@ function CycleForm({
             {dateRange(dayOf(periodStart), dayOf(periodEnd))} ({days} days)
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Due{' '}
-            {deadline.toLocaleDateString(undefined, {
+            {existing?.reopened_until ? 'Open until ' : 'Due '}
+            {new Date(
+              (closesAt ?? deadline).getTime() -
+                (existing?.reopened_until ? 0 : 1)
+            ).toLocaleString(undefined, {
+              timeZone: BUSINESS_TIME_ZONE,
               month: 'short',
               day: 'numeric',
+              year: 'numeric',
+              ...(existing?.reopened_until && {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short',
+              }),
             })}
             {!pastDeadline &&
               !submitted &&
@@ -1348,45 +1451,78 @@ function CycleForm({
         >
           {isStaff && <Chip size="small" label="Staff view (read-only)" />}
           <CycleStatusPill status={status} />
-          {canReopen && (submitted || (pastDeadline && !reopened)) && (
+          {onEditForm && (
+            <Button size="small" variant="outlined" onClick={onEditForm}>
+              Edit Form
+            </Button>
+          )}
+          {canReopen && (
             <Button
               size="small"
               variant="outlined"
-              onClick={() => onReopen(cycleNumber)}
+              onClick={() => setWindowDialog(true)}
             >
-              Reopen for Student
+              Set submission window
             </Button>
           )}
         </Stack>
       </Stack>
 
-      <ReportStepper
-        steps={sections.map(sec => sec.short)}
-        active={openSection}
-        done={sectionDone}
-        onSelect={setOpenSection}
-      />
+      {windowDialog && (
+        <BiweeklyWindowDialog
+          cycleNumber={cycleNumber}
+          now={now}
+          onOpen={onReopen}
+          onClose={() => setWindowDialog(false)}
+        />
+      )}
 
-      <Stack spacing={1.5}>
-        {sections.map((sec, i) => (
-          <ReportSection
-            key={sec.title}
-            number={i + 1}
-            title={sec.title}
-            description={sec.description}
-            icon={sec.icon}
-            done={sectionDone[i]}
-            open={openSection === i}
-            onToggle={() => setOpenSection(openSection === i ? -1 : i)}
-            onNext={
-              i < sections.length - 1 ? () => setOpenSection(i + 1) : undefined
-            }
-          >
-            {sec.content}
-          </ReportSection>
-        ))}
-      </Stack>
+      {definition ? (
+        <Box sx={{ mt: 3 }}>
+          {formError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {formError}
+            </Alert>
+          )}
+          <FormFields
+            definition={definition}
+            answers={answers}
+            disabled={locked}
+            onChange={(id, value) => setAnswers({ ...answers, [id]: value })}
+          />
+        </Box>
+      ) : (
+        <>
+          <ReportStepper
+            steps={sections.map(sec => sec.short)}
+            active={openSection}
+            done={sectionDone}
+            onSelect={setOpenSection}
+          />
 
+          <Stack spacing={1.5}>
+            {sections.map((sec, i) => (
+              <ReportSection
+                key={sec.title}
+                number={i + 1}
+                title={sec.title}
+                description={sec.description}
+                icon={sec.icon}
+                done={sectionDone[i]}
+                open={openSection === i}
+                onToggle={() => setOpenSection(openSection === i ? -1 : i)}
+                onNext={
+                  i < sections.length - 1
+                    ? () => setOpenSection(i + 1)
+                    : undefined
+                }
+              >
+                {sec.content}
+              </ReportSection>
+            ))}
+          </Stack>
+        </>
+      )}
       <Box sx={{ mt: 3 }}>
         {isStaff ? (
           <Alert severity="info">
@@ -1428,13 +1564,13 @@ function CycleForm({
                     variant="contained"
                     size="large"
                     startIcon={<SendIcon />}
-                    disabled={!f.progress_summary}
+                    disabled={!definition && !f.progress_summary}
                     onClick={() => save(true)}
                   >
                     Submit Report
                   </Button>
                 </Stack>
-                {missing.length > 0 && (
+                {!definition && missing.length > 0 && (
                   <Typography
                     variant="body2"
                     color="text.secondary"
@@ -1451,8 +1587,10 @@ function CycleForm({
                 severity="error"
                 icon={<LockClosedIcon fontSize="inherit" />}
               >
-                Deadline passed on {deadline.toLocaleDateString()}. Contact
-                faculty to reopen.
+                {pastDeadline
+                  ? `The submission window closed on ${closesAt.toLocaleString()}.`
+                  : 'This cycle has not opened yet.'}{' '}
+                Contact faculty to open it.
               </Alert>
             )}
           </>

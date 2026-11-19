@@ -3,23 +3,14 @@ import { EVALUATION_TRANSITIONS, isStudent } from '@nst/shared/permissions.js'
 
 import { uploadToS3 } from '../config/s3.js'
 import KPIStatus from '../models/enums/KPIStatus.js'
-import { DEFAULT_TIME_ZONE, zonedDate } from './programme.js'
+import { parseDeadline } from '@nst/shared/deadlines.js'
 
-// A day picked on the KPI form ("2026-11-08") is due at the end of that day
-// in the portal's time zone, as the KPI bot's are: read as UTC midnight it
-// would close at 5:30 am India time on the due day itself. A full date and
-// time is kept as sent; empty means no due date.
-export const kpiDueDate = dueDate => {
-  if (!dueDate) {
-    return null
-  }
-  if (typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(dueDate)) {
-    return new Date(
-      zonedDate(dueDate, '23:59', DEFAULT_TIME_ZONE).getTime() + 59999
-    )
-  }
-  return new Date(dueDate)
-}
+const deadlineKind = value =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? 'date'
+    : 'timestamp'
+
+export const kpiDueDate = parseDeadline
 
 // Scores are out of 100; health thresholds and the overview chart assume it.
 // Returns null when no score was sent and -1 when it is out of range.
@@ -110,6 +101,7 @@ export const buildKPIUpdateFields = ({
   assignIfDefined(fields, 'description', description)
   if (dueDate !== undefined) {
     fields.dueDate = kpiDueDate(dueDate)
+    fields.dueDateKind = deadlineKind(dueDate)
   }
   assignIfDefined(fields, 'targetValue', targetValue)
   assignIfDefined(fields, 'actualValue', actualValue)
@@ -196,6 +188,7 @@ export const buildNewKPIDocument = ({
     title: title.trim(),
     description: description.trim(),
     dueDate: kpiDueDate(dueDate),
+    dueDateKind: deadlineKind(dueDate),
     venture,
     scope: resolvedScope.scope,
     founder: resolvedScope.founder,

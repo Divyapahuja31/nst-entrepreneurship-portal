@@ -1,3 +1,4 @@
+import { mongoDeadlineCutoff } from '@nst/shared/deadlines.js'
 import KpiModel from '../models/kpi.js'
 import Venture from '../models/venture.js'
 import VentureProposal from '../models/ventureProposal.js'
@@ -218,7 +219,8 @@ const getActionQueue = async (
         {
           ...scopedKpis,
           status: { $in: ['DRAFT', 'REJECTED'] },
-          dueDate: { $lt: new Date() },
+          dueDate: { $type: 'date' },
+          $expr: { $lte: [mongoDeadlineCutoff(), '$$NOW'] },
         },
         'dueDate'
       ),

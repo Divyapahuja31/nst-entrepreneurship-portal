@@ -1,3 +1,4 @@
+import { deadlineLabel, openDeadlineFilter } from '@nst/shared/deadlines.js'
 import mongoose from 'mongoose'
 import {
   canAddKpi,
@@ -82,9 +83,15 @@ const findKPIForCaller = async (req, res) => {
 // The caller can see the KPI but may not do this to it. A lock is the
 // usual reason, so say so when it is.
 const refuse = (res, ctx, message) =>
-  res
-    .status(403)
-    .json({ success: false, message: kpiLockReason(ctx) ?? message })
+  res.status(403).json({
+    success: false,
+    message:
+      ctx.isPastDue && ctx.deadline
+        ? 'The KPI deadline was ' +
+          deadlineLabel(ctx.deadline) +
+          '. Submissions and edits are closed.'
+        : (kpiLockReason(ctx) ?? message),
+  })
 
 export const getAllKPIs = async (req, res) => {
   try {
@@ -417,6 +424,19 @@ export const getFounderKPIs = async (req, res) => {
   }
 }
 
+const kpiSaveError = (res, error, message) => {
+  if (error.name === 'DeadlineError') {
+    return res.status(403).json({ success: false, message: error.message })
+  }
+  const stale = ['VersionError', 'DocumentNotFoundError'].includes(error.name)
+  return res.status(stale ? 409 : 500).json({
+    success: false,
+    message: stale
+      ? 'This KPI changed in the meantime. Reload and try again.'
+      : message,
+  })
+}
+
 export const submitKPIForApproval = async (req, res) => {
   try {
     const found = await findKPIForCaller(req, res)
@@ -445,10 +465,7 @@ export const submitKPIForApproval = async (req, res) => {
     })
   } catch (error) {
     console.error('Submit KPI error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to submit KPI',
-    })
+    return kpiSaveError(res, error, 'Failed to submit KPI')
   }
 }
 
@@ -529,7 +546,7 @@ export const evaluateKPI = async (req, res) => {
           status: kpi.status,
           ...(isBoard(req.user) ? {} : { isLocked: { $ne: true } }),
         },
-        { $set: updateFields },
+        { $set: updateFields, $inc: { __v: 1 } },
         { returnDocument: 'after', runValidators: true }
       )
     )
@@ -581,6 +598,7 @@ const setKPILock = (locked, canChange, refusal) => async (req, res) => {
             lockedBy: locked ? req.user.id : null,
             lockedAt: locked ? new Date() : null,
           },
+          $inc: { __v: 1 },
         },
         { returnDocument: 'after' }
       )
@@ -677,10 +695,7 @@ export const submitKPIEvidence = async (req, res) => {
     })
   } catch (error) {
     console.error('Submit KPI evidence error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to submit evidence',
-    })
+    return kpiSaveError(res, error, 'Failed to submit evidence')
   }
 }
 
@@ -737,10 +752,7 @@ export const updateKPI = async (req, res) => {
       .json({ success: true, message: 'KPI updated', data: kpi })
   } catch (error) {
     console.error('Update KPI error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update KPI',
-    })
+    return kpiSaveError(res, error, 'Failed to update KPI')
   }
 }
 
@@ -758,7 +770,18 @@ export const deleteKPI = async (req, res) => {
       return refuse(res, ctx, 'This KPI can no longer be deleted')
     }
 
-    await kpi.deleteOne()
+    const removed = await KPI.deleteOne({
+      _id: kpi._id,
+      __v: kpi.__v,
+      ...(isStudent(req.user) ? openDeadlineFilter() : {}),
+    })
+    if (!removed.deletedCount) {
+      return res.status(409).json({
+        success: false,
+        message:
+          'This KPI changed or its deadline was reached. Reload to review the deadline.',
+      })
+    }
 
     await SubKPI.deleteMany({ parentKPI: kpi._id })
 
@@ -813,10 +836,7 @@ export const uploadKPIEvidence = async (req, res) => {
   } catch (error) {
     // Storage details (bucket names, AWS errors) stay in the server log.
     console.error('Upload KPI evidence error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to upload evidence',
-    })
+    return kpiSaveError(res, error, 'Failed to upload evidence')
   }
 }
 
@@ -847,10 +867,7 @@ export const deleteKPIEvidence = async (req, res) => {
     })
   } catch (error) {
     console.error('Delete KPI evidence error:', error)
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to delete evidence',
-    })
+    return kpiSaveError(res, error, 'Failed to delete evidence')
   }
 }
 

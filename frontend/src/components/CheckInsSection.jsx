@@ -91,7 +91,7 @@ function CheckInRow({
   checkIn,
   showVenture,
   canManage,
-  canRun,
+  canUseBot,
   adding,
   onMove,
   onCancel,
@@ -110,7 +110,9 @@ function CheckInRow({
     checkIn.series && 'Repeats',
     happened && TRANSCRIPT_LABELS[checkIn.transcript?.status],
     happened && checkIn.notes && 'Notes',
-    checkIn.status !== 'CANCELLED' && KPI_BOT_LABELS[checkIn.kpiBot?.mode],
+    canUseBot &&
+      checkIn.status !== 'CANCELLED' &&
+      KPI_BOT_LABELS[checkIn.kpiBot?.mode],
   ].filter(Boolean)
 
   return (
@@ -134,7 +136,7 @@ function CheckInRow({
         </Typography>
       </Box>
       <StatusPill {...statusOf(checkIn)} />
-      {canRun && canAddBot(checkIn) && (
+      {canUseBot && upcoming && canAddBot(checkIn) && (
         <Button
           variant="text"
           loading={adding}
@@ -244,7 +246,7 @@ export default function CheckInsSection({
   title = 'Check-Ins',
   subtitle = 'Meetings on Google Meet.',
 }) {
-  const { actor, isStaff } = useAccess()
+  const { actor, isStaff, isAdmin } = useAccess()
   const revalidator = useRevalidator()
   const [searchParams, setSearchParams] = useSearchParams()
   // Mentors arrive as ids or as { id, username, email }.
@@ -401,7 +403,7 @@ export default function CheckInsSection({
       checkIn={checkIn}
       showVenture={showVenture}
       canManage={managesRow(checkIn)}
-      canRun={runsRow(checkIn)}
+      canUseBot={isAdmin}
       adding={addingBot === checkIn._id}
       onAddBot={addBot}
       onMove={c => setDialog({ checkIn: c })}

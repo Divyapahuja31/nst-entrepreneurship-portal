@@ -5,8 +5,7 @@ import {
   listRecommendations,
 } from '../controllers/kpiRecommendation.js'
 
-// Who may see and decide each recommendation is checked per startup and
-// founder (see controllers/kpiRecommendation.js).
+// Mounted behind the admin role check in index.js.
 const router = Router()
 
 router.get('/', listRecommendations)

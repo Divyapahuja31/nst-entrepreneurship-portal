@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // What admins changed about the emails, on the Emails page. There is one
@@ -28,6 +29,8 @@ const emailSettingsSchema = new mongoose.Schema(
 )
 
 export const modelName = 'EmailSettings'
+
+auditModel(emailSettingsSchema, modelName)
 
 const EmailSettings = mongoose.model(modelName, emailSettingsSchema)
 

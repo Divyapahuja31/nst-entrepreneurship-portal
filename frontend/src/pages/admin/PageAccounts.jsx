@@ -29,6 +29,7 @@ import {
   Typography,
 } from '@mui/material'
 
+import AuditHistory from '../../components/AuditHistory'
 import EmptyState from '../../components/EmptyState'
 import PageHeader from '../../components/PageHeader'
 import SectionCard from '../../components/SectionCard'
@@ -43,7 +44,6 @@ import {
   ShieldIcon,
   TargetIcon,
 } from '../../components/icons'
-import { formatDate } from '../../components/kpiStatus'
 import {
   changeAccountRole,
   createAccount,
@@ -96,19 +96,6 @@ const matchesSearch = (account, search) => {
     account.email?.toLowerCase().includes(query) ||
     account.venture?.name?.toLowerCase().includes(query)
   )
-}
-
-const describeEntry = entry => {
-  switch (entry.action) {
-    case 'ROLE_CHANGED':
-      return `${roleLabel(entry.previousRole)} → ${roleLabel(entry.newRole)}`
-    case 'ACCOUNT_CREATED':
-      return `Created as ${roleLabel(entry.newRole)}`
-    case 'ACCOUNT_DEACTIVATED':
-      return 'Deactivated'
-    default:
-      return entry.action
-  }
 }
 
 function RoleSelect({ account, disabledReason, onChange }) {
@@ -286,50 +273,8 @@ function AddAccountDialog({ open, batches, onClose, onCreated }) {
   )
 }
 
-function ActivityLog({ entries }) {
-  if (!entries.length) {
-    return (
-      <SectionCard>
-        <EmptyState
-          icon={BookIcon}
-          title="No changes yet"
-          description="Role changes, new accounts and deactivations will be listed here."
-        />
-      </SectionCard>
-    )
-  }
-  return (
-    <TableCard>
-      <Table sx={{ minWidth: 640 }}>
-        <TableHead>
-          <TableRow>
-            <StyledTableCell>When</StyledTableCell>
-            <StyledTableCell>Account</StyledTableCell>
-            <StyledTableCell>Change</StyledTableCell>
-            <StyledTableCell>By</StyledTableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {entries.map(entry => (
-            <StyledTableRow key={entry._id}>
-              <StyledTableCell sx={{ whiteSpace: 'nowrap' }}>
-                {formatDate(entry.createdAt)}
-              </StyledTableCell>
-              <StyledTableCell>{entry.target?.email}</StyledTableCell>
-              <StyledTableCell>{describeEntry(entry)}</StyledTableCell>
-              <StyledTableCell>
-                {entry.actor?.email ?? 'Command line'}
-              </StyledTableCell>
-            </StyledTableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableCard>
-  )
-}
-
 export default function PageAccounts() {
-  const { accounts, adminCount, entries, batches } = useLoaderData()
+  const { accounts, adminCount, batches } = useLoaderData()
   const revalidator = useRevalidator()
   const { actor } = useAccess()
 
@@ -601,7 +546,7 @@ export default function PageAccounts() {
         </>
       )}
 
-      {tab === 1 && <ActivityLog entries={entries} />}
+      {tab === 1 && <AuditHistory />}
 
       <AddAccountDialog
         open={adding}

@@ -41,7 +41,6 @@ const recommend = (founder, fields = {}) =>
 const as = user => ({
   get: url => request(app).get(url).set('Cookie', cookieFor(user)),
   post: url => request(app).post(url).set('Cookie', cookieFor(user)),
-  put: url => request(app).put(url).set('Cookie', cookieFor(user)),
 })
 
 const meeting = (fields = {}) =>
@@ -72,32 +71,33 @@ beforeEach(async () => {
 })
 
 describe('recommended KPIs', () => {
-  it('shows a founder only their own, and staff their startups', async () => {
+  it('shows only admins the pending recommendations for a startup', async () => {
     await recommend(data.users.owner)
     await recommend(vic)
     await recommend(data.users.owner, { status: 'DISMISSED' })
-
-    const olu = await as(data.users.owner).get('/api/kpi-recommendations')
-    assert.equal(olu.status, 200)
-    assert.deepEqual(
-      olu.body.data.map(r => r.title),
-      ['Goal for Olu Owner']
-    )
-
+    await recommend(data.users.owner, { founder: null, title: 'Team goal' })
     const url = `/api/kpi-recommendations?ventureId=${data.ventures.alpha._id}`
-    const mo = await as(data.users.mentor).get(url)
-    assert.equal(mo.status, 200)
-    assert.equal(mo.body.data.length, 2)
-    assert.equal((await as(data.users.board).get(url)).body.data.length, 2)
-    assert.equal((await as(data.users.otherMentor).get(url)).status, 403)
+    const result = await as(data.users.admin).get(url).expect(200)
+    assert.deepEqual(result.body.data.map(rec => rec.title).sort(), [
+      'Goal for Olu Owner',
+      'Goal for Vic Cofounder',
+      'Team goal',
+    ])
+    for (const user of [
+      data.users.owner,
+      data.users.mentor,
+      data.users.board,
+    ]) {
+      await as(user).get(url).expect(403)
+    }
   })
 
   it('leaves out a founder who has left the startup', async () => {
     await recommend(vic)
     await Founder.updateOne({ user: vic._id }, { status: 'LEFT' })
     const url = `/api/kpi-recommendations?ventureId=${data.ventures.alpha._id}`
-    assert.equal((await as(data.users.mentor).get(url)).body.data.length, 0)
-    const accept = await as(data.users.mentor).post(
+    assert.equal((await as(data.users.admin).get(url)).body.data.length, 0)
+    const accept = await as(data.users.admin).post(
       `/api/kpi-recommendations/${(await KpiRecommendation.findOne())._id}/accept`
     )
     assert.equal(accept.status, 409)
@@ -107,8 +107,8 @@ describe('recommended KPIs', () => {
     const rec = await recommend(data.users.owner)
     const url = `/api/kpi-recommendations/${rec._id}/accept`
     const [one, two] = await Promise.all([
-      as(data.users.owner).post(url),
-      as(data.users.owner).post(url),
+      as(data.users.admin).post(url),
+      as(data.users.admin).post(url),
     ])
     assert.deepEqual([one.status, two.status].sort(), [201, 409])
 
@@ -119,34 +119,46 @@ describe('recommended KPIs', () => {
     assert.equal(kpi.status, 'DRAFT')
     assert.equal(kpi.scope, 'FOUNDER')
     assert.equal(kpi.targetValue, '200 users')
-    assert.equal(String(kpi.createdBy), String(data.users.owner._id))
+    assert.equal(String(kpi.createdBy), String(data.users.admin._id))
     assert.equal((await KpiRecommendation.findById(rec._id)).status, 'ACCEPTED')
     // It is the founder's to work on now.
     const mine = await as(data.users.owner).get('/api/kpis')
     assert.ok(mine.body.data.some(k => String(k._id) === String(rec._id)))
   })
 
-  it('can be accepted by the mentor or the board, not by others', async () => {
-    const forOlu = await recommend(data.users.owner)
-    const forVic = await recommend(vic)
-    const accept = (user, rec) =>
-      as(user).post(`/api/kpi-recommendations/${rec._id}/accept`)
-
-    assert.equal((await accept(vic, forOlu)).status, 403)
-    assert.equal((await accept(data.users.outsider, forOlu)).status, 403)
-    assert.equal((await accept(data.users.otherMentor, forOlu)).status, 403)
-    assert.equal((await accept(data.users.mentor, forOlu)).status, 201)
-    assert.equal((await accept(data.users.board, forVic)).status, 201)
-    const kpi = await KPI.findById(forOlu._id)
-    assert.equal(String(kpi.createdBy), String(data.users.mentor._id))
-    assert.equal(String(kpi.founder), String(data.users.owner._id))
+  it('lets only an admin add a shared startup draft KPI', async () => {
+    const rec = await recommend(data.users.owner, { founder: null })
+    const url = `/api/kpi-recommendations/${rec._id}`
+    for (const user of [
+      data.users.owner,
+      data.users.mentor,
+      data.users.board,
+    ]) {
+      await as(user)
+        .post(url + '/accept')
+        .expect(403)
+      await as(user)
+        .post(url + '/dismiss')
+        .expect(403)
+    }
+    assert.equal(await KPI.countDocuments({ _id: rec._id }), 0)
+    const added = await as(data.users.admin)
+      .post(url + '/accept')
+      .expect(201)
+    assert.equal(added.body.data.scope, 'VENTURE')
+    assert.equal(added.body.data.founder, null)
+    assert.equal(added.body.data.status, 'DRAFT')
+    for (const founder of [data.users.owner, vic]) {
+      const list = await as(founder).get('/api/kpis').expect(200)
+      assert.ok(list.body.data.some(kpi => kpi._id === String(rec._id)))
+    }
   })
 
   it("won't accept one whose due date has passed", async () => {
     const rec = await recommend(data.users.owner, {
       dueDate: new Date(Date.now() - DAY_MS),
     })
-    const res = await as(data.users.owner).post(
+    const res = await as(data.users.admin).post(
       `/api/kpi-recommendations/${rec._id}/accept`
     )
     assert.equal(res.status, 409)
@@ -157,11 +169,14 @@ describe('recommended KPIs', () => {
     const rec = await recommend(data.users.owner)
     const url = `/api/kpi-recommendations/${rec._id}/dismiss`
     assert.equal((await as(vic).post(url)).status, 403)
-    assert.equal((await as(data.users.owner).post(url)).status, 200)
-    assert.equal((await as(data.users.owner).post(url)).status, 409)
+    assert.equal((await as(data.users.admin).post(url)).status, 200)
+    assert.equal((await as(data.users.admin).post(url)).status, 409)
     assert.equal(
-      (await as(data.users.owner).get('/api/kpi-recommendations')).body.data
-        .length,
+      (
+        await as(data.users.admin).get(
+          `/api/kpi-recommendations?ventureId=${data.ventures.alpha._id}`
+        )
+      ).body.data.length,
       0
     )
     assert.equal(await KPI.countDocuments({ _id: rec._id }), 0)
@@ -169,18 +184,23 @@ describe('recommended KPIs', () => {
 })
 
 describe('adding the KPI bot to a meeting', () => {
-  it("is for the meeting's mentor, before the bot has read it", async () => {
+  it('is for admins, before the bot has read the meeting', async () => {
     const off = await meeting({ googleEventId: 'event2' })
     const url = `/api/checkins/${off._id}/kpi-bot`
-    assert.equal((await as(data.users.owner).post(url)).status, 403)
-    assert.equal((await as(data.users.otherMentor).post(url)).status, 403)
-    const added = await as(data.users.mentor).post(url)
+    for (const user of [
+      data.users.owner,
+      data.users.mentor,
+      data.users.board,
+    ]) {
+      await as(user).post(url).expect(403)
+    }
+    const added = await as(data.users.admin).post(url)
     assert.equal(added.status, 200)
     assert.equal(added.body.checkIn.kpiBot.mode, 'ON')
     // Already on, like a bi-weekly session's.
-    assert.equal((await as(data.users.mentor).post(url)).status, 409)
+    assert.equal((await as(data.users.admin).post(url)).status, 409)
     assert.equal(
-      (await as(data.users.mentor).post(`/api/checkins/${checkIn._id}/kpi-bot`))
+      (await as(data.users.admin).post(`/api/checkins/${checkIn._id}/kpi-bot`))
         .status,
       409
     )
@@ -190,7 +210,7 @@ describe('adding the KPI bot to a meeting', () => {
       kpiExtraction: { status: 'SKIPPED' },
     })
     assert.equal(
-      (await as(data.users.mentor).post(`/api/checkins/${read._id}/kpi-bot`))
+      (await as(data.users.admin).post(`/api/checkins/${read._id}/kpi-bot`))
         .status,
       409
     )
@@ -200,7 +220,7 @@ describe('adding the KPI bot to a meeting', () => {
     })
     assert.equal(
       (
-        await as(data.users.mentor).post(
+        await as(data.users.admin).post(
           `/api/checkins/${noTranscript._id}/kpi-bot`
         )
       ).status,
@@ -208,61 +228,19 @@ describe('adding the KPI bot to a meeting', () => {
     )
   })
 
-  it('lets an active founder run the bot on the local demo check-in only', async t => {
-    const demo = await meeting({ googleEventId: 'demo-kpi-bot' })
-    const ordinary = await meeting({ googleEventId: 'another-event' })
-    const founder = as(data.users.owner)
-    const demoUrl = `/api/checkins/${demo.id}`
-    const ordinaryUrl = `/api/checkins/${ordinary.id}`
-    assert.equal((await founder.post(demoUrl + '/kpi-bot')).status, 403)
-
-    app.locals.kpiDemoCheckInId = demo.id
-    t.after(() => {
-      delete app.locals.kpiDemoCheckInId
-    })
-
-    const visible = await founder.get(demoUrl)
-    assert.equal(visible.status, 200)
-    assert.equal(visible.body.checkIn.canRunDemoBot, true)
-    assert.equal(
-      (await founder.get(ordinaryUrl)).body.checkIn.canRunDemoBot,
-      undefined
-    )
-    assert.equal((await founder.post(ordinaryUrl + '/kpi-bot')).status, 403)
-    assert.equal(
-      (await founder.put(demoUrl + '/notes').send({ notes: 'Test' })).status,
-      403
-    )
-    assert.equal(
-      (await as(data.users.outsider).post(demoUrl + '/kpi-bot')).status,
-      403
-    )
-    await Founder.updateOne({ user: vic._id }, { status: 'LEFT' })
-    assert.equal((await as(vic).post(demoUrl + '/kpi-bot')).status, 403)
-
-    const added = await founder.post(demoUrl + '/kpi-bot')
-    assert.equal(added.status, 200)
-    assert.equal(added.body.checkIn.kpiBot.mode, 'ON')
-  })
-
-  it('activates the demo bot only once across concurrent founder requests', async t => {
-    const demo = await meeting({ googleEventId: 'demo-kpi-bot' })
-    app.locals.kpiDemoCheckInId = demo.id
-    t.after(() => {
-      delete app.locals.kpiDemoCheckInId
-    })
-
-    const url = `/api/checkins/${demo.id}/kpi-bot`
+  it('activates the bot only once across concurrent admin requests', async () => {
+    const sample = await meeting({ googleEventId: 'demo-kpi-bot' })
+    const url = `/api/checkins/${sample._id}/kpi-bot`
     const responses = await Promise.all([
-      as(data.users.owner).post(url),
-      as(vic).post(url),
+      as(data.users.admin).post(url),
+      as(data.users.admin2).post(url),
     ])
     assert.deepEqual(responses.map(res => res.status).sort(), [200, 409])
     assert.equal(
       responses.find(res => res.status === 409).body.kpiBot.mode,
       'ON'
     )
-    assert.equal((await CheckIn.findById(demo._id)).kpiBotMode, 'ON')
+    assert.equal((await CheckIn.findById(sample._id)).kpiBotMode, 'ON')
   })
 
   it('adds it for every startup in a group session', async () => {
@@ -275,14 +253,14 @@ describe('adding the KPI bot to a meeting', () => {
     }
     const alpha = await meeting(group)
     const beta = await meeting({ ...group, venture: data.ventures.beta._id })
-    const res = await as(data.users.mentor).post(
+    const res = await as(data.users.admin).post(
       `/api/checkins/${alpha._id}/kpi-bot`
     )
     assert.equal(res.status, 200)
     assert.equal((await CheckIn.findById(beta._id)).kpiBotMode, 'ON')
   })
 
-  it("is set when a mentor's check-in is scheduled with it", async () => {
+  it('sets default modes for different meeting types', async () => {
     // Without it, a new check-in reads as off.
     assert.equal((await meeting({ googleEventId: 'e5' })).kpiBotMode, 'OFF')
     assert.equal(kpiBotModeFor({ number: 3 }), 'AUTO')

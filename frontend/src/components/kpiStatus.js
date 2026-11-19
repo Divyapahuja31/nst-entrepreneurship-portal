@@ -1,3 +1,8 @@
+import {
+  BUSINESS_TIME_ZONE,
+  deadlinePassed,
+  deadlineLabel,
+} from '@nst/shared/deadlines.js'
 // How each KPI status reads and which tint it gets, everywhere in the app.
 export const KPI_STATUS = {
   DRAFT: { label: 'Draft', tint: 'gray', plain: true },
@@ -14,6 +19,7 @@ export const formatDate = value => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
   return date.toLocaleDateString('en-US', {
+    timeZone: BUSINESS_TIME_ZONE,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -24,8 +30,10 @@ export const formatDate = value => {
 export function lockReason(kpi) {
   if (kpi.isLocked) return 'This KPI is locked. Its grade is final.'
   if (kpi.status === 'GRADED') return 'Graded KPIs are locked.'
-  if (kpi.dueDate && new Date(kpi.dueDate) < new Date()) {
+  if (deadlinePassed(kpi.dueDate, Date.now(), kpi.dueDateKind)) {
     return 'The deadline has passed, so this KPI is closed.'
   }
   return null
 }
+
+export const formatDeadline = value => (value ? deadlineLabel(value) : '-')

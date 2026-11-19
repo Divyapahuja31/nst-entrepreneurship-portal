@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 const evidenceLinkSchema = new mongoose.Schema(
@@ -27,6 +28,9 @@ const evidenceLinkSchema = new mongoose.Schema(
 
 const biWeeklySubmissionSchema = new mongoose.Schema(
   {
+    form_snapshot: { type: mongoose.Schema.Types.Mixed },
+    form_revision: { type: Number },
+    custom_answers: { type: mongoose.Schema.Types.Mixed },
     custom_id: {
       type: String,
       required: true,
@@ -58,6 +62,10 @@ const biWeeklySubmissionSchema = new mongoose.Schema(
     },
     // Set when the board reopens the cycle, so the team can edit and submit
     // it again even after its deadline. Cleared when it is submitted.
+    reopened_until: {
+      type: Date,
+      default: null,
+    },
     reopened_at: {
       type: Date,
       default: null,
@@ -148,6 +156,8 @@ biWeeklySubmissionSchema.index(
 )
 
 export const modelName = 'BiWeeklySubmission'
+auditModel(biWeeklySubmissionSchema, modelName)
+
 const BiWeeklySubmission = mongoose.model(modelName, biWeeklySubmissionSchema)
 
 export default BiWeeklySubmission

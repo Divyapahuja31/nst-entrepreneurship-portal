@@ -1,11 +1,12 @@
 import mongoose from 'mongoose'
+import { parseDeadline } from '@nst/shared/deadlines.js'
 
 // Empty means no due date; anything else must be a date.
 export const dueDateError = dueDate =>
   dueDate === undefined ||
   dueDate === null ||
   dueDate === '' ||
-  !Number.isNaN(new Date(dueDate).getTime())
+  !Number.isNaN(parseDeadline(dueDate).getTime())
     ? null
     : 'Choose a valid due date'
 

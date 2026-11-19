@@ -9,6 +9,7 @@ import {
 } from './emailDomains.js'
 import { cookieOptions, signToken } from './token.js'
 import { getUserPortfolio } from './userPortfolio.js'
+import { noteAuditIdentity } from './audit.js'
 
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -71,6 +72,7 @@ export const verifyGoogleAuthCode = async code => {
 
   const payload = ticket.getPayload()
   const { sub: googleId, email, email_verified: emailVerified } = payload
+  noteAuditIdentity(email, googleId)
 
   if (!email) {
     return { error: 'Google did not provide an email address.', status: 403 }

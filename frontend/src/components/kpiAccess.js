@@ -1,3 +1,4 @@
+import { deadlinePassed } from '@nst/shared/deadlines.js'
 import { canEvaluateKpi } from '@nst/shared/permissions.js'
 
 // The KPI permission context, as the @nst/shared rules take it, for a KPI
@@ -20,7 +21,7 @@ export const staffKpiContext = (kpi, ventureMentors = []) => ({
   kpiFounderId: idOf(kpi.founder),
   status: kpi.status,
   isLocked: Boolean(kpi.isLocked),
-  isPastDue: Boolean(kpi.dueDate) && new Date(kpi.dueDate) < new Date(),
+  isPastDue: deadlinePassed(kpi.dueDate, Date.now(), kpi.dueDateKind),
 })
 
 // Why this staff member can't review the KPI, or null when they can.

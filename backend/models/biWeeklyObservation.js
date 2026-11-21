@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 const biWeeklyObservationSchema = new mongoose.Schema(
@@ -54,6 +55,8 @@ const biWeeklyObservationSchema = new mongoose.Schema(
 )
 
 export const modelName = 'BiWeeklyObservation'
+
+auditModel(biWeeklyObservationSchema, modelName)
 
 const Observation = mongoose.model(modelName, biWeeklyObservationSchema)
 

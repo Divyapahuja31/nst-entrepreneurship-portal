@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // When the bi-weekly reports start, set by an admin apart from the
@@ -25,6 +26,8 @@ const reportScheduleSchema = new mongoose.Schema(
 )
 
 export const modelName = 'ReportSchedule'
+
+auditModel(reportScheduleSchema, modelName)
 
 const ReportSchedule = mongoose.model(modelName, reportScheduleSchema)
 

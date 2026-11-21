@@ -107,7 +107,7 @@ describe('due dates', () => {
     assert.equal(edited.body.data.dueDate, '2026-12-01T18:29:59.999Z')
   })
 
-  it('moves the KPIs saved at UTC midnight to the end of their day, once', async () => {
+  it('migrates confirmed legacy dates once while preserving explicit instants', async () => {
     const old = await KPI.create({
       title: 'Old',
       description: 'x',
@@ -121,8 +121,9 @@ describe('due dates', () => {
       venture: data.ventures.alpha._id,
       createdBy: data.users.owner._id,
       dueDate: new Date('2026-11-08T12:00:00Z'),
+      dueDateKind: 'timestamp',
     })
-    assert.ok((await migrateKpiDueDates()) >= 1)
+    assert.ok((await migrateKpiDueDates({ confirmedDateOnly: true })) >= 1)
     assert.equal(
       (await KPI.findById(old._id)).dueDate.toISOString(),
       '2026-11-08T18:29:59.999Z'
@@ -131,6 +132,6 @@ describe('due dates', () => {
       (await KPI.findById(timed._id)).dueDate.toISOString(),
       '2026-11-08T12:00:00.000Z'
     )
-    assert.equal(await migrateKpiDueDates(), 0)
+    assert.equal(await migrateKpiDueDates({ confirmedDateOnly: true }), 0)
   })
 })

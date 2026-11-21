@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken'
+import { auditContext, identifyAuditActor } from './auditContext.js'
+import { noteAuditIdentity } from './audit.js'
 
 const getJwtSecret = () => {
   const secret = process.env.JWT_SECRET
@@ -22,6 +24,7 @@ const JWT_OPTIONS = {
 }
 
 export const signToken = user => {
+  identifyAuditActor(user)
   const roleName = user.role?.name || user.role
   return jwt.sign(
     {
@@ -51,6 +54,11 @@ export function validateToken(token) {
 }
 
 export const signGoogleSignupToken = ({ googleId, email }) => {
+  noteAuditIdentity(email, googleId)
+  const context = auditContext()
+  if (context) {
+    context.signupRequired = true
+  }
   return jwt.sign(
     {
       googleId,

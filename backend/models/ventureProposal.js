@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 import startupStage from './enums/startupStage.js'
@@ -188,6 +189,8 @@ ventureProposalSchema.index(
 export const OLD_APPROVED_INDEX = 'unique_approved_proposal_per_user'
 
 export const modelName = 'VentureProposal'
+
+auditModel(ventureProposalSchema, modelName)
 
 const VentureProposal = mongoose.model(modelName, ventureProposalSchema)
 

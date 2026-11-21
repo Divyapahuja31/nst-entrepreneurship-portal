@@ -1,3 +1,4 @@
+import { deadlinePassed, BUSINESS_TIME_ZONE } from '@nst/shared/deadlines.js'
 import { useEffect, useState } from 'react'
 
 import { Alert, Box, Button, Typography } from '@mui/material'
@@ -12,6 +13,7 @@ import { SparklesIcon } from './icons'
 
 const formatDay = date =>
   new Date(date).toLocaleDateString(undefined, {
+    timeZone: BUSINESS_TIME_ZONE,
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -21,7 +23,7 @@ const formatDay = date =>
 const formatMeetingDay = ymd =>
   ymd ? formatDay(`${ymd}T12:00:00`) : 'a meeting'
 
-// A startup's recommendations (or a student's own), only `founderId`'s when
+// A startup's recommendations, only `founderId`'s when
 // given. Returns { recommendations } or { error }.
 const fetchRecommendations = async (ventureId, founderId) => {
   const result = await listRecommendations(ventureId)
@@ -35,13 +37,12 @@ const fetchRecommendations = async (ventureId, founderId) => {
   }
 }
 
-const isPastDue = rec =>
-  Boolean(rec.dueDate) && new Date(rec.dueDate) < new Date()
+const isPastDue = rec => deadlinePassed(rec.dueDate)
 
-function Recommendation({ rec, showFounder, busy, onAccept, onDismiss }) {
+function Recommendation({ rec, busy, onAccept, onDismiss }) {
   const pastDue = isPastDue(rec)
   const details = [
-    showFounder && rec.founder?.username,
+    rec.founder?.username || 'Startup KPI',
     rec.targetValue && `Target: ${rec.targetValue}`,
     rec.dueDate && `Due ${formatDay(rec.dueDate)}`,
     `From ${formatMeetingDay(rec.meetingDate)}`,
@@ -95,7 +96,7 @@ function Recommendation({ rec, showFounder, busy, onAccept, onDismiss }) {
           loading={busy === 'accept'}
           onClick={() => onAccept(rec)}
         >
-          Accept
+          Add Draft KPI
         </Button>
       </Box>
     </Box>
@@ -103,8 +104,8 @@ function Recommendation({ rec, showFounder, busy, onAccept, onDismiss }) {
 }
 
 // The KPIs the bot recommends from meeting transcripts, still to be
-// accepted (they become the founder's draft KPIs) or dismissed. A student
-// sees their own; staff pass `ventureId` for a startup's, and `founderId`
+// added as draft KPIs or dismissed. Admins pass `ventureId` for a startup's
+// recommendations, and `founderId`
 // on a founder's profile for just theirs. Shows nothing when there are
 // none. `onAccepted` lets the page reload its KPIs.
 export default function KpiRecommendations({
@@ -167,11 +168,7 @@ export default function KpiRecommendations({
       tint="blue"
       title="Recommended KPIs"
       sx={sx}
-      subtitle={
-        ventureId
-          ? 'Suggested by the KPI bot from meeting transcripts. Accept one to add it as the founder’s draft KPI.'
-          : 'Suggested by the KPI bot from your meetings. Accept one to add it to your KPIs as a draft you can edit.'
-      }
+      subtitle="Review the transcript suggestions and add the ones you want as draft KPIs."
     >
       <Box sx={{ display: 'grid', gap: 1.5 }}>
         {error && (
@@ -183,7 +180,6 @@ export default function KpiRecommendations({
           <Recommendation
             key={rec._id}
             rec={rec}
-            showFounder={Boolean(ventureId)}
             busy={busy[rec._id]}
             onAccept={r => decide(r, 'accept')}
             onDismiss={r => decide(r, 'dismiss')}

@@ -17,10 +17,12 @@ import Role from '../models/role.js'
 import User from '../models/user.js'
 import { sendReportCardPublished } from '../utils/emailService.js'
 import { appUrl } from '../utils/kpiLockEmails.js'
+import { gradeSuggestions } from '../utils/reportCardSuggestions.js'
+import { reportCardEvidence } from '../utils/reportCardEvidence.js'
 
 const studentFields = 'username email'
-const reportFields = 'draft published.publishedAt revision'
-const templateFields = 'name columns layout'
+const reportFields = 'draft observation published.publishedAt revision'
+const templateFields = 'name columns layout updatedAt'
 const trimmed = value => (typeof value === 'string' ? value.trim() : '')
 const validText = (value, max) => value.length > 0 && value.length <= max
 
@@ -105,9 +107,70 @@ export const createTemplate = async (req, res) => {
     template: {
       _id: template._id,
       name: template.name,
+      updatedAt: template.updatedAt,
       ...format,
     },
   })
+}
+
+const templateConflict =
+  'This template changed in another session. Refresh before editing it.'
+
+const readCriteriaUpdate = (template, { subjects, updatedAt }) => {
+  const currentVersion = template.updatedAt ?? null
+  if (updatedAt !== (currentVersion?.toISOString() ?? null)) {
+    return { status: 409, error: templateConflict }
+  }
+  if (!Array.isArray(subjects)) {
+    return { status: 400, error: 'Send a list of template criteria.' }
+  }
+  const layout = { ...template.layout, subjects }
+  const error = gradeLayoutError(layout)
+  if (error) {
+    return { status: 400, error }
+  }
+  const nextVersion = new Date(
+    Math.max(Date.now(), (currentVersion?.getTime() ?? 0) + 1)
+  )
+  return {
+    currentVersion,
+    nextVersion,
+    subjects: normalizeGradeLayout(layout).subjects,
+  }
+}
+
+export const updateTemplateCriteria = async (req, res) => {
+  const { templateId } = req.params
+  if (!mongoose.isObjectIdOrHexString(templateId)) {
+    return res.status(404).json({ error: 'Template not found.' })
+  }
+  const template = await ReportCardTemplate.findById(templateId)
+    .select(templateFields)
+    .lean()
+  if (!template?.layout) {
+    return res.status(404).json({ error: 'Term template not found.' })
+  }
+  const { error, status, currentVersion, nextVersion, subjects } =
+    readCriteriaUpdate(template, req.body ?? {})
+  if (error) {
+    return res.status(status).json({ error })
+  }
+  const updated = await ReportCardTemplate.findOneAndUpdate(
+    { _id: templateId, updatedAt: currentVersion },
+    {
+      $set: {
+        'layout.subjects': subjects,
+        updatedAt: nextVersion,
+      },
+    },
+    { returnDocument: 'after', timestamps: false }
+  )
+    .select(templateFields)
+    .lean()
+  if (!updated) {
+    return res.status(409).json({ error: templateConflict })
+  }
+  return res.json({ template: updated })
 }
 
 export const getStudentReportCard = async (_req, res) => {
@@ -170,6 +233,71 @@ const validRows = (rows, width) =>
 const validRevision = revision =>
   Number.isSafeInteger(revision) && revision >= 0
 
+const observationError = value =>
+  typeof value !== 'string' || value.length > limits.observation
+    ? `Keep student observations to ${limits.observation} characters.`
+    : ''
+
+const readSuggestionInput = ({
+  observation,
+  layout,
+  rows,
+  assessmentId,
+  revision,
+}) => {
+  const invalid = observationError(observation)
+  if (invalid) {
+    return { error: invalid }
+  }
+  if (!observation.trim()) {
+    return { error: 'Enter a student observation first.' }
+  }
+  const error = gradeLayoutError(layout)
+  if (error) {
+    return { error }
+  }
+  const assessments = reportAssessments(layout)
+  if (
+    !validRevision(revision) ||
+    !validRows(rows, assessments.length + 1) ||
+    (assessmentId !== undefined &&
+      !assessments.some(item => item.id === assessmentId))
+  ) {
+    return {
+      error: 'Check the current grading grid and assessment selection.',
+    }
+  }
+  return {
+    observation: observation.trim(),
+    layout: normalizeGradeLayout(layout),
+    rows,
+    assessmentId,
+    revision,
+  }
+}
+
+export const suggestReportGrades = async (req, res) => {
+  const { error, revision, ...input } = readSuggestionInput(req.body ?? {})
+  if (error) {
+    return res.status(400).json({ error })
+  }
+  const exists = await ReportCard.exists({
+    _id: res.locals.student._id,
+    revision,
+  })
+  if (!exists) {
+    return res
+      .status(409)
+      .json({ error: 'Refresh the report card before suggesting grades.' })
+  }
+  const evidence = await reportCardEvidence(res.locals.student._id)
+  const result = await gradeSuggestions({ ...input, evidence })
+  if (result.error) {
+    return res.status(result.status).json({ error: result.error })
+  }
+  return res.json(result)
+}
+
 const readReportUpdate = ({
   title: rawTitle,
   columns: rawColumns,
@@ -177,6 +305,7 @@ const readReportUpdate = ({
   revision,
   rows,
   publish,
+  observation,
 }) => {
   const title = trimmed(rawTitle)
   if (!validText(title, limits.title)) {
@@ -193,8 +322,16 @@ const readReportUpdate = ({
     return { error: 'Check the number of cells and the length of each entry.' }
   }
 
+  const invalidObservation =
+    observation === undefined ? '' : observationError(observation)
+  if (invalidObservation) {
+    return { error: invalidObservation }
+  }
   return {
-    draft: { title, ...format, rows: rows.map(row => row.map(trimmed)) },
+    update: {
+      draft: { title, ...format, rows: rows.map(row => row.map(trimmed)) },
+      ...(observation !== undefined && { observation: observation.trim() }),
+    },
     revision,
     publish,
   }
@@ -203,13 +340,13 @@ const readReportUpdate = ({
 export const saveReportCard = async (req, res) => {
   const student = res.locals.student
   const id = student._id
-  const { draft, revision, publish, error } = readReportUpdate(req.body ?? {})
+  const { update, revision, publish, error } = readReportUpdate(req.body ?? {})
   if (error) {
     return res.status(400).json({ error })
   }
 
-  const update = { draft }
   if (publish) {
+    const { draft } = update
     const rows = filledReportRows(draft.rows)
     const publicationError = draft.layout
       ? gradedReportError(draft.layout, rows)

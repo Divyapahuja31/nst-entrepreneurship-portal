@@ -1,15 +1,23 @@
+import useDeadlineRefresh from '../../hooks/useDeadlineRefresh'
+import { BUSINESS_TIME_ZONE } from '@nst/shared/deadlines.js'
+import BiweeklyWindowDialog from './BiweeklyWindowDialog'
 import * as React from 'react'
 import { Link as RouterLink, useLoaderData, useRevalidator } from 'react-router'
 
 import {
-  reopenBiWeeklySubmission,
+  openBiWeeklyWindows,
   saveBiWeeklyEvaluation,
   saveBiWeeklyObservation,
   submitBiWeeklyCycle,
 } from '../../api/biweekly'
 import toError from '../../api/toError'
 
-import { CYCLES, CYCLE_DAYS } from '@nst/shared/biweeklyCycles.js'
+import {
+  CYCLES,
+  cycleStart,
+  biweeklyClosesAt,
+  isBiweeklyOpen,
+} from '@nst/shared/biweeklyCycles.js'
 import {
   PILLAR_WEIGHTS,
   evaluationStatus,
@@ -61,8 +69,6 @@ import SectionCard from '../../components/SectionCard'
 import StatTile from '../../components/StatTile'
 import StatusPill from '../../components/StatusPill'
 import { tints, tokens } from '../../theme'
-
-const GRACE_DAYS = 3
 
 /* ---------- Evidence checklist per cycle (stage-aware) ---------- */
 const CHECKLISTS = [
@@ -210,13 +216,10 @@ const isWebUrl = value => {
 function computeCycles(startISO) {
   const start = new Date(startISO)
   return Array.from({ length: CYCLES }, (_, i) => {
-    const s = new Date(start)
-    s.setDate(start.getDate() + i * CYCLE_DAYS)
-    const e = new Date(s)
-    e.setDate(s.getDate() + CYCLE_DAYS - 1)
-    const deadline = new Date(e)
-    deadline.setDate(deadline.getDate() + GRACE_DAYS)
-    return { n: i + 1, start: s, end: e, deadline }
+    const s = cycleStart(start, i + 1)
+    const e = new Date(cycleStart(start, i + 2).getTime() - 86400000)
+    const deadline = biweeklyClosesAt(start, i + 1)
+    return { n: i + 1, origin: start, start: s, end: e, deadline }
   })
 }
 
@@ -228,10 +231,9 @@ const checklistFor = cycleNumber => CHECKLISTS[cycleNumber + 1]
 // One status per cycle, shared by the cycle cards and the filters.
 function cycleStatus(cycle, row, now = new Date()) {
   if (row?.submitted_at) return 'completed'
-  // Reopened by faculty: open again, whatever the deadline.
-  if (row?.reopened_at) return 'inProgress'
-  if (cycle.deadline < now) return 'missed'
-  if (row || now >= cycle.start) return 'inProgress'
+  if (isBiweeklyOpen(cycle.origin, cycle.n, row, now)) return 'inProgress'
+  const closesAt = biweeklyClosesAt(cycle.origin, cycle.n, row)
+  if (closesAt && closesAt <= now) return 'missed'
   return 'upcoming'
 }
 
@@ -258,6 +260,7 @@ function dateRange(start, end) {
 }
 
 function BiWeekly({ data: propData }) {
+  useDeadlineRefresh()
   const loaderData = useLoaderData()
   // Embedded in the admin founder profile, which already has its own page title.
   const embedded = propData !== undefined
@@ -278,6 +281,11 @@ function BiWeekly({ data: propData }) {
   // { text, severity }: progress and success in green, failures in red.
   const [message, setMessage] = React.useState(null)
   const detailRef = React.useRef(null)
+  const [now, setNow] = React.useState(() => new Date())
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   const cycles = React.useMemo(
     // Every startup's cycles count from the reports' start once it is set.
@@ -327,11 +335,13 @@ function BiWeekly({ data: propData }) {
       await operation()
       setMessage({ text: done, severity: 'success' })
       revalidator.revalidate()
+      return true
     } catch (err) {
       setMessage({
         text: toError(err, 'Action failed').error,
         severity: 'error',
       })
+      return false
     }
   }
 
@@ -347,16 +357,20 @@ function BiWeekly({ data: propData }) {
         })
     )
 
-  const reopenSubmission = cycleNumber => {
-    if (!window.confirm('Unlock to edit? Faculty will see this as re-opened.'))
-      return
-
-    return run('Unlocking...', 'Unlocked for the team.', () =>
-      reopenBiWeeklySubmission({
-        ventureId: venture?._id,
-        cycle_number: cycleNumber,
+  const reopenSubmission = async (cycleNumber, until, ventureIds) => {
+    const result = await openBiWeeklyWindows({
+      ventureIds,
+      cycle_number: cycleNumber,
+      reopened_until: until,
+    })
+    revalidator.revalidate()
+    if (!result.failedVentureIds.length) {
+      setMessage({
+        text: `Cycle ${cycleNumber} opened for ${result.openedVentureIds.length} startups.`,
+        severity: 'success',
       })
-    )
+    }
+    return result
   }
 
   const saveObservation = payload =>
@@ -443,6 +457,7 @@ function BiWeekly({ data: propData }) {
       </Box>
 
       <ProgressStats
+        rows={rows}
         cycles={cycles}
         currentCycle={currentCycle}
         submittedCount={submittedCount}
@@ -492,6 +507,8 @@ function BiWeekly({ data: propData }) {
             periodStart={localDate(activeMeta.start)}
             periodEnd={localDate(activeMeta.end)}
             deadline={activeMeta.deadline}
+            origin={activeMeta.origin}
+            now={now}
             existing={activeRow}
             isStaff={isStaff}
             canReopen={canReopen}
@@ -757,6 +774,7 @@ const REVIEW_META = {
 }
 
 function ProgressStats({
+  rows,
   cycles,
   currentCycle,
   submittedCount,
@@ -766,8 +784,15 @@ function ProgressStats({
   const pct = Math.round((submittedCount / CYCLES) * 100)
   const now = new Date()
   const current = cycles.find(c => c.n === currentCycle)
-  const daysLeft = current
-    ? Math.ceil((current.deadline.getTime() - now.getTime()) / 86400000)
+  const closesAt =
+    current &&
+    biweeklyClosesAt(
+      current.origin,
+      current.n,
+      rows.find(row => row.cycle_number === currentCycle)
+    )
+  const daysLeft = closesAt
+    ? Math.ceil((closesAt.getTime() - now.getTime()) / 86400000)
     : 0
   const latest = evaluations[0]
   const review = latest && REVIEW_META[latest.status]
@@ -889,6 +914,8 @@ function CycleForm({
   periodStart,
   periodEnd,
   deadline,
+  origin,
+  now,
   existing,
   isStaff,
   canReopen,
@@ -916,14 +943,11 @@ function CycleForm({
     return map
   })
 
-  const now = new Date()
+  const [windowDialog, setWindowDialog] = React.useState(false)
   const submitted = !!existing?.submitted_at
-  const pastDeadline = deadline < now
-  // Faculty reopened it: the team may edit and submit again, deadline or not.
-  const reopened = !submitted && Boolean(existing?.reopened_at)
-  // Staff view is read-only (staff never submit student progress). Students
-  // are locked out once it is submitted, or past its deadline unless reopened.
-  const locked = isStaff ? true : submitted || (pastDeadline && !reopened)
+  const closesAt = biweeklyClosesAt(origin, cycleNumber, existing)
+  const pastDeadline = closesAt && closesAt <= now
+  const locked = isStaff || !isBiweeklyOpen(origin, cycleNumber, existing, now)
   const checklist = checklistFor(cycleNumber)
 
   const requiredCount = checklist?.items.length ?? 0
@@ -932,7 +956,7 @@ function CycleForm({
       i => checked[i.key] || links.some(l => l.check === i.key && l.url)
     ).length ?? 0
   const daysToDeadline = Math.ceil(
-    (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    ((closesAt ?? deadline).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
   )
 
   const save = submit => {
@@ -1330,10 +1354,20 @@ function CycleForm({
             {dateRange(dayOf(periodStart), dayOf(periodEnd))} ({days} days)
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Due{' '}
-            {deadline.toLocaleDateString(undefined, {
+            {existing?.reopened_until ? 'Open until ' : 'Due '}
+            {new Date(
+              (closesAt ?? deadline).getTime() -
+                (existing?.reopened_until ? 0 : 1)
+            ).toLocaleString(undefined, {
+              timeZone: BUSINESS_TIME_ZONE,
               month: 'short',
               day: 'numeric',
+              year: 'numeric',
+              ...(existing?.reopened_until && {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short',
+              }),
             })}
             {!pastDeadline &&
               !submitted &&
@@ -1348,17 +1382,26 @@ function CycleForm({
         >
           {isStaff && <Chip size="small" label="Staff view (read-only)" />}
           <CycleStatusPill status={status} />
-          {canReopen && (submitted || (pastDeadline && !reopened)) && (
+          {canReopen && (
             <Button
               size="small"
               variant="outlined"
-              onClick={() => onReopen(cycleNumber)}
+              onClick={() => setWindowDialog(true)}
             >
-              Reopen for Student
+              Set submission window
             </Button>
           )}
         </Stack>
       </Stack>
+
+      {windowDialog && (
+        <BiweeklyWindowDialog
+          cycleNumber={cycleNumber}
+          now={now}
+          onOpen={onReopen}
+          onClose={() => setWindowDialog(false)}
+        />
+      )}
 
       <ReportStepper
         steps={sections.map(sec => sec.short)}
@@ -1451,8 +1494,10 @@ function CycleForm({
                 severity="error"
                 icon={<LockClosedIcon fontSize="inherit" />}
               >
-                Deadline passed on {deadline.toLocaleDateString()}. Contact
-                faculty to reopen.
+                {pastDeadline
+                  ? `The submission window closed on ${closesAt.toLocaleString()}.`
+                  : 'This cycle has not opened yet.'}{' '}
+                Contact faculty to open it.
               </Alert>
             )}
           </>

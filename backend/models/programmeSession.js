@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // An extra session's own settings, for one day. It needs no programme: the
@@ -91,6 +92,8 @@ programmeSessionSchema.index(
 export const REGULAR = { extra: null }
 
 export const modelName = 'ProgrammeSession'
+
+auditModel(programmeSessionSchema, modelName)
 
 const ProgrammeSession = mongoose.model(modelName, programmeSessionSchema)
 

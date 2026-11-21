@@ -9,6 +9,7 @@ import {
 } from '@nst/shared/permissions.js'
 
 import AuditLog from '../models/auditLog.js'
+import { flushAudit, recordAudit } from '../utils/audit.js'
 import Batch from '../models/batch.js'
 import Founder from '../models/founder.js'
 import Role from '../models/role.js'
@@ -50,7 +51,15 @@ const accountSummary = (user, venture = null) => ({
 const party = user => ({ id: user._id ?? user.id, email: user.email })
 
 const writeAudit = (req, target, fields) =>
-  AuditLog.create({ actor: party(req.user), target: party(target), ...fields })
+  recordAudit({
+    actor: party(req.user),
+    target: party(target),
+    ...fields,
+    eventType: 'change',
+    resourceType: 'User',
+    resourceId: String(target._id),
+    outcome: 'success',
+  })
 
 const activeAdminCount = async () => {
   const admin = await Role.findOne({ name: ROLES.ADMIN }).select('_id')
@@ -172,16 +181,10 @@ export const createAccount = async (req, res) => {
       campus: isStudent ? body.campus : undefined,
     })
 
-    // No account without its audit entry.
-    try {
-      await writeAudit(req, user, {
-        action: 'ACCOUNT_CREATED',
-        newRole: body.role,
-      })
-    } catch (auditError) {
-      await User.deleteOne({ _id: user._id })
-      throw auditError
-    }
+    writeAudit(req, user, {
+      action: 'ACCOUNT_CREATED',
+      newRole: body.role,
+    })
 
     user.role = role
     return res.status(201).json({ account: accountSummary(user) })
@@ -401,7 +404,14 @@ export const deactivateAccount = async (req, res) => {
 
 export const getAuditLog = async (req, res) => {
   try {
-    const entries = await AuditLog.find().sort({ createdAt: -1 }).limit(200)
+    await flushAudit()
+    const entries = await AuditLog.find({
+      action: {
+        $in: ['ROLE_CHANGED', 'ACCOUNT_CREATED', 'ACCOUNT_DEACTIVATED'],
+      },
+    })
+      .sort({ createdAt: -1 })
+      .limit(200)
     return res.status(200).json({ entries })
   } catch (error) {
     console.error('Get audit log error:', error)

@@ -1,3 +1,4 @@
+import useDeadlineRefresh from '../../hooks/useDeadlineRefresh'
 import { useState, Fragment } from 'react'
 import {
   useLoaderData,
@@ -21,7 +22,6 @@ import {
 } from '@mui/material'
 
 import AddKpi from '../../components/AddKpi'
-import KpiRecommendations from '../../components/KpiRecommendations'
 import EmptyState from '../../components/EmptyState'
 import SectionCard from '../../components/SectionCard'
 import StatTile from '../../components/StatTile'
@@ -129,6 +129,7 @@ function StudentKpiRow({
 }
 
 export default function Kpis() {
+  useDeadlineRefresh()
   const loaderData = useLoaderData()
   const { ventureId: routeVentureId } = useParams()
   const userProfile = useAuthStore(state => state.user)
@@ -419,11 +420,6 @@ export default function Kpis() {
               }
             />
           </Box>
-
-          <KpiRecommendations
-            onAccepted={() => revalidator.revalidate()}
-            sx={{ height: 'auto', mb: { xs: 2, sm: 3 } }}
-          />
 
           <SectionCard
             title="Your KPIs"

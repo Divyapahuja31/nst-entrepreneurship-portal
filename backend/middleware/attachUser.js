@@ -1,5 +1,6 @@
 import User from '../models/user.js'
 import { validateToken } from '../utils/token.js'
+import { identifyAuditActor } from '../utils/auditContext.js'
 
 // The caller for a session token, or null if the token is no longer good.
 // The user is loaded each time so that a password reset signs out old
@@ -38,6 +39,7 @@ export default function attachUser(req, res, next) {
   return findSessionUser(req.cookies.token).then(user => {
     if (user) {
       req.user = user
+      identifyAuditActor(user)
     }
     return next()
   })

@@ -253,7 +253,7 @@ describe('extracting KPIs from transcripts', () => {
     )
   })
 
-  it("leaves a meeting the bot wasn't added to, until someone adds it", async () => {
+  it("leaves a meeting the bot wasn't added to, until an admin adds it", async () => {
     const checkIn = await readyCheckIn({ kpiBotMode: 'OFF' })
     assert.deepEqual(await extractCheckInKpis(), { done: 0, failed: 0 })
     assert.equal(calls.length, 0)
@@ -263,7 +263,7 @@ describe('extracting KPIs from transcripts', () => {
     )
     const added = await request(app)
       .post(`/api/checkins/${checkIn._id}/kpi-bot`)
-      .set('Cookie', cookieFor(data.users.mentor))
+      .set('Cookie', cookieFor(data.users.admin))
     assert.equal(added.status, 200)
     assert.equal(added.body.checkIn.kpiBot.mode, 'ON')
     assert.deepEqual(await extractCheckInKpis(), { done: 1, failed: 0 })
@@ -583,7 +583,7 @@ describe('review findings', () => {
     await extractCheckInKpis()
     const as = user => url =>
       request(app).get(url).set('Cookie', cookieFor(user))
-    const one = await as(data.users.owner)(`/api/checkins/${checkIn._id}`)
+    const one = await as(data.users.admin)(`/api/checkins/${checkIn._id}`)
     assert.equal(one.status, 200)
     assert.equal(one.body.checkIn.kpiExtraction, undefined)
     assert.equal(one.body.checkIn.kpiBotMode, undefined)
@@ -600,10 +600,21 @@ describe('review findings', () => {
         },
       ],
     })
+    for (const viewer of [
+      data.users.owner,
+      data.users.mentor,
+      data.users.board,
+    ]) {
+      const check = await as(viewer)(`/api/checkins/${checkIn._id}`)
+      assert.equal(check.status, 200)
+      assert.equal(check.body.checkIn.kpiBot, undefined)
+      assert.equal(check.body.checkIn.kpiExtraction, undefined)
+    }
     const list = await as(data.users.owner)('/api/checkins')
     assert.ok(list.body.checkIns.length)
     for (const listed of list.body.checkIns) {
       assert.equal(listed.kpiExtraction, undefined)
+      assert.equal(listed.kpiBot, undefined)
     }
   })
 
@@ -624,7 +635,7 @@ describe('review findings', () => {
     const as = id =>
       request(app)
         .get(`/api/checkins/${id}`)
-        .set('Cookie', cookieFor(data.users.mentor))
+        .set('Cookie', cookieFor(data.users.admin))
     const one = (await as(skipped._id)).body.checkIn.kpiBot
     assert.equal(one.status, 'SKIPPED')
     assert.equal(
@@ -675,6 +686,36 @@ describe('review findings', () => {
       founder: data.users.outsider._id,
     }).lean()
     assert.equal(String(oz.venture), String(data.ventures.beta._id))
+  })
+
+  it('assigns a team goal only to the startup supported by its transcript', async () => {
+    const group = { group: true, googleEventId: 'team-goal' }
+    const alpha = await readyCheckIn(group)
+    const beta = await readyCheckIn({
+      ...group,
+      venture: data.ventures.beta._id,
+    })
+    const quote = 'Yes, we will reach 200 users by the 8th.'
+    setKpiExtractor(
+      fake([
+        goal('Olu Owner', quote, {
+          startupId: String(data.ventures.alpha._id),
+        }),
+        goal('Olu Owner', quote, { startupId: String(data.ventures.beta._id) }),
+      ])
+    )
+
+    await extractCheckInKpis()
+    assert.equal(calls.length, 1)
+    const recommendations = await KpiRecommendation.find()
+    assert.equal(recommendations.length, 1)
+    assert.equal(String(recommendations[0].checkIn), alpha.id)
+    assert.equal(recommendations[0].founder, null)
+    const rejected = await CheckIn.findById(beta._id)
+    assert.equal(
+      rejected.kpiExtraction.skipped[0].reason,
+      'Quote does not identify this startup'
+    )
   })
 
   it('shares one Gemini call between concurrent workers in a group meeting', async () => {

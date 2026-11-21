@@ -3,6 +3,7 @@ import {
   canManageCheckIns,
   canReadCheckIns,
   canRunCheckIn,
+  isAdmin,
   isBoard,
   isStaff,
   isStudent,
@@ -11,11 +12,7 @@ import {
 import CheckIn, { KPI_BOT_RUNS } from '../models/checkIn.js'
 import CheckInSeries from '../models/checkInSeries.js'
 import Venture from '../models/venture.js'
-import {
-  isVentureMember,
-  scopedVentureIds,
-  ventureAccess,
-} from '../utils/access.js'
+import { scopedVentureIds, ventureAccess } from '../utils/access.js'
 import {
   checkInEvent,
   checkInFields,
@@ -62,9 +59,13 @@ const POPULATE = [
 ]
 
 // Lists leave out the transcript itself; GET /:id has it.
-const loadCheckIns = filter =>
+const loadCheckIns = (filter, actor) =>
   CheckIn.find(filter)
-    .select('-transcript.entries -transcript.text')
+    .select(
+      isAdmin(actor)
+        ? '-transcript.entries -transcript.text'
+        : '-transcript.entries -transcript.text -kpiExtraction'
+    )
     .sort({ scheduledAt: 1 })
     .populate(POPULATE)
 
@@ -215,7 +216,7 @@ const listForVenture = async (req, res, ventureId) => {
   }
   return res.json({
     venture: venture.id,
-    checkIns: await loadCheckIns({ venture: venture._id }),
+    checkIns: await loadCheckIns({ venture: venture._id }, req.user),
   })
 }
 
@@ -227,10 +228,13 @@ const listForFounder = async (req, res, founderId) => {
   }
   const ventureIds = isBoard(req.user) ? null : await scopedVentureIds(req.user)
   return res.json({
-    checkIns: await loadCheckIns({
-      'attendees.user': founderId,
-      ...(ventureIds && { venture: { $in: ventureIds } }),
-    }),
+    checkIns: await loadCheckIns(
+      {
+        'attendees.user': founderId,
+        ...(ventureIds && { venture: { $in: ventureIds } }),
+      },
+      req.user
+    ),
   })
 }
 
@@ -255,12 +259,15 @@ export const listCheckIns = async (req, res) => {
     }
     if (mine) {
       return res.json({
-        checkIns: await loadCheckIns({
-          $or: [
-            { staff: req.user.id, session: { $ne: null } },
-            { mentor: req.user.id, session: null },
-          ],
-        }),
+        checkIns: await loadCheckIns(
+          {
+            $or: [
+              { staff: req.user.id, session: { $ne: null } },
+              { mentor: req.user.id, session: null },
+            ],
+          },
+          req.user
+        ),
       })
     }
     return res.status(400).json({ error: 'Name a ventureId or founderId' })
@@ -295,6 +302,9 @@ const parseNewCheckIn = async (body, venture) => {
 export const createCheckIns = async (req, res) => {
   try {
     const body = req.body ?? {}
+    if (body.kpiBot === true) {
+      return res.status(403).json({ error: 'Only admins can add the KPI bot' })
+    }
     const venture = await findManagedVenture(req, res, body.ventureId)
     if (!venture) {
       return null
@@ -323,8 +333,6 @@ export const createCheckIns = async (req, res) => {
           timeZone,
         }),
         attendees,
-        // The KPI bot reads a mentor's check-in only when they add it.
-        kpiBotMode: body.kpiBot === true ? 'ON' : 'OFF',
       })
       return res.status(201).json({
         checkIns: await loadCheckIns({ _id: checkIn._id }),
@@ -460,9 +468,10 @@ export const endCheckInSeries = async (req, res) => {
 
 const MAX_NOTES = 20000
 
-// Only the local demo server opts this sample meeting into founder activation.
-const isDemoFounder = req =>
-  isStudent(req.user) && req.params.id === req.app.locals.kpiDemoCheckInId
+const checkInDetails = (id, actor) => {
+  const query = CheckIn.findById(id).populate(POPULATE)
+  return isAdmin(actor) ? query : query.select('-kpiExtraction')
+}
 
 // One check-in with its transcript and notes, for anyone who can read the
 // startup.
@@ -472,7 +481,7 @@ export const getCheckIn = async (req, res) => {
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: 'Valid check-in id is required' })
     }
-    const checkIn = await CheckIn.findById(id).populate(POPULATE)
+    const checkIn = await checkInDetails(id, req.user)
     if (!checkIn) {
       return res.status(404).json({ error: 'Check-in not found' })
     }
@@ -483,11 +492,6 @@ export const getCheckIn = async (req, res) => {
     const runsIt = checkIn.session && canRunCheckIn(req.user, checkIn.staff)
     if (!runsIt && !canReadCheckIns(req.user, { mentorIds, isMember })) {
       return res.status(403).json({ error: 'Forbidden' })
-    }
-    if (isMember && isDemoFounder(req)) {
-      return res.json({
-        checkIn: { ...checkIn.toJSON(), canRunDemoBot: true },
-      })
     }
     return res.json({ checkIn })
   } catch (error) {
@@ -543,7 +547,7 @@ export const refreshTranscript = async (req, res) => {
         .json({ error: 'Only a check-in that has ended can be checked' })
     }
     const settled = await processCheckIn(checkIn, { manual: true })
-    const updated = await CheckIn.findById(checkIn._id).populate(POPULATE)
+    const updated = await checkInDetails(checkIn._id, req.user)
     return res.json({ checkIn: updated, settled })
   } catch (error) {
     return sendError(res, error, 'Could not check for a transcript')
@@ -569,24 +573,6 @@ const kpiBotProblem = checkIn => {
   return null
 }
 
-const findBotCheckIn = async (req, res) => {
-  if (!isDemoFounder(req)) {
-    const found = await findManagedCheckIn(req, res, { programme: true })
-    return found?.checkIn
-  }
-
-  const checkIn = await CheckIn.findById(req.params.id)
-  if (!checkIn) {
-    res.status(404).json({ error: 'Check-in not found' })
-    return null
-  }
-  if (!(await isVentureMember(req.user.id, checkIn.venture))) {
-    res.status(403).json({ error: 'Forbidden' })
-    return null
-  }
-  return checkIn
-}
-
 const sendBotConflict = (res, checkIn, error) =>
   res.status(409).json({
     error,
@@ -598,9 +584,12 @@ const sendBotConflict = (res, checkIn, error) =>
 // from it. In a group session it is added for every startup in the meeting.
 export const addKpiBot = async (req, res) => {
   try {
-    const checkIn = await findBotCheckIn(req, res)
+    if (!mongoose.isObjectIdOrHexString(req.params.id)) {
+      return res.status(400).json({ error: 'Valid check-in id is required' })
+    }
+    const checkIn = await CheckIn.findById(req.params.id)
     if (!checkIn) {
-      return null
+      return res.status(404).json({ error: 'Check-in not found' })
     }
     const problem = kpiBotProblem(checkIn)
     if (problem) {

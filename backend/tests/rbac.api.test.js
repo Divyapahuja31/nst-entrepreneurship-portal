@@ -4,6 +4,7 @@ import request from 'supertest'
 
 import app from '../app.js'
 import AuditLog from '../models/auditLog.js'
+import { flushAudit } from '../utils/audit.js'
 import Batch from '../models/batch.js'
 import KPI from '../models/kpi.js'
 import Role from '../models/role.js'
@@ -322,11 +323,21 @@ describe('bi-weekly reviews', () => {
     assert.equal(read.status, 403)
 
     assert.equal(
-      (await as(mentor).post('/api/biweekly/reopen', target(alpha))).status,
+      (
+        await as(mentor).post('/api/biweekly/reopen', {
+          ...target(alpha),
+          reopened_until: new Date(Date.now() + 86400000).toISOString(),
+        })
+      ).status,
       403
     )
     assert.equal(
-      (await as(board).post('/api/biweekly/reopen', target(alpha))).status,
+      (
+        await as(board).post('/api/biweekly/reopen', {
+          ...target(alpha),
+          reopened_until: new Date(Date.now() + 86400000).toISOString(),
+        })
+      ).status,
       200
     )
   })
@@ -475,6 +486,7 @@ describe('accounts', () => {
       .post('/api/auth/signin')
       .send({ email: owner.email, password: 'password123' })
     assert.equal(signIn.status, 403)
+    await flushAudit()
     assert.equal(
       await AuditLog.countDocuments({ action: 'ACCOUNT_DEACTIVATED' }),
       1
@@ -498,6 +510,7 @@ describe('accounts', () => {
     })
     assert.equal(mentor.status, 201)
     assert.equal(mentor.body.account.role, 'mentor')
+    await flushAudit()
     assert.equal(
       await AuditLog.countDocuments({ action: 'ACCOUNT_CREATED' }),
       1

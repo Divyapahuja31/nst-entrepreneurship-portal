@@ -27,7 +27,11 @@ router.use('/admin', requireRole(...STAFF_ROLES), admin)
 
 // protected routes with sign in only
 router.use('/kpis', requireAuth, kpiRoutes)
-router.use('/kpi-recommendations', requireAuth, kpiRecommendationRoutes)
+router.use(
+  '/kpi-recommendations',
+  requireRole(ROLES.ADMIN),
+  kpiRecommendationRoutes
+)
 router.use('/subkpis', requireAuth, subKpiRoutes)
 router.use('/proposals', requireAuth, proposalRoutes)
 router.use('/industries', requireAuth, industryRoutes)

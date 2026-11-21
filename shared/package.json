@@ -9,7 +9,8 @@
     "./biweeklyCycles.js": "./biweeklyCycles.js",
     "./evidenceFiles.js": "./evidenceFiles.js",
     "./evaluationScore.js": "./evaluationScore.js",
-    "./reportCards.js": "./reportCards.js"
+    "./reportCards.js": "./reportCards.js",
+    "./deadlines.js": "./deadlines.js"
   },
   "scripts": {
     "test": "node --test",

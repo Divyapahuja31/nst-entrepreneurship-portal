@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 // An email domain (or subdomain) people may sign up and sign in with. Each
@@ -24,6 +25,8 @@ const emailDomainSchema = new mongoose.Schema(
 )
 
 export const modelName = 'EmailDomain'
+
+auditModel(emailDomainSchema, modelName)
 
 const EmailDomain = mongoose.model(modelName, emailDomainSchema)
 

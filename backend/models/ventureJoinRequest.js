@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 import ventureJoinRequestStatus from './enums/ventureJoinRequestStatus.js'
@@ -45,6 +46,8 @@ const ventureJoinRequestSchema = new mongoose.Schema(
 ventureJoinRequestSchema.index({ venture: 1, requestedBy: 1 }, { unique: true })
 
 export const modelName = 'VentureJoinRequest'
+
+auditModel(ventureJoinRequestSchema, modelName)
 
 const VentureJoinRequest = mongoose.model(modelName, ventureJoinRequestSchema)
 

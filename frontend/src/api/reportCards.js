@@ -31,6 +31,12 @@ const mutate = async (method, path, payload) => {
 export const createTemplate = payload =>
   mutate('post', `${adminPath}/templates`, payload)
 
+export const updateTemplateCriteria = (id, payload) =>
+  mutate('patch', `${adminPath}/templates/${id}/criteria`, payload)
+
+export const suggestReportGrades = (id, payload) =>
+  mutate('post', `${studentPath(id)}/grade-suggestions`, payload)
+
 export const createReportCard = (id, templateId) =>
   mutate('post', studentPath(id), { templateId })
 

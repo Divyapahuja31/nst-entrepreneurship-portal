@@ -2,7 +2,7 @@
 // so this is how one is bootstrapped; later admins are made from the
 // Accounts page. Usage: npm run make-admin -w backend -- you@newtonschool.co
 import { ROLES } from '@nst/shared/permissions.js'
-import AuditLog from '../models/auditLog.js'
+import { recordAudit } from '../utils/audit.js'
 import Role from '../models/role.js'
 import User from '../models/user.js'
 import { runWithDatabase } from './connect.js'
@@ -31,12 +31,16 @@ runWithDatabase(async () => {
   const previousRole = user.role?.name ?? null
   user.role = admin._id
   await user.save()
-  await AuditLog.create({
+  recordAudit({
     action: 'ROLE_CHANGED',
     actor: null,
     target: { id: user._id, email: user.email },
     previousRole,
     newRole: ROLES.ADMIN,
+    eventType: 'change',
+    resourceType: 'User',
+    resourceId: String(user._id),
+    outcome: 'success',
   })
   console.info(`${email} is now an admin`)
 })

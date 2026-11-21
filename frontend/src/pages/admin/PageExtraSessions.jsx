@@ -30,6 +30,7 @@ import PageHeader from '../../components/PageHeader'
 import SectionCard from '../../components/SectionCard'
 import StatusPill from '../../components/StatusPill'
 import { CalendarIcon, PlusIcon } from '../../components/icons'
+import useAccess from '../../hooks/useAccess'
 import {
   LIMITS,
   clockOf,
@@ -157,7 +158,7 @@ const zoneOf = (session, page) => session.extra.timeZone || page.timeZone
 
 // ------------------------------------------------------------ the editor
 
-function DetailsCard({ form, setField, fieldError, editing }) {
+function DetailsCard({ form, setField, fieldError, editing, canUseBot }) {
   const slotMode = form.mode === 'SLOTS'
   const number = (field, label) => (
     <TextField
@@ -242,16 +243,18 @@ function DetailsCard({ form, setField, fieldError, editing }) {
         {slotMode && number('gapMinutes', 'Gap between slots (minutes)')}
         {slotMode &&
           number('firstGapMinutes', 'Gap before the first slot (minutes)')}
-        <FormControlLabel
-          sx={{ gridColumn: '1 / -1' }}
-          control={
-            <Checkbox
-              checked={form.kpiBot}
-              onChange={e => setField('kpiBot', e.target.checked)}
-            />
-          }
-          label="Add KPI bot: recommend KPIs to the founders from each meeting’s transcript"
-        />
+        {canUseBot && (
+          <FormControlLabel
+            sx={{ gridColumn: '1 / -1' }}
+            control={
+              <Checkbox
+                checked={form.kpiBot}
+                onChange={e => setField('kpiBot', e.target.checked)}
+              />
+            }
+            label="Use the KPI bot to suggest founder and startup KPIs for admin review"
+          />
+        )}
       </Box>
     </SectionCard>
   )
@@ -398,6 +401,7 @@ function SessionsList({ page, busy, onEdit, onCancel }) {
 // ------------------------------------------------------------ the page
 
 export default function PageExtraSessions() {
+  const { isAdmin } = useAccess()
   const loaded = useLoaderData()
   const outcome = useCalendarOutcome()
   const [page, setPage] = useState(loaded)
@@ -430,6 +434,9 @@ export default function PageExtraSessions() {
     setSaving(true)
     setError(null)
     const payload = payloadOf(form)
+    if (!isAdmin) {
+      delete payload.kpiBot
+    }
     const result = editing.id
       ? await updateExtraSession(editing.id, payload)
       : await createExtraSession(payload)
@@ -532,6 +539,7 @@ export default function PageExtraSessions() {
               setField={setField}
               fieldError={fieldError}
               editing={Boolean(editing.id)}
+              canUseBot={isAdmin}
             />
             <StaffCard
               form={form}

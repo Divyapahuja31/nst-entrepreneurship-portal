@@ -1,3 +1,4 @@
+import { BUSINESS_TIME_ZONE } from '@nst/shared/deadlines.js'
 import crypto from 'node:crypto'
 import mongoose from 'mongoose'
 import { CYCLES, CYCLE_DAYS, cycleForDate } from '@nst/shared/biweeklyCycles.js'
@@ -303,7 +304,7 @@ const EXTRA_FIELDS = [
   'excludedFounders',
 ]
 
-export const DEFAULT_TIME_ZONE = 'Asia/Kolkata'
+export const DEFAULT_TIME_ZONE = BUSINESS_TIME_ZONE
 
 // The settings a session runs with: the programme's, with an extra session's
 // own on top. A plain object either way; an extra session needs no

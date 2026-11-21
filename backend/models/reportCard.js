@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import layoutSchema from '../utils/reportCardLayout.js'
 
@@ -26,10 +27,14 @@ const schema = new mongoose.Schema(
     _id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     draft: { type: contentSchema, required: true },
     published: { type: publicationSchema, default: null },
+    // Private grading notes, separate from the published report.
+    observation: { type: String },
     revision: { type: Number, default: 0 },
   },
   { timestamps: true }
 )
 
 export const modelName = 'ReportCard'
+auditModel(schema, modelName)
+
 export default mongoose.model(modelName, schema)

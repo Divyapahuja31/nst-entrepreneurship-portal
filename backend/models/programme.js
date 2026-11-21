@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -83,6 +84,8 @@ const programmeSchema = new mongoose.Schema(
 )
 
 export const modelName = 'Programme'
+
+auditModel(programmeSchema, modelName)
 
 const Programme = mongoose.model(modelName, programmeSchema)
 

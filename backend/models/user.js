@@ -1,3 +1,4 @@
+import { auditModel } from '../utils/auditModel.js'
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 
@@ -157,6 +158,8 @@ userSchema.set('toJSON', {
 })
 
 export const modelName = 'User'
+
+auditModel(userSchema, modelName)
 
 const User = mongoose.model(modelName, userSchema)
 

@@ -8,6 +8,8 @@ export const REPORT_CARD_LIMITS = Object.freeze({
   title: 100,
   column: 50,
   cell: 120,
+  criterionDescription: 500,
+  observation: 4000,
 })
 
 export const filledReportRows = rows =>
@@ -68,11 +70,15 @@ const validLegend = legend =>
     return meaning.length > 0 && meaning.length <= REPORT_CARD_LIMITS.cell
   })
 
-const validSubjects = subjects =>
+const validSubjectNames = subjects =>
   Array.isArray(subjects) &&
   subjects.length <= REPORT_CARD_LIMITS.rows &&
-  hasUniqueNames(subjects) &&
-  subjects.every(subject => validMaximum(subject.max))
+  (!subjects.length || hasUniqueNames(subjects))
+
+const validCriterionDescription = ({ description }) =>
+  description === undefined ||
+  (typeof description === 'string' &&
+    description.trim().length <= REPORT_CARD_LIMITS.criterionDescription)
 
 export const subjectMarkMaximum = (layout, subject) => {
   if (layout.mode === 'numeric') {
@@ -82,7 +88,7 @@ export const subjectMarkMaximum = (layout, subject) => {
   return undefined
 }
 
-const layoutStructureError = layout => {
+const termStructureError = layout => {
   const { terms } = layout
   if (
     terms.length > REPORT_CARD_LIMITS.terms ||
@@ -109,8 +115,24 @@ const layoutStructureError = layout => {
   ) {
     return 'Choose whether to show an average for each assessment.'
   }
-  if (layout.subjects !== undefined && !validSubjects(layout.subjects)) {
-    return 'Give each template subject a unique name and a maximum mark greater than zero.'
+  return ''
+}
+
+const subjectStructureError = ({ subjects, mode }) => {
+  if (subjects === undefined) {
+    return ''
+  }
+  if (!validSubjectNames(subjects)) {
+    return 'Give each template subject a unique name.'
+  }
+  if (
+    mode === 'numeric' &&
+    subjects.some(subject => !validMaximum(subject.max))
+  ) {
+    return 'Enter a maximum mark greater than zero for each template subject.'
+  }
+  if (subjects.some(subject => !validCriterionDescription(subject))) {
+    return `Keep each criterion description to ${REPORT_CARD_LIMITS.criterionDescription} characters.`
   }
   return ''
 }
@@ -123,7 +145,8 @@ export const gradeLayoutError = layout => {
     return 'Choose a grading mode and add at least one term.'
   }
   const { mode, legend } = layout
-  const structureProblem = layoutStructureError(layout)
+  const structureProblem =
+    termStructureError(layout) || subjectStructureError(layout)
   if (structureProblem) {
     return structureProblem
   }
@@ -156,9 +179,10 @@ export const normalizeGradeLayout = layout => ({
     })),
   })),
   ...(layout.subjects && {
-    subjects: layout.subjects.map(({ name, max }) => ({
+    subjects: layout.subjects.map(({ name, max, description }) => ({
       name: name.trim(),
-      max: Number(max),
+      max: validMaximum(max) ? Number(max) : 100,
+      ...(nameOf(description) && { description: nameOf(description) }),
     })),
   }),
   legend: Object.fromEntries(

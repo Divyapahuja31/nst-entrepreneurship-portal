@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { cycleForDate } from '@nst/shared/biweeklyCycles.js'
+import { isAdmin } from '@nst/shared/permissions.js'
 
 import CheckIn from '../models/checkIn.js'
 import ProgrammeSession from '../models/programmeSession.js'
@@ -91,6 +92,7 @@ const pageData = async viewer => {
       ...session.toObject(),
       extra: {
         ...session.extra.toObject(),
+        kpiBot: isAdmin(viewer) ? session.extra.kpiBot : undefined,
         staff: activeOnly(session.extra.staff),
         excludedVentures: ids(session.extra.excludedVentures),
         excludedFounders: ids(session.extra.excludedFounders),
@@ -114,7 +116,14 @@ const NO_HOST =
 
 // The checked session from the body, its day and times read in timeZone, or
 // { status, field, error }.
-const checkedSession = async (body, timeZone) => {
+const checkedSession = async (body, timeZone, actor) => {
+  if (!isAdmin(actor) && body?.kpiBot !== undefined) {
+    return {
+      status: 403,
+      field: 'kpiBot',
+      error: 'Only admins can configure the KPI bot',
+    }
+  }
   const parsed = parseExtraSession(body ?? {}, timeZone)
   if (parsed.error) {
     return { status: 400, ...parsed }
@@ -179,7 +188,8 @@ export const createExtraSession = async (req, res) => {
     }
     const checked = await checkedSession(
       req.body,
-      timeZoneOf(await getProgramme())
+      timeZoneOf(await getProgramme()),
+      req.user
     )
     if (!checked.error) {
       // With no host yet, a connected admin adding one becomes it.
@@ -239,7 +249,8 @@ export const updateExtraSession = async (req, res) => {
     // Its times stay in the zone it was made in.
     const checked = await checkedSession(
       req.body,
-      found.extra.timeZone || timeZoneOf(await getProgramme())
+      found.extra.timeZone || timeZoneOf(await getProgramme()),
+      req.user
     )
     if (checked.error) {
       return refuse(res, checked)
@@ -249,7 +260,11 @@ export const updateExtraSession = async (req, res) => {
       const botWas = Boolean(session.extra.kpiBot)
       session.set({
         ...checked.fields,
-        extra: { ...checked.fields.extra, createdBy: session.extra.createdBy },
+        extra: {
+          ...checked.fields.extra,
+          kpiBot: isAdmin(req.user) ? checked.fields.extra.kpiBot : botWas,
+          createdBy: session.extra.createdBy,
+        },
         status: session.status === 'CANCELLED' ? 'PLANNED' : session.status,
       })
       const saved = await session.save()

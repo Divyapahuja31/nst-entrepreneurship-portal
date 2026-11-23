@@ -6,6 +6,7 @@ import Founder from '../models/founder.js'
 import KPI from '../models/kpi.js'
 import KpiRecommendation from '../models/kpiRecommendation.js'
 import User from '../models/user.js'
+import KpiBotSettings from '../models/kpiBotSettings.js'
 import {
   extractCheckInKpis,
   matchSpeaker,
@@ -193,6 +194,31 @@ describe('matching speakers to founders', () => {
 })
 
 describe('extracting KPIs from transcripts', () => {
+  it('uses saved guidance for each new extraction and keeps existing recommendations', async () => {
+    await KpiBotSettings.create({
+      _id: 'default',
+      guidance: 'Focus on customer discovery.',
+      revision: 1,
+    })
+    const first = await readyCheckIn()
+    await extractCheckInKpis()
+    assert.equal(calls[0].guidance, 'Focus on customer discovery.')
+    const originalIds = await KpiRecommendation.find({
+      checkIn: first._id,
+    }).distinct('_id')
+    await KpiBotSettings.updateOne(
+      { _id: 'default' },
+      { guidance: 'Focus on product delivery.', revision: 2 }
+    )
+    await readyCheckIn({ googleEventId: 'next-meeting' })
+    await extractCheckInKpis()
+    assert.equal(calls[1].guidance, 'Focus on product delivery.')
+    assert.equal(calls.length, 2)
+    assert.equal(
+      await KpiRecommendation.countDocuments({ _id: { $in: originalIds } }),
+      originalIds.length
+    )
+  })
   it('can process the sample meeting without claiming other ready meetings', async () => {
     const ordinary = await readyCheckIn()
     const sample = await readyCheckIn({
@@ -348,6 +374,28 @@ describe('extracting KPIs from transcripts', () => {
 })
 
 describe('failures part way through', () => {
+  it('retries a malformed goals list instead of marking the meeting done', async () => {
+    const checkIn = await readyCheckIn()
+    setKpiExtractor(async () => ({ goals: GOALS }))
+    assert.deepEqual(await extractCheckInKpis(), { done: 0, failed: 1 })
+    const failed = await CheckIn.findById(checkIn._id)
+    assert.equal(failed.kpiExtraction.status, 'FAILED')
+    assert.equal(failed.kpiExtraction.candidates, undefined)
+    setKpiExtractor(fake())
+    await extractCheckInKpis({ now: new Date(Date.now() + 11 * 60 * 1000) })
+    assert.equal((await CheckIn.findById(checkIn._id)).kpiExtraction.created, 2)
+  })
+
+  it('never extracts a cancelled meeting even if its transcript is ready', async () => {
+    const checkIn = await readyCheckIn({ status: 'CANCELLED' })
+    assert.deepEqual(await extractCheckInKpis(), { done: 0, failed: 0 })
+    assert.equal(calls.length, 0)
+    assert.equal(
+      (await CheckIn.findById(checkIn._id)).kpiExtraction.attempts,
+      0
+    )
+    assert.equal(await KpiRecommendation.countDocuments(), 0)
+  })
   const minutesLater = minutes => ({
     now: new Date(Date.now() + minutes * 60 * 1000),
   })
@@ -431,6 +479,7 @@ describe('failures part way through', () => {
     await extractCheckInKpis()
     const run = (await CheckIn.findById(checkIn._id)).kpiExtraction
     assert.equal(run.created, 99)
+    assert.equal(await KpiRecommendation.countDocuments(), 0)
   })
 
   it('counts a goal Gemini repeats once', async () => {

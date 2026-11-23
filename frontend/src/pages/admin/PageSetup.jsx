@@ -22,6 +22,7 @@ import {
 import EmptyState from '../../components/EmptyState'
 import PageHeader from '../../components/PageHeader'
 import SectionCard from '../../components/SectionCard'
+import KpiBotPromptButton from '../../components/KpiBotPromptButton'
 import StatusPill from '../../components/StatusPill'
 import { StyledTableCell, StyledTableRow } from '../../components/Table.style'
 import {
@@ -624,6 +625,26 @@ export default function PageSetup() {
       )}
 
       <Box sx={{ display: 'grid', gap: { xs: 2, sm: 3 } }}>
+        <SectionCard>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Box>
+              <Typography variant="h6">KPI Bot</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Edit recommendation guidance while keeping meeting context and
+                validation.
+              </Typography>
+            </Box>
+            <KpiBotPromptButton />
+          </Box>
+        </SectionCard>
         <CampusesSection
           campuses={page.campuses}
           run={run}

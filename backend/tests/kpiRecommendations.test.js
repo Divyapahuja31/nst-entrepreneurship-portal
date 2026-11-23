@@ -10,6 +10,8 @@ import KPI from '../models/kpi.js'
 import KpiRecommendation from '../models/kpiRecommendation.js'
 import ProgrammeSession from '../models/programmeSession.js'
 import User from '../models/user.js'
+import AuditLog from '../models/auditLog.js'
+import { flushAudit } from '../utils/audit.js'
 import { kpiBotModeFor } from '../utils/programmeScheduler.js'
 import { migrateKpiBotModes } from '../utils/kpiBotModeMigration.js'
 import { cookieFor, seed, startDatabase, stopDatabase } from './helpers.js'
@@ -55,7 +57,7 @@ const meeting = (fields = {}) =>
     ...fields,
   })
 
-before(startDatabase)
+before(() => startDatabase({ replicaSet: true }))
 after(stopDatabase)
 beforeEach(async () => {
   data = await seed()
@@ -121,9 +123,81 @@ describe('recommended KPIs', () => {
     assert.equal(kpi.targetValue, '200 users')
     assert.equal(String(kpi.createdBy), String(data.users.admin._id))
     assert.equal((await KpiRecommendation.findById(rec._id)).status, 'ACCEPTED')
+    await flushAudit()
+    const changes = await AuditLog.find({
+      resourceId: String(rec._id),
+      eventType: 'change',
+    }).lean()
+    assert.equal(
+      changes.filter(entry => entry.resourceType === 'KPI').length,
+      1
+    )
+    assert.equal(
+      changes.filter(entry => entry.after?.status === 'ACCEPTED').length,
+      1
+    )
     // It is the founder's to work on now.
     const mine = await as(data.users.owner).get('/api/kpis')
     assert.ok(mine.body.data.some(k => String(k._id) === String(rec._id)))
+  })
+
+  it('keeps a recommendation pending if creating its KPI fails', async t => {
+    const rec = await recommend(data.users.owner)
+    const write = t.mock.method(KPI, 'updateOne', async () => {
+      throw new Error('Simulated KPI write failure')
+    })
+    const url = `/api/kpi-recommendations/${rec._id}/accept`
+    await as(data.users.admin).post(url).expect(500)
+    write.mock.restore()
+    const pending = await KpiRecommendation.findById(rec._id)
+    assert.equal(pending.status, 'PENDING')
+    assert.equal(pending.decidedBy, null)
+    assert.equal(await KPI.countDocuments({ _id: rec._id }), 0)
+    await flushAudit()
+    assert.equal(
+      await AuditLog.countDocuments({
+        resourceId: String(rec._id),
+        eventType: 'change',
+      }),
+      0
+    )
+    await as(data.users.admin).post(url).expect(201)
+    assert.equal(await KPI.countDocuments({ _id: rec._id }), 1)
+  })
+
+  it('rolls back both writes if acceptance fails after creating the KPI', async t => {
+    const rec = await recommend(data.users.owner)
+    const realWrite = KPI.updateOne.bind(KPI)
+    const write = t.mock.method(KPI, 'updateOne', async (...args) => {
+      await realWrite(...args)
+      throw new Error('Simulated failure after KPI write')
+    })
+    const url = `/api/kpi-recommendations/${rec._id}/accept`
+    await as(data.users.admin).post(url).expect(500)
+    write.mock.restore()
+    assert.equal((await KpiRecommendation.findById(rec._id)).status, 'PENDING')
+    assert.equal(await KPI.countDocuments({ _id: rec._id }), 0)
+    await as(data.users.admin).post(url).expect(201)
+  })
+
+  it('allows only one outcome when acceptance races with dismissal', async () => {
+    const rec = await recommend(data.users.owner)
+    const url = `/api/kpi-recommendations/${rec._id}`
+    const [accept, dismiss] = await Promise.all([
+      as(data.users.admin).post(url + '/accept'),
+      as(data.users.admin).post(url + '/dismiss'),
+    ])
+    const saved = await KpiRecommendation.findById(rec._id)
+    if (saved.status === 'ACCEPTED') {
+      assert.equal(accept.status, 201)
+      assert.equal(dismiss.status, 409)
+      assert.equal(await KPI.countDocuments({ _id: rec._id }), 1)
+    } else {
+      assert.equal(saved.status, 'DISMISSED')
+      assert.equal(accept.status, 409)
+      assert.equal(dismiss.status, 200)
+      assert.equal(await KPI.countDocuments({ _id: rec._id }), 0)
+    }
   })
 
   it('lets only an admin add a shared startup draft KPI', async () => {

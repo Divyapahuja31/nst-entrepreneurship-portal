@@ -28,6 +28,9 @@ const evidenceLinkSchema = new mongoose.Schema(
 
 const biWeeklySubmissionSchema = new mongoose.Schema(
   {
+    form_snapshot: { type: mongoose.Schema.Types.Mixed },
+    form_revision: { type: Number },
+    custom_answers: { type: mongoose.Schema.Types.Mixed },
     custom_id: {
       type: String,
       required: true,

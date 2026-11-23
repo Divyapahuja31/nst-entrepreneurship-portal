@@ -1,3 +1,11 @@
+import BiweeklyForm from '../models/biweeklyForm.js'
+import {
+  validateForm,
+  cleanForm,
+  validateAnswers,
+  BUILTIN_FIELDS,
+} from '@nst/shared/biweeklyForm.js'
+import { isAdmin } from '@nst/shared/permissions.js'
 import { deadlineLabel } from '@nst/shared/deadlines.js'
 import mongoose from 'mongoose'
 import Venture from '../models/venture.js'
@@ -69,6 +77,9 @@ export const getBiWeeklyData = async (req, res) => {
       .filter(Boolean)
 
     return res.json({
+      form: venture
+        ? await BiweeklyForm.findOne({ venture: venture._id }).lean()
+        : null,
       founder,
       venture: withStageLabel(venture),
       coFounders,
@@ -121,7 +132,7 @@ const submissionRefusal = ({ existing, origin, cycleNum, data, isSubmit }) => {
     return closedCycleRefusal(existing, origin, cycleNum)
   }
   const summary = data.progress_summary ?? existing?.progress_summary
-  if (isSubmit && !String(summary ?? '').trim()) {
+  if (!data.form_snapshot && isSubmit && !String(summary ?? '').trim()) {
     return { status: 400, error: 'Add a progress summary before submitting.' }
   }
   return null
@@ -143,6 +154,58 @@ const studentCycle = async req => {
   return { ...parsed, ...found }
 }
 
+const applyReportForm = async (body, existing, venture, data, isSubmit) => {
+  const currentForm = !existing
+    ? await BiweeklyForm.findOne({ venture: venture._id }).lean()
+    : null
+  const definition = existing?.form_snapshot ?? currentForm?.definition
+  if (!definition) {
+    return null
+  }
+  const revision = existing?.form_revision ?? currentForm.revision
+  if (body.form_revision !== revision) {
+    return { status: 409, error: 'The form changed. Reload before saving.' }
+  }
+  return assignFormAnswers(body, existing, data, isSubmit, definition, revision)
+}
+const assignFormAnswers = (
+  body,
+  existing,
+  data,
+  isSubmit,
+  definition,
+  revision
+) => {
+  const incoming = body.custom_answers ?? {}
+  const invalid = validateAnswers(definition, incoming, false)
+  if (invalid) {
+    return { status: 400, error: invalid }
+  }
+  const answers = { ...(existing?.custom_answers ?? {}), ...incoming }
+  const error = validateAnswers(definition, answers, isSubmit)
+  if (error) {
+    return { status: 400, error }
+  }
+  for (const key of Object.keys(data)) {
+    delete data[key]
+  }
+  Object.assign(data, {
+    form_snapshot: definition,
+    form_revision: revision,
+    custom_answers: answers,
+  })
+  mapStandardAnswers(definition, answers, data)
+  return null
+}
+const mapStandardAnswers = (definition, answers, data) => {
+  for (const b of definition.blocks) {
+    if (!BUILTIN_FIELDS[b.id] || answers[b.id] === undefined) {
+      continue
+    }
+    data[b.id] = answers[b.id] === '' && b.type === 'number' ? 0 : answers[b.id]
+  }
+}
+
 export const submitBiWeeklyCycle = async (req, res) => {
   try {
     if (!req.user?.id) {
@@ -158,6 +221,16 @@ export const submitBiWeeklyCycle = async (req, res) => {
     const existing = await BiWeeklySubmission.findOne({
       custom_id: ventureCycleKey(venture._id, cycleNum),
     })
+    const formError = await applyReportForm(
+      req.body,
+      existing,
+      venture,
+      data,
+      isSubmit
+    )
+    if (formError) {
+      return res.status(formError.status).json({ error: formError.error })
+    }
     const refusal = submissionRefusal({
       existing,
       origin,
@@ -492,5 +565,55 @@ export const openBiWeeklyWindows = async (req, res) => {
     return res
       .status(500)
       .json({ error: 'Could not open submission windows. Please try again.' })
+  }
+}
+
+// Admin-only editing is enforced here independently of the visible edit button.
+export const saveBiweeklyForm = async (req, res) => {
+  if (!isAdmin(req.user)) {
+    return res.status(403).json({ error: 'Only admins can edit report forms.' })
+  }
+  try {
+    const venture = await findTargetVenture(req.body.ventureId)
+    if (!venture) {
+      return res.status(404).json({ error: 'Startup not found.' })
+    }
+    const error = validateForm(req.body.definition)
+    if (error) {
+      return res.status(400).json({ error })
+    }
+    if (!Number.isInteger(req.body.revision) || req.body.revision < 0) {
+      return res
+        .status(400)
+        .json({ error: 'A valid form revision is required.' })
+    }
+    const definition = cleanForm(req.body.definition)
+    const cleanedError = validateForm(definition)
+    if (cleanedError) {
+      return res.status(400).json({ error: cleanedError })
+    }
+    const form = await BiweeklyForm.findOneAndUpdate(
+      { venture: venture._id, revision: req.body.revision },
+      { $set: { definition, updatedBy: req.user.id }, $inc: { revision: 1 } },
+      {
+        upsert: req.body.revision === 0,
+        returnDocument: 'after',
+        runValidators: true,
+      }
+    )
+    if (!form) {
+      return res
+        .status(409)
+        .json({ error: 'The form changed. Reload before editing.' })
+    }
+    return res.json({ form })
+  } catch (error) {
+    if (error.code === 11000) {
+      return res
+        .status(409)
+        .json({ error: 'The form changed. Reload before editing.' })
+    }
+    console.error('Save biweekly form error:', error)
+    return res.status(500).json({ error: 'Could not save the report form.' })
   }
 }

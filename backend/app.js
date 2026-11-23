@@ -63,6 +63,9 @@ app.post(
   '/api/admin/report-cards/students/:studentId/grade-suggestions',
   express.json({ limit: '512kb' })
 )
+// Form limits cover 60 bounded Unicode blocks and their long-text answers.
+app.put('/api/biweekly/form', express.json({ limit: '2mb' }))
+app.post('/api/biweekly/submission', express.json({ limit: '4mb' }))
 app.use(express.json())
 app.use(cookieParser())
 app.use(attachUser)

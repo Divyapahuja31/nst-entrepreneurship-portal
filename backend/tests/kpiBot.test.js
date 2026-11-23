@@ -6,6 +6,7 @@ import Founder from '../models/founder.js'
 import KPI from '../models/kpi.js'
 import KpiRecommendation from '../models/kpiRecommendation.js'
 import User from '../models/user.js'
+import KpiBotSettings from '../models/kpiBotSettings.js'
 import {
   extractCheckInKpis,
   matchSpeaker,
@@ -193,6 +194,31 @@ describe('matching speakers to founders', () => {
 })
 
 describe('extracting KPIs from transcripts', () => {
+  it('uses saved guidance for each new extraction and keeps existing recommendations', async () => {
+    await KpiBotSettings.create({
+      _id: 'default',
+      guidance: 'Focus on customer discovery.',
+      revision: 1,
+    })
+    const first = await readyCheckIn()
+    await extractCheckInKpis()
+    assert.equal(calls[0].guidance, 'Focus on customer discovery.')
+    const originalIds = await KpiRecommendation.find({
+      checkIn: first._id,
+    }).distinct('_id')
+    await KpiBotSettings.updateOne(
+      { _id: 'default' },
+      { guidance: 'Focus on product delivery.', revision: 2 }
+    )
+    await readyCheckIn({ googleEventId: 'next-meeting' })
+    await extractCheckInKpis()
+    assert.equal(calls[1].guidance, 'Focus on product delivery.')
+    assert.equal(calls.length, 2)
+    assert.equal(
+      await KpiRecommendation.countDocuments({ _id: { $in: originalIds } }),
+      originalIds.length
+    )
+  })
   it('can process the sample meeting without claiming other ready meetings', async () => {
     const ordinary = await readyCheckIn()
     const sample = await readyCheckIn({

@@ -28,6 +28,7 @@ export const AUDIT_FIELDS = {
   CheckInSeries:
     'venture mentor status startAt endedAt durationMinutes timeZone',
   KpiRecommendation: 'venture founder title status dueDate decidedBy decidedAt',
+  KpiBotSettings: 'guidance revision updatedBy',
   ReportCard: 'revision draft.title draft.rows published.publishedAt',
   ReportCardTemplate: 'name columns layout.mode layout.subjects',
   VentureProposal: 'submittedBy venture startupName description status reviews',
@@ -44,6 +45,10 @@ const readPath = (object, path) =>
   path.split('.').reduce((value, key) => value?.[key], object)
 
 const enrich = {
+  KpiBotSettings(snapshot, document) {
+    snapshot.guidanceEvidence = textEvidence(document.guidance)
+    delete snapshot.guidance
+  },
   GoogleCredential(snapshot, document) {
     snapshot.emailFingerprint = auditFingerprint(document.googleEmail)
     delete snapshot.googleEmail

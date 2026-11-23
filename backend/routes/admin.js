@@ -10,6 +10,10 @@ import setup from './setup.js'
 import reportCards from './reportCards.js'
 import serviceHistory from './serviceHistory.js'
 import { getAuditHistory } from '../controllers/audit.js'
+import {
+  readKpiBotSettings,
+  updateKpiBotSettings,
+} from '../controllers/kpiBotSettings.js'
 
 import {
   createFounder,
@@ -50,6 +54,8 @@ router.put(
 )
 
 router.use('/accounts', requireRole(ROLES.ADMIN), accounts)
+router.get('/kpi-bot-settings', requireRole(ROLES.ADMIN), readKpiBotSettings)
+router.put('/kpi-bot-settings', requireRole(ROLES.ADMIN), updateKpiBotSettings)
 router.get('/audit-log', requireRole(ROLES.ADMIN), getAuditHistory)
 router.use('/programme', requireRole(ROLES.ADMIN), programme)
 router.use('/extra-sessions', requireRole(...BOARD_ROLES), extraSessions)

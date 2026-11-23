@@ -119,6 +119,14 @@ and raw collection access remain outside this application-level restriction.
 
 ## KPI bot browser demo
 
+Admins can edit the bot's global recommendation guidance from **School Setup
+→ KPI Bot → Edit Prompt**, or from the KPI Bot heading in a meeting's transcript
+dialog. The editor shows the context and built-in rules kept with every request
+and can restore the default guidance. Changes apply to the next extraction;
+saved results and existing recommendations remain unchanged. Only admins can
+read or save the prompt. Concurrent edits require reloading the latest revision
+instead of overwriting another admin's changes. No migration is required.
+
 KPI recommendation acceptance requires MongoDB transactions: use a replica
 set (including MongoDB Atlas) or a sharded cluster. The temporary browser demo
 starts a single-node replica set automatically. Acceptance commits the draft

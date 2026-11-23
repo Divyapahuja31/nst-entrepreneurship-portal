@@ -22,6 +22,7 @@ import {
   saveCheckInNotes,
 } from '../api/checkins'
 import useAccess from '../hooks/useAccess'
+import KpiBotPromptButton from './KpiBotPromptButton'
 
 const formatWhen = date =>
   new Date(date).toLocaleString(undefined, {
@@ -320,9 +321,19 @@ export default function TranscriptDialog({
               transcript?.status !== 'UNAVAILABLE' &&
               checkIn.status !== 'CANCELLED' && (
                 <Box sx={{ display: 'grid', gap: 1.5 }}>
-                  <Typography variant="subtitle1" component="h3">
-                    KPI Bot
-                  </Typography>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="subtitle1" component="h3">
+                      KPI Bot
+                    </Typography>
+                    <KpiBotPromptButton />
+                  </Box>
                   <KpiBotSummary
                     kpiBot={checkIn.kpiBot}
                     ready={ready}

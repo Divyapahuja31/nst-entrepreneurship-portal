@@ -5,6 +5,8 @@ import KPI from '../models/kpi.js'
 import KpiRecommendation from '../models/kpiRecommendation.js'
 import Venture from '../models/venture.js'
 import { isPastDue, isVentureMember } from '../utils/access.js'
+import { recordAudit } from '../utils/audit.js'
+import { auditSnapshot } from '../utils/auditFields.js'
 
 // The admin reviews transcript recommendations for a startup and its founders.
 
@@ -103,6 +105,28 @@ const kpiFrom = (recommendation, userId) => ({
   status: 'DRAFT',
 })
 
+// Commit the decision and draft together. A crash or failed write leaves
+// both unchanged, so the recommendation remains available for retry.
+const acceptAtomically = (recommendation, doc, userId) =>
+  mongoose.connection.transaction(async session => {
+    const claimed = await KpiRecommendation.findOneAndUpdate(
+      { _id: recommendation._id, status: PENDING },
+      {
+        $set: { status: 'ACCEPTED', decidedBy: userId, decidedAt: new Date() },
+      },
+      { session }
+    )
+    if (!claimed) {
+      return false
+    }
+    await KPI.updateOne(
+      { _id: doc._id },
+      { $setOnInsert: doc },
+      { session, upsert: true, setDefaultsOnInsert: true }
+    )
+    return true
+  })
+
 // Turns a recommendation into a draft KPI, with the same id, so
 // two clicks never make two KPIs.
 export const acceptRecommendation = async (req, res) => {
@@ -116,26 +140,39 @@ export const acceptRecommendation = async (req, res) => {
     }
     const doc = kpiFrom(recommendation, req.user.id)
     await new KPI(doc).validate()
-    if (!(await decide(recommendation, 'ACCEPTED', req.user.id))) {
+    if (!(await acceptAtomically(recommendation, doc, req.user.id))) {
       return fail(res, 409, 'This recommendation was already decided')
-    }
-    try {
-      await KPI.updateOne(
-        { _id: doc._id },
-        { $setOnInsert: doc },
-        { upsert: true, setDefaultsOnInsert: true }
-      )
-    } catch (error) {
-      await KpiRecommendation.updateOne(
-        { _id: recommendation._id },
-        { $set: { status: PENDING, decidedBy: null, decidedAt: null } }
-      )
-      throw error
     }
     const kpi = await KPI.findById(doc._id).populate(
       'founder',
       'username email'
     )
+    // Model snapshot reads cannot see uncommitted writes. Record the
+    // committed pair explicitly, never an aborted transaction attempt.
+    recordAudit({
+      eventType: 'change',
+      action: 'KPI_RECOMMENDATION_ACCEPTED',
+      resourceType: 'KpiRecommendation',
+      resourceId: recommendation._id,
+      ventureId: recommendation.venture,
+      outcome: 'success',
+      before: auditSnapshot('KpiRecommendation', recommendation),
+      after: auditSnapshot('KpiRecommendation', {
+        ...recommendation.toObject(),
+        status: 'ACCEPTED',
+        decidedBy: req.user.id,
+        decidedAt: new Date(),
+      }),
+    })
+    recordAudit({
+      eventType: 'change',
+      action: 'KPI_CHANGED',
+      resourceType: 'KPI',
+      resourceId: doc._id,
+      ventureId: recommendation.venture,
+      outcome: 'success',
+      after: auditSnapshot('KPI', doc),
+    })
     return res.status(201).json({
       success: true,
       message: 'KPI added',

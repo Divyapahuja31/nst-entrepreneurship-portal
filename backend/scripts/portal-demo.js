@@ -4,7 +4,7 @@ import { once } from 'node:events'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import mongoose from 'mongoose'
-import { MongoMemoryServer } from 'mongodb-memory-server'
+import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import { createServer } from 'vite'
 
 import { migrateRbac } from '../utils/rbacMigration.js'
@@ -120,7 +120,7 @@ export async function runPortalDemo({
   process.once('SIGTERM', stop)
 
   try {
-    database = await MongoMemoryServer.create()
+    database = await MongoMemoryReplSet.create({ replSet: { count: 1 } })
     await mongoose.connect(database.getUri())
     await migrateRbac()
     const accounts = await seed(password)

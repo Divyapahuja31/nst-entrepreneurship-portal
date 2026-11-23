@@ -158,10 +158,14 @@ const extractWithTimeout = async input => {
     }, timeoutMs)
   })
   try {
-    return await Promise.race([
+    const goals = await Promise.race([
       extractor({ ...input, signal: controller.signal }),
       timeout,
     ])
+    if (!Array.isArray(goals)) {
+      throw new Error('KPI extraction returned an invalid goals list')
+    }
+    return goals
   } finally {
     clearTimeout(timer)
   }
@@ -685,9 +689,12 @@ const runOne = async checkIn => {
   if (kpis === WAITING_FOR_MEETING) {
     return { deferred: true }
   }
-  await CheckIn.updateOne(ownLease(checkIn), {
+  const started = await CheckIn.updateOne(ownLease(checkIn), {
     $set: { 'kpiExtraction.started': true },
   })
+  if (!started.matchedCount) {
+    return { deferred: true }
+  }
   const otherFounders = await activeFounders({
     venture: { $ne: checkIn.venture },
   })
@@ -710,6 +717,7 @@ const claimNext = (now, checkInId) =>
   CheckIn.findOneAndUpdate(
     {
       ...(checkInId && { _id: checkInId }),
+      status: { $in: ['SCHEDULED', 'HELD'] },
       'transcript.status': 'READY',
       kpiBotMode: { $in: KPI_BOT_RUNS },
       'kpiExtraction.status': { $nin: ['DONE', 'SKIPPED'] },

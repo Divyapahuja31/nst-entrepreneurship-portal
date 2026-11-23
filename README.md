@@ -119,6 +119,12 @@ and raw collection access remain outside this application-level restriction.
 
 ## KPI bot browser demo
 
+KPI recommendation acceptance requires MongoDB transactions: use a replica
+set (including MongoDB Atlas) or a sharded cluster. The temporary browser demo
+starts a single-node replica set automatically. Acceptance commits the draft
+KPI and recommendation decision together, so a failed write leaves the
+recommendation available to retry.
+
 From the project root, run `npm run demo:kpi-bot` and open
 `http://localhost:5173/signin`. Use the demo email addresses and password
 printed in your terminal. The demo uses ports 5173 and 4000 and a temporary

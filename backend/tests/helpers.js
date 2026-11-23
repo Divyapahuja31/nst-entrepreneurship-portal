@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { MongoMemoryServer } from 'mongodb-memory-server'
+import { MongoMemoryReplSet, MongoMemoryServer } from 'mongodb-memory-server'
 
 import Campus from '../models/campus.js'
 import Founder from '../models/founder.js'
@@ -174,8 +174,10 @@ export const connectCalendar = (user, scopes = ALL_SCOPES) =>
 
 let mongod = null
 
-export const startDatabase = async () => {
-  mongod = await MongoMemoryServer.create()
+export const startDatabase = async ({ replicaSet = false } = {}) => {
+  mongod = replicaSet
+    ? await MongoMemoryReplSet.create({ replSet: { count: 1 } })
+    : await MongoMemoryServer.create()
   await mongoose.connect(mongod.getUri())
 }
 

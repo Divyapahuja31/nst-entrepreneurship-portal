@@ -1,3 +1,4 @@
+import { withGeminiRetry } from './geminiRetry.js'
 import { GoogleGenAI } from '@google/genai'
 import {
   REPORT_CARD_LIMITS as limits,
@@ -162,18 +163,23 @@ export const gradeSuggestions = async ({
   const signal = AbortSignal.timeout(30000)
   try {
     const client = new GoogleGenAI({ apiKey })
-    const response = await client.models.generateContent({
-      model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
-      contents: JSON.stringify(
-        promptData(observation, layout, cells, evidence)
-      ),
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseJsonSchema,
-        abortSignal: signal,
-      },
-    })
+    const model = process.env.GEMINI_MODEL || 'gemini-flash-latest'
+    const response = await withGeminiRetry(
+      attemptSignal =>
+        client.models.generateContent({
+          model,
+          contents: JSON.stringify(
+            promptData(observation, layout, cells, evidence)
+          ),
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseJsonSchema,
+            abortSignal: attemptSignal,
+          },
+        }),
+      { signal, model }
+    )
     const suggestions = readSuggestions(response)
     return { suggestions: trustedSuggestions(suggestions, cells, layout.mode) }
   } catch (error) {

@@ -1,3 +1,4 @@
+import { withGeminiRetry } from './geminiRetry.js'
 import { createHash } from 'node:crypto'
 import { GoogleGenAI } from '@google/genai'
 import CheckIn, { KPI_BOT_RUNS } from '../models/checkIn.js'
@@ -109,18 +110,23 @@ export const geminiExtractor = async ({
       startupId: venture,
     })),
   }
-  const response = await geminiClient().models.generateContent({
-    model: model || process.env.GEMINI_MODEL || DEFAULT_MODEL,
-    // Display names are typed by the speakers, so they stay with the data,
-    // not in the instructions.
-    contents: `Meeting date: ${meetingDate}\n\n<participants>\n${JSON.stringify(participants)}\n</participants>\n\n<signed_in_speakers>\n${JSON.stringify(identified ?? [])}\n</signed_in_speakers>\n\n<transcript>\n${text}\n</transcript>`,
-    config: {
-      systemInstruction: buildKpiInstructions(timeZone, guidance),
-      responseMimeType: 'application/json',
-      responseJsonSchema: OUTPUT_SCHEMA,
-      abortSignal: signal,
-    },
-  })
+  const chosenModel = model || process.env.GEMINI_MODEL || DEFAULT_MODEL
+  const response = await withGeminiRetry(
+    attemptSignal =>
+      geminiClient().models.generateContent({
+        model: chosenModel,
+        // Display names are typed by the speakers, so they stay with the data,
+        // not in the instructions.
+        contents: `Meeting date: ${meetingDate}\n\n<participants>\n${JSON.stringify(participants)}\n</participants>\n\n<signed_in_speakers>\n${JSON.stringify(identified ?? [])}\n</signed_in_speakers>\n\n<transcript>\n${text}\n</transcript>`,
+        config: {
+          systemInstruction: buildKpiInstructions(timeZone, guidance),
+          responseMimeType: 'application/json',
+          responseJsonSchema: OUTPUT_SCHEMA,
+          abortSignal: attemptSignal,
+        },
+      }),
+    { signal, model: chosenModel, attemptTimeoutMs: 35000 }
+  )
   const finishReason = response.candidates?.[0]?.finishReason
   if (finishReason !== 'STOP' || !response.text) {
     throw new Error(
